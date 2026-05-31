@@ -305,17 +305,7 @@ export default function CallsPage() {
         )}
 
         {/* DIALER DIALOG OPEN FAB */}
-        <button
-          onClick={() => {
-            triggerVibration();
-            setIsDialerOpen(true);
-          }}
-          className="fixed bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#FF006E] to-[#b3004d] text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(255,0,110,0.4)] hover:shadow-[0_0_20px_rgba(255,0,110,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
-          aria-label="Open Dialer"
-          id="open-dialer-fab"
-        >
-          <PhoneCall className="h-5 w-5" />
-        </button>
+        
 
         {/* DIALER FULL OVERLAY SHEET */}
         <AnimatePresence>
@@ -456,6 +446,18 @@ export default function CallsPage() {
           )}
         </AnimatePresence>
       </main>
+
+      <button
+          onClick={() => {
+            triggerVibration();
+            setIsDialerOpen(true);
+          }}
+          className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#FF006E] to-[#b3004d] text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(255,0,110,0.4)] hover:shadow-[0_0_20px_rgba(255,0,110,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
+          aria-label="Open Dialer"
+          id="open-dialer-fab"
+        >
+          <PhoneCall className="h-5 w-5" />
+        </button>
 
       <BottomNav currentTab="calls" />
     </>

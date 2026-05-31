@@ -375,17 +375,7 @@ export default function ContactsPage() {
         )}
 
         {/* ADD MANUAL CONTACT TRIGGER FAB */}
-        <button
-          onClick={() => {
-            triggerVibration();
-            setIsAddOpen(true);
-          }}
-          className="fixed bottom-22 right-4 w-10 h-10 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-full flex items-center justify-center shadow-[0_0_12px_rgba(0,212,255,0.4)] hover:shadow-[0_0_16px_rgba(0,212,255,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
-          aria-label="Add Contact"
-          id="add-contact-fab"
-        >
-          <Plus className="h-4 w-4 stroke-[3]" />
-        </button>
+        
 
         {/* BOTTOM ACTION SHEET DIALOG ON CONTACT CLICK */}
         <AnimatePresence>
@@ -589,6 +579,18 @@ export default function ContactsPage() {
           )}
         </AnimatePresence>
       </main>
+
+      <button
+          onClick={() => {
+            triggerVibration();
+            setIsAddOpen(true);
+          }}
+          className="absolute bottom-22 right-4 w-10 h-10 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-full flex items-center justify-center shadow-[0_0_12px_rgba(0,212,255,0.4)] hover:shadow-[0_0_16px_rgba(0,212,255,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
+          aria-label="Add Contact"
+          id="add-contact-fab"
+        >
+          <Plus className="h-4 w-4 stroke-[3]" />
+        </button>
 
       <BottomNav currentTab="contacts" />
     </>
