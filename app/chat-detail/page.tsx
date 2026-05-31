@@ -1,0 +1,854 @@
+'use client';
+
+import React, { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Send,
+  Paperclip,
+  MoreVertical,
+  Trash2,
+  Copy,
+  ArrowLeft,
+  Smile,
+  X,
+  FileImage,
+  Check,
+  CheckCheck,
+  Phone,
+  Video,
+  Share2,
+  CornerUpRight,
+  PhoneOff,
+  User,
+  ExternalLink,
+  Users
+} from 'lucide-react';
+import {
+  getMessages,
+  saveMessage,
+  deleteMessage,
+  getChats,
+  saveChat,
+  getContacts,
+  Message,
+  Chat,
+  Contact
+} from '@/lib/db';
+import Header from '@/components/Header';
+import { generateId, getCurrentTimestamp } from '@/lib/utils';
+
+function ChatDetailContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const phone = searchParams.get('phone') || '';
+  const name = searchParams.get('name') || 'Neural Link';
+  const avatar = searchParams.get('avatar') || '';
+  const chatId = `chat-${phone}`;
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState('');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  
+  // Header Options Menu Dropdown state
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  // Selected Message Context Dialog (Copy/Delete)
+  const [activeMessage, setActiveMessage] = useState<Message | null>(null);
+  const [selectedMsgIds, setSelectedMsgIds] = useState<string[]>([]);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const justLongPressedRef = useRef(false);
+
+  // File Picker Input reference
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Simulated Voice/Video Call states
+  const [isCallActive, setIsCallActive] = useState(false);
+  const [isCallVideo, setIsCallVideo] = useState(false);
+  const [callTimer, setCallTimer] = useState(0);
+
+  // Profile sharing states
+  const [isShareOpen, setIsShareOpen] = useState(false);
+
+  // Forwarding states
+  const [isForwarding, setIsForwarding] = useState(false);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+
+  // Toast notifier state
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const alertToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 2000);
+  };
+
+  // Fetch destination contacts for forwarding
+  useEffect(() => {
+    const fetchForwardContacts = async () => {
+      try {
+        const list = await getContacts();
+        setContacts(list);
+      } catch (e) {
+        console.error('Failed to fill contacts for forward:', e);
+      }
+    };
+    fetchForwardContacts();
+  }, []);
+
+  // Timer for Voice/Video Calls
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isCallActive) {
+      interval = setInterval(() => {
+        setCallTimer(prev => prev + 1);
+      }, 1000);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isCallActive]);
+
+  const formatCallDuration = (sec: number) => {
+    const mins = Math.floor(sec / 60);
+    const secs = sec % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // Load message logs
+  const loadMessages = async () => {
+    if (!phone) return;
+    try {
+      const logs = await getMessages(chatId);
+      setMessages(logs);
+      // Ensure the chat exists in the active channel list too
+      const currentChats = await getChats();
+      const chatExists = currentChats.some(c => c.id === chatId);
+      if (!chatExists) {
+        const matchingChat: Chat = {
+          id: chatId,
+          name,
+          phone,
+          avatar,
+          lastMessage: '',
+          timestamp: getCurrentTimestamp(),
+          unread: 0,
+          archived: false
+        };
+        await saveChat(matchingChat);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      loadMessages();
+    }, 0);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phone]);
+
+  // Scroll to bottom whenever messages list gets updated
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const triggerVibration = () => {
+    if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
+      window.navigator.vibrate(40);
+    }
+  };
+
+  // Attach Image via hidden input file picker
+  const handleImagePickClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setSelectedImage(reader.result);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!inputText.trim() && !selectedImage) return;
+
+    const bodyText = inputText.trim();
+
+    // 1. Build message payload for database
+    const newMsg: Message = {
+      id: generateId('msg'),
+      chatId,
+      text: bodyText,
+      image: selectedImage || undefined,
+      sender: 'user',
+      timestamp: getCurrentTimestamp(),
+      status: 'sent'
+    };
+
+    // 2. Save locally in IndexedDB
+    await saveMessage(newMsg);
+    
+    // Clear inputs immediately
+    setInputText('');
+    setSelectedImage(null);
+
+    // Refresh display
+    await loadMessages();
+
+    // 3. Fallback to native SMS composer intent
+    triggerVibration();
+    try {
+      const smsBody = encodeURIComponent(bodyText);
+      window.location.href = `sms:${phone}?body=${smsBody}`;
+    } catch (err) {
+      console.error('Failed to trigger native SMS routing:', err);
+    }
+
+    // Interactive reply simulation after 1.5 seconds for engaging UX
+    setTimeout(async () => {
+      const responses = [
+        "Transmission verified. Reading the coordinates.",
+        "Acknowledged. NeuraLink channel speed is stable.",
+        "Incoming pulse received. Keep streaming.",
+        "Got it! Let me sync this into my local cyberdeck."
+      ];
+      const randomReply = responses[Math.floor(Math.random() * responses.length)];
+      const responseMsg: Message = {
+        id: generateId('msg-reply'),
+        chatId,
+        text: randomReply,
+        sender: 'contact',
+        timestamp: getCurrentTimestamp(),
+        status: 'read'
+      };
+      await saveMessage(responseMsg);
+      await loadMessages();
+      triggerVibration();
+    }, 1500);
+  };
+
+  // Long press triggering for messages
+  const handleMessagePressStart = (msg: Message) => {
+    justLongPressedRef.current = false;
+    const timer = setTimeout(() => {
+      triggerVibration();
+      justLongPressedRef.current = true;
+      setSelectedMsgIds(prev => {
+        if (prev.includes(msg.id)) {
+          return prev;
+        } else {
+          return [...prev, msg.id];
+        }
+      });
+    }, 600);
+    longPressTimerRef.current = timer;
+  };
+
+  const handleMessagePressEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleMessageClick = (msg: Message) => {
+    if (justLongPressedRef.current) {
+      justLongPressedRef.current = false;
+      return;
+    }
+    if (selectedMsgIds.length > 0) {
+      triggerVibration();
+      if (selectedMsgIds.includes(msg.id)) {
+        setSelectedMsgIds(prev => prev.filter(id => id !== msg.id));
+      } else {
+        setSelectedMsgIds(prev => [...prev, msg.id]);
+      }
+    }
+  };
+
+  const handleCopySelected = () => {
+    if (selectedMsgIds.length === 0) return;
+    triggerVibration();
+    const selectedTexts = messages
+      .filter(m => selectedMsgIds.includes(m.id))
+      .map(m => m.text || "")
+      .filter(t => t !== "")
+      .join("\n");
+    navigator.clipboard.writeText(selectedTexts);
+    setSelectedMsgIds([]);
+    alertToast(`Copied selected message(s)!`);
+  };
+
+  const handleDeleteSelected = async () => {
+    if (selectedMsgIds.length === 0) return;
+    triggerVibration();
+    for (const id of selectedMsgIds) {
+      await deleteMessage(id);
+    }
+    setSelectedMsgIds([]);
+    await loadMessages();
+    alertToast("Deleted selected message(s)");
+  };
+
+  const handleClearChat = async () => {
+    const db = await getMessages(chatId);
+    for (const msg of db) {
+      await deleteMessage(msg.id);
+    }
+    setIsMenuOpen(false);
+    loadMessages();
+    alertToast("Chat cleared");
+  };
+
+  const triggerCallSimulation = (isVideo: boolean) => {
+    triggerVibration();
+    setCallTimer(0);
+    setIsCallVideo(isVideo);
+    setIsCallActive(true);
+  };
+
+  const hasTextOrMedia = inputText.trim().length > 0 || selectedImage !== null;
+
+  return (
+    <div className="fixed inset-x-0 top-0 bottom-0 max-w-md mx-auto bg-zinc-950 text-white flex flex-col z-30 overflow-hidden border-x border-zinc-900 shadow-2xl">
+      {/* Pink Glowing pulsing header component */}
+      <Header
+        title={name}
+        subtitle="Active now"
+        isChatDetail={true}
+        backHref="/chats"
+        rightAction={
+          <div className="flex items-center gap-1.5 select-none">
+            {/* Voice call icon */}
+            <button
+              onClick={() => triggerCallSimulation(false)}
+              className="p-1 px-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all text-zinc-900 cursor-pointer"
+              title="Voice Call"
+            >
+              <Phone className="h-4.5 w-4.5 stroke-[2.5]" />
+            </button>
+            {/* Video call icon */}
+            <button
+              onClick={() => triggerCallSimulation(true)}
+              className="p-1 px-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all text-zinc-900 cursor-pointer"
+              title="Video Call"
+            >
+              <Video className="h-4.5 w-4.5 stroke-[2.5]" />
+            </button>
+
+            {/* Menu Dropdown Trigger */}
+            <div className="relative">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="p-1 rounded-full hover:bg-[#18181b]/10 active:scale-90 transition-all text-zinc-900 cursor-pointer"
+                id="chat-menu-trigger"
+                title="Options"
+              >
+                <MoreVertical className="h-5 w-5 stroke-[2.5]" />
+              </button>
+
+              {/* Menu Dropdown Container */}
+              <AnimatePresence>
+                {isMenuOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)} />
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                      className="absolute right-0 mt-2 w-44 bg-zinc-900 border border-zinc-805 rounded-xl shadow-xl z-50 p-1.5 select-none text-left"
+                      id="chat-dropdown-menu"
+                    >
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          router.push(`/profile?name=${encodeURIComponent(name)}&phone=${encodeURIComponent(phone)}&avatar=${encodeURIComponent(avatar)}`);
+                        }}
+                        className="w-full text-left font-sans text-xs py-2 px-3 hover:bg-zinc-850 rounded-lg text-zinc-200 transition-colors cursor-pointer"
+                      >
+                        View Profile
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          setIsShareOpen(true);
+                        }}
+                        className="w-full text-left font-sans text-xs py-2 px-3 hover:bg-zinc-850 rounded-lg text-zinc-200 transition-colors cursor-pointer"
+                      >
+                        Share Profile
+                      </button>
+                      <div className="h-[1px] bg-zinc-805 my-1" />
+                      <button
+                        onClick={handleClearChat}
+                        className="w-full text-left font-sans text-xs py-2 px-3 hover:bg-red-950/40 text-red-450 rounded-lg transition-colors cursor-pointer"
+                      >
+                        Clear Chat
+                      </button>
+                    </motion.div>
+                  </>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        }
+      />
+
+      {/* Messages Scroll Area */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
+        {messages.length === 0 ? (
+          /* Empty State emoji hello with name */
+          <div className="flex flex-col items-center justify-center h-full text-center py-20 select-none" id="messages-empty-state">
+            <span className="text-4xl animate-bounce mb-3">💬</span>
+            <p className="text-zinc-300 font-bold text-sm font-display mb-1">
+              Say hello to {name}
+            </p>
+            <p className="text-zinc-500 text-xs px-12 leading-relaxed">
+              Secure channel speed is stable. Shoot a SMS or send a pulse attachment!
+            </p>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isUser = msg.sender === 'user';
+            const isSelected = selectedMsgIds.includes(msg.id);
+            return (
+              <motion.div
+                key={msg.id}
+                onPointerDown={() => handleMessagePressStart(msg)}
+                onPointerUp={handleMessagePressEnd}
+                onPointerCancel={handleMessagePressEnd}
+                onTouchStart={() => handleMessagePressStart(msg)}
+                onTouchEnd={handleMessagePressEnd}
+                onClick={() => handleMessageClick(msg)}
+                initial={{ opacity: 0, x: isUser ? 25 : -25, scale: 0.95 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
+                className={`flex ${isUser ? 'justify-end' : 'justify-start'} select-none cursor-pointer`}
+              >
+                {/* User message bubble size is 50% less width (max-w-[43%]), crisp styled and time at top-right inside bubble */}
+                <div
+                  className={`p-2.5 px-3 rounded-xl relative transition-all duration-200 flex flex-col justify-between ${
+                    isUser
+                      ? 'max-w-[44%] bg-[#cbfe00] text-zinc-950 rounded-tr-none'
+                      : 'max-w-[70%] bg-zinc-900 border border-zinc-805 text-zinc-100 rounded-tl-none'
+                  } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
+                >
+                  {/* Top-Right Time inside the Bubble */}
+                  <div className="flex justify-end items-center mb-1 select-none opacity-60 text-[9px] font-mono leading-none">
+                    <span className={isUser ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}>
+                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+
+                  {/* Image Bubble rendering */}
+                  {msg.image && (
+                    <div className="mb-2 rounded-lg overflow-hidden border border-black/10">
+                      <img
+                        src={msg.image}
+                        alt="Shared asset"
+                        className="max-h-40 w-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {/* Body Text */}
+                  {msg.text && (
+                    <p className="text-xs leading-relaxed font-sans break-words whitespace-pre-wrap font-medium">
+                      {msg.text}
+                    </p>
+                  )}
+
+                  {/* Tick icon for status rendering in user bubble bottomright */}
+                  {isUser && (
+                    <div className="flex justify-end mt-0.5 opacity-80">
+                      {msg.status === 'read' ? (
+                        <CheckCheck className="h-3 w-3 text-emerald-700 font-bold" />
+                      ) : (
+                        <Check className="h-3 w-3 text-zinc-650" />
+                      )}
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })
+        )}
+        <div ref={scrollRef} className="h-2" />
+      </div>
+
+      {/* Selected Image Preview Bar above input */}
+      {selectedImage && (
+        <div className="bg-zinc-900 border-t border-zinc-805 p-2 flex items-center justify-between select-none">
+          <div className="flex items-center gap-2">
+            <FileImage className="h-4 w-4 text-[#cbfe00]" />
+            <span className="text-[10px] text-zinc-400 truncate max-w-sm">Pulse Media Attachment Ready...</span>
+          </div>
+          <button
+            onClick={() => setSelectedImage(null)}
+            className="p-1 rounded-full bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Bottom Message Composer Input form is fixed position and non-scrollable */}
+      <form
+        onSubmit={handleSendMessage}
+        className="p-2 px-3 bg-zinc-950 border-t border-zinc-900 flex items-center gap-2 z-30 select-none pb-4"
+        id="messages-composer-form"
+      >
+        <button
+          type="button"
+          onClick={handleImagePickClick}
+          className="p-2.5 bg-zinc-900 text-zinc-450 hover:text-white rounded-xl transition-colors active:scale-90 cursor-pointer"
+          title="Attach Image"
+          id="image-attach-btn"
+        >
+          <Paperclip className="h-4 w-4 text-[#cbfe00]" />
+        </button>
+
+        {/* Hidden Picker Input */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept="image/*"
+          className="hidden"
+          id="hidden-file-input"
+        />
+
+        <div className="flex-1 relative">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Encrypt and send pulse..."
+            className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2 px-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors"
+          />
+        </div>
+
+        {/* Send button is gray by default, turns yellow when there is text or media */}
+        <button
+          type="submit"
+          className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+            hasTextOrMedia
+              ? 'bg-yellow-400 text-zinc-950 font-bold shadow-[0_0_12px_rgba(234,179,8,0.4)] active:scale-95'
+              : 'bg-zinc-800 text-zinc-500'
+          }`}
+          disabled={!hasTextOrMedia}
+          id="message-send-btn"
+        >
+          <Send className="h-4 w-4" />
+        </button>
+      </form>
+
+      {/* Simulated Fulscreen Voice/Video call Dialog overlay */}
+      <AnimatePresence>
+        {isCallActive && (
+          <div className="fixed inset-0 bg-zinc-950/95 z-50 flex flex-col items-center justify-between p-8 text-center select-none">
+            {/* Top right close cross (X) button */}
+            <div className="w-full flex justify-end">
+              <button
+                onClick={() => setIsCallActive(false)}
+                className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90"
+                title="End stream"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Center profile node and waves */}
+            <div className="space-y-6 flex-1 flex flex-col items-center justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-[#cbfe00]/25 animate-ping" />
+                {avatar ? (
+                  <img
+                    src={avatar}
+                    alt={name}
+                    className="w-24 h-24 rounded-full object-cover border-2 border-[#cbfe00]"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-zinc-900 border-2 border-[#cbfe00] flex items-center justify-center text-[#cbfe00] font-bold text-3xl select-none">
+                    {name.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold tracking-tight text-white">{name}</h3>
+                <p className="text-[#cbfe00] text-xs uppercase tracking-wider font-mono font-bold animate-pulse">
+                  {isCallVideo ? 'Video Calling...' : 'Voice Calling...'}
+                </p>
+                <p className="text-zinc-550 font-mono text-sm">{formatCallDuration(callTimer)}</p>
+              </div>
+
+              {isCallVideo && (
+                <div className="w-48 h-32 bg-zinc-900 border border-zinc-805 rounded-xl overflow-hidden mt-4 relative">
+                  <div className="absolute inset-0 bg-gradient-to-tr from-[#cbfe00]/10 to-transparent animate-pulse" />
+                  <span className="absolute bottom-2 left-2 text-[9px] font-mono uppercase bg-black/60 px-1.5 py-0.5 rounded text-[#cbfe00]">
+                    Deck Cam: active
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="flex items-center justify-center gap-6 mb-8">
+              <button
+                type="button"
+                onClick={() => {
+                  triggerVibration();
+                  setIsCallActive(false);
+                }}
+                className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center active:scale-90 transition-all cursor-pointer shadow-[0_0_15px_rgba(220,38,38,0.4)]"
+              >
+                <PhoneOff className="h-6 w-6" />
+              </button>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Side-floating Tool Dock for multi-selection without backdrop blur */}
+      <AnimatePresence>
+        {selectedMsgIds.length > 0 && !isForwarding && (
+          <motion.div
+            initial={{ opacity: 0, x: 50, scale: 0.9 }}
+            animate={{ opacity: 1, x: 0, scale: 1 }}
+            exit={{ opacity: 0, x: 50, scale: 0.9 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="absolute right-3.5 top-1/2 -translate-y-1/2 bg-white border border-zinc-200 p-2 py-3.5 rounded-full flex flex-col items-center gap-4.5 shadow-[0_4px_25px_rgba(255,255,255,0.25)] z-40 select-none"
+            id="multi-select-dock"
+          >
+            {/* Display count of selected */}
+            <span className="text-[10px] font-mono font-bold text-zinc-600 bg-zinc-100 rounded-full w-5 h-5 flex items-center justify-center border border-zinc-200">
+              {selectedMsgIds.length}
+            </span>
+
+            {/* Copy Button (Black symbol) */}
+            <button
+              onClick={handleCopySelected}
+              className="p-2 cursor-pointer hover:bg-zinc-100 active:scale-90 rounded-full transition-all text-black"
+              title="Copy"
+            >
+              <Copy className="h-4.5 w-4.5 stroke-[2.2]" />
+            </button>
+
+            {/* Forward Button (Black symbol) */}
+            <button
+              onClick={() => {
+                triggerVibration();
+                setIsForwarding(true);
+              }}
+              className="p-2 cursor-pointer hover:bg-zinc-100 active:scale-90 rounded-full transition-all text-black"
+              title="Forward"
+            >
+              <CornerUpRight className="h-4.5 w-4.5 stroke-[2.2]" />
+            </button>
+
+            {/* Delete Button (Red symbol) */}
+            <button
+              onClick={handleDeleteSelected}
+              className="p-2 cursor-pointer hover:bg-red-50 text-red-650 active:scale-90 rounded-full transition-all text-red-600"
+              title="Delete"
+            >
+              <Trash2 className="h-4.5 w-4.5 stroke-[2.2]" />
+            </button>
+
+            <div className="w-5 h-[1px] bg-zinc-200 my-0.5" />
+
+            {/* Close/Deselect button (X symbol) */}
+            <button
+              onClick={() => setSelectedMsgIds([])}
+              className="p-2 cursor-pointer hover:bg-zinc-100 active:scale-90 rounded-full transition-all text-zinc-500"
+              title="Cancel Selection"
+            >
+              <X className="h-4 w-4 stroke-[2]" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Share profile modal overlay (with X button in top right) */}
+      <AnimatePresence>
+        {isShareOpen && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-sm p-5 relative shadow-2xl">
+              {/* Dynamic top-right close cross button */}
+              <button
+                onClick={() => setIsShareOpen(false)}
+                className="absolute top-4 right-4 p-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white rounded-full transition-all cursor-pointer"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+
+              <div className="text-center space-y-4">
+                {/* Title */}
+                <div className="flex items-center justify-center gap-2 text-xs font-mono font-bold uppercase tracking-wider text-[#cbfe00]">
+                  <Share2 className="h-4 w-4" />
+                  Share Node Profile
+                </div>
+
+                {/* Profile Card */}
+                <div className="bg-zinc-950 border border-zinc-850 rounded-xl p-4 flex flex-col items-center space-y-3">
+                  {avatar ? (
+                    <img
+                      src={avatar}
+                      alt={name}
+                      className="w-16 h-16 rounded-full object-cover border-2 border-zinc-800"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-850 flex items-center justify-center text-[#cbfe00] font-bold text-xl uppercase">
+                      {name.slice(0, 2)}
+                    </div>
+                  )}
+
+                  <div>
+                    <h4 className="text-white font-bold text-sm">{name}</h4>
+                    <p className="text-zinc-500 font-mono text-xs">{phone}</p>
+                  </div>
+
+                  <div className="w-full text-center py-2 px-3 bg-zinc-900/60 rounded-lg text-[10px] text-zinc-400 font-sans italic">
+                    &quot;Secure Profile Connection verified&quot;
+                  </div>
+                </div>
+
+                {/* Action Link Copy */}
+                <div className="space-y-2 pt-2">
+                  <button
+                    onClick={() => {
+                      triggerVibration();
+                      navigator.clipboard.writeText(`NeuraChat Profile Connection:\nNode: ${name}\nPhone: ${phone}`);
+                      setIsShareOpen(false);
+                      alertToast("Connection copied!");
+                    }}
+                    className="w-full py-2 bg-[#cbfe00] hover:bg-[#b5e200] text-zinc-900 text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-all active:scale-97 cursor-pointer"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Copy Connection
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Forward selection drawer pop-up dialog (includes close cross button) */}
+      <AnimatePresence>
+        {isForwarding && (selectedMsgIds.length > 0 || activeMessage) && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+            <div className="bg-zinc-900 border border-zinc-805 rounded-2xl w-full max-w-sm p-5 relative shadow-2xl flex flex-col max-h-[70vh]">
+              {/* Top right close cross button */}
+              <button
+                onClick={() => {
+                  setIsForwarding(false);
+                  setSelectedMsgIds([]);
+                  setActiveMessage(null);
+                }}
+                className="absolute top-4 right-4 p-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-400 hover:text-white rounded-full transition-all cursor-pointer"
+              >
+                <X className="h-4.5 w-4.5" />
+              </button>
+
+              <div className="text-center mb-4 select-none">
+                <h4 className="text-white font-bold text-sm flex items-center justify-center gap-1.5">
+                  <CornerUpRight className="h-4 w-4 text-[#cbfe00]" />
+                  Forward Pulse
+                </h4>
+                <p className="text-zinc-500 text-[10px] uppercase font-mono mt-0.5">Select destination node</p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1 no-scrollbar">
+                {contacts.length === 0 ? (
+                  <p className="text-center text-zinc-500 text-xs py-8">No destination nodes available</p>
+                ) : (
+                  contacts.map(c => (
+                    <button
+                      key={c.id}
+                      onClick={async () => {
+                        triggerVibration();
+                        const forwardChatId = `chat-${c.phone}`;
+                        // Filter the exact messages that are selected
+                        const selectedObjects = messages.filter(m => selectedMsgIds.includes(m.id));
+                        
+                        // Fallback to activeMessage if somehow selectedObjects is empty
+                        const msgsToForward = selectedObjects.length > 0 
+                          ? selectedObjects 
+                          : (activeMessage ? [activeMessage] : []);
+
+                        for (const msgToFwd of msgsToForward) {
+                          const forwardMsg: Message = {
+                            id: generateId('msg-fwd'),
+                            chatId: forwardChatId,
+                            text: msgToFwd.text,
+                            image: msgToFwd.image,
+                            sender: 'user',
+                            timestamp: getCurrentTimestamp(),
+                            status: 'sent'
+                          };
+                          await saveMessage(forwardMsg);
+                        }
+
+                        setIsForwarding(false);
+                        setSelectedMsgIds([]);
+                        setActiveMessage(null);
+                        alertToast(`Forwarded ${msgsToForward.length} message(s) to ${c.name}`);
+                      }}
+                      className="w-full text-left p-2 bg-zinc-950 border border-zinc-900 hover:border-zinc-800 rounded-xl flex items-center gap-3 transition-all cursor-pointer active:scale-[0.99]"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-zinc-900 text-[#cbfe00] flex items-center justify-center font-bold text-xs uppercase border border-zinc-850">
+                        {c.name.slice(0, 2)}
+                      </div>
+                      <div>
+                        <p className="text-white text-xs font-semibold">{c.name}</p>
+                        <p className="text-zinc-500 text-[9px] font-mono">{c.phone}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating alert toast notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900 border border-zinc-800 text-[#cbfe00] rounded-full text-xs font-semibold shadow-xl z-50 flex items-center gap-1.5 animate-bounce">
+            <Check className="h-3.5 w-3.5 text-[#cbfe00]" />
+            {toastMessage}
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export default function ChatDetailPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <label className="text-[#cbfe00] text-xs font-mono">Loading Neural Channel...</label>
+      </div>
+    }>
+      <ChatDetailContent />
+    </Suspense>
+  );
+}

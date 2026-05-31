@@ -1,0 +1,173 @@
+@import "tailwindcss";
+
+/* Custom Scrollbar Styles for elegant mobile UI */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 255, 0.4);
+}
+
+/* Scroll area hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(255, 0, 110, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(255, 0, 110, 1);
+  }
+}
+
+.neon-glow-pink {
+  animation: glow-pulse 2s infinite ease-in-out;
+}
+
+@keyframes glow-pulse-blue {
+  0%, 100% {
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 25px rgba(0, 212, 255, 1);
+  }
+}
+
+.neon-glow-blue {
+  animation: glow-pulse-blue 2s infinite ease-in-out;
+}
+
+/* Active scale micro-interaction */
+.tap-active:active {
+  transform: scale(0.97);
+  transition: transform 0.1s ease;
+}
+
+/* --- LIGHT THEME BEAUTY OVERRIDES --- */
+html.light,
+html.light body,
+html.light .bg-black {
+  background-color: #f3f4f6 !important; /* light graybg-zinc-100 */
+  color: #0f172a !important; /* slate-900 key text content */
+}
+
+html.light .bg-zinc-950 {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html.light .bg-zinc-900,
+html.light .bg-zinc-905 {
+  background-color: #f3f4f6 !important;
+  color: #1e293b !important;
+}
+
+html.light .bg-zinc-850 {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .bg-zinc-800 {
+  background-color: #cbd5e1 !important;
+}
+
+html.light .text-white,
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light p.text-white,
+html.light span.text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-zinc-100 {
+  color: #0f172a !important;
+}
+
+html.light .text-zinc-200 {
+  color: #1e293b !important;
+}
+
+html.light .text-zinc-300 {
+  color: #334155 !important;
+}
+
+html.light .text-zinc-400 {
+  color: #475569 !important;
+}
+
+html.light .text-zinc-500 {
+  color: #64748b !important;
+}
+
+html.light .border-zinc-900,
+html.light .border-zinc-805,
+html.light .border-zinc-802,
+html.light .border-zinc-700 {
+  border-color: #e2e8f0 !important;
+}
+
+html.light .hover\:bg-zinc-900\/60:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .hover\:bg-zinc-850:hover {
+  background-color: #cbd5e1 !important;
+}
+
+/* Modals and Sheets Backdrop */
+html.light .fixed.inset-0.bg-black\/85,
+html.light .fixed.inset-0.bg-black\/90,
+html.light .fixed.inset-0.bg-black\/80 {
+  background-color: rgba(15, 23, 42, 0.4) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+/* Custom modal container box elements in light theme */
+html.light #dialer-sheet-container,
+html.light #contact-action-sheet,
+html.light #settings-main-container div[role="dialog"],
+html.light .fixed.inset-0 .bg-zinc-950,
+html.light .fixed.inset-0 div.bg-zinc-950 {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 -15px 30px -10px rgba(15, 23, 42, 0.15) !important;
+}
+
+/* Header style adjusting */
+html.light header,
+html.light header.bg-black\/80 {
+  background-color: rgba(255, 255, 255, 0.85) !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+}
+
+/* Bottom Navigation */
+html.light nav,
+html.light nav.bg-black\/80 {
+  background-color: rgba(255, 255, 255, 0.9) !important;
+  border-top: 1px solid #e2e8f0 !important;
+}
+
+html.light .text-zinc-405,
+html.light .text-zinc-450 {
+  color: #334155 !important;
+}
+
+html.light .divide-zinc-90 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #cbd5e1 !important;
+}
+
