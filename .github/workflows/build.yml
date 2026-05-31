@@ -1,65 +1,73 @@
-name: Build NeuraChat APK
+name: Build Android APK
 
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch:
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
-    name: Cloud Compilation
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Clone Code
-        uses: actions/checkout@v4
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
 
-      - name: 2. Setup Node.js v22
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "22"
+        cache: 'npm'
 
-      - name: 3. Setup Java JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'zulu'
+        java-version: "21"
 
-      - name: 4. Install Dependencies
-        run: |
-          npm install --legacy-peer-deps
+    - name: Install Dependencies
+      run: npm install --legacy-peer-deps
 
-      - name: 5. Build Next.js Web Asset
-        run: |
-          npm run build
+    - name: Next.js Build and Export
+      run: npm run build
 
-      - name: 6. Build Capacitor Android Platform with Native Injections
-        run: |
-          rm -rf android
-          npx cap add android
-          
-          # Native directory path create karo
-          mkdir -p android/app/src/main/java/com/neurasamu/neurachat
-          
-          # Master Manifest overwrite karo
-          cp .github/manifests/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
-          
-          # Native Java helper classes inject karo
-          cp .github/native/*.java android/app/src/main/java/com/neurasamu/neurachat/
-          
-          # Platform sync karo
-          npx cap sync android
+    - name: Create www folder for Capacitor
+      run: |
+        mkdir -p www
+        if [ -d "out" ]; then
+          cp -r out/. www/
+        else
+          echo "<html><body>App</body></html>" > www/index.html
+        fi
 
-      - name: 7. Compile Android Debug APK
-        run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+    - name: Add Android Platform
+      run: rm -rf android
 
-      - name: 8. Upload Compiled APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NeuraChat-Debug-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-          retention-days: 7
+    - name: Fresh Cap Add
+      run: |
+        rm -rf android
+        npx cap add android
+
+    - name: Copy Custom AndroidManifest
+      run: cp .github/manifests/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+
+    - name: Copy Native Java Files
+      run: |
+        cp .github/java/SmsReceiver.java android/app/src/main/java/com/neurasamu/neurachat/
+        cp .github/java/MmsReceiver.java android/app/src/main/java/com/neurasamu/neurachat/
+        cp .github/java/CallService.java android/app/src/main/java/com/neurasamu/neurachat/
+    - name: Sync Android
+      run: npx cap sync android
+
+    - name: Build Android App
+      run: |
+        cd android
+        chmod +x ./gradlew
+        ./gradlew assembleDebug
+
+    - name: Upload APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: NeuraChat-Debug-APK
+        path: android/app/build/outputs/apk/debug/app-debug.apk
