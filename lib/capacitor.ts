@@ -47,7 +47,7 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
             
             // Ultra-robust number extractor (captures any Android projection version)
             const phoneList = capC.phoneNumbers || capC.phones || [];
-            const rawPhone = phoneList[0]?.number || (phoneList[0] as any)?.value || '';
+            const rawPhone = (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
 
             if (rawPhone) {
               const cleanPhone = rawPhone.replace(/\s+/g, '');

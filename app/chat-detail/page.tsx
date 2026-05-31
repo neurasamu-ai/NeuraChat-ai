@@ -216,7 +216,7 @@ function ChatDetailContent() {
     try {
       const { isNativePlatform } = require('@/lib/capacitor');
       if (isNativePlatform()) {
-        const { registerPlugin } = require('@getcapacitor/core');
+        const { registerPlugin } = require('@capacitor/core');
         const SmsPlugin = registerPlugin('SmsPlugin');
         await SmsPlugin.sendDirectSMS({ phone, message: bodyText });
         console.log('Direct SMS sent successfully in background!');
