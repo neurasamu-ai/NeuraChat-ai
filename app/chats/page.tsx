@@ -49,7 +49,7 @@ export default function ChatsPage() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  
+
   // Selection mode states
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -254,7 +254,7 @@ export default function ChatsPage() {
       setNeuraMessages(prev => [...prev, assistantMsg]);
     } catch (err: any) {
       console.error(err);
-      const errText = err.name === 'AbortError' 
+      const errText = err.name === 'AbortError'
         ? 'Connection timed out. Please check your system internet node and proxy configurations.'
         : `Matrix transmission failure: ${err.message || 'Unknown network error'}.`;
       const assistantMsg: Message = {
@@ -709,16 +709,6 @@ export default function ChatsPage() {
           </div>
         )}
 
-        {/* FAB To Open Contacts Menu */}
-        <button
-          onClick={openNewChat}
-          className="fixed bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(0,212,255,0.4)] hover:shadow-[0_0_20px_rgba(0,212,255,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
-          aria-label="New Chat"
-          id="new-chat-fab"
-        >
-          <Plus className="h-6 w-6 stroke-[3]" />
-        </button>
-
         {/* NEW CHAT DIALOG OVERLAY (Single tab: Contacts list) */}
         <AnimatePresence>
           {isNewChatOpen && (
@@ -848,7 +838,7 @@ export default function ChatsPage() {
                       placeholder="e.g. Nicola Tesla"
                       value={manualName}
                       onChange={(e) => setManualName(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-[#00D4FF]"
+                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-[#00D4FF]"
                     />
                   </div>
 
@@ -862,7 +852,7 @@ export default function ChatsPage() {
                       placeholder="e.g. +14155551234"
                       value={manualPhone}
                       onChange={(e) => setManualPhone(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-[#FF006E]"
+                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-[#FF006E]"
                     />
                   </div>
 
@@ -1087,6 +1077,16 @@ export default function ChatsPage() {
           )}
         </AnimatePresence>
       </main>
+
+      {/* FAB To Open Contacts Menu - Now outside scroll container & positioned absolute */}
+      <button
+        onClick={openNewChat}
+        className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(0,212,255,0.4)] hover:shadow-[0_0_20px_rgba(0,212,255,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
+        aria-label="New Chat"
+        id="new-chat-fab"
+      >
+        <Plus className="h-6 w-6 stroke-[3]" />
+      </button>
 
       {/* Bottom Main Tab Bar */}
       <BottomNav currentTab="chats" />
