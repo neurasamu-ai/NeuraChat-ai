@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <ConsoleInterceptor />
         <ThemeManager />
-        <div className="flex-1 flex flex-col w-full max-w-md mx-auto relative border-x border-zinc-900 shadow-2xl bg-zinc-950 pb-20">
+        <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 pb-20">
           {children}
         </div>
       </body>

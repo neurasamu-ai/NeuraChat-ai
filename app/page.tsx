@@ -123,7 +123,7 @@ export default function SplashScreen() {
           initial={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.4 }}
-          className="fixed inset-0 w-full h-full max-w-md mx-auto bg-black flex flex-col items-center justify-center overflow-hidden z-50 select-none pb-20"
+          className="fixed inset-0 w-full h-full md:max-w-md md:mx-auto bg-black flex flex-col items-center justify-center overflow-hidden z-50 select-none pb-20"
           id="splash-screen-container"
         >
           {/* Neural Canvas Background */}

@@ -129,7 +129,7 @@ function ProfileContent() {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-zinc-950 text-white relative">
+    <div className="flex flex-col h-screen w-full md:max-w-md md:mx-auto bg-zinc-950 text-white relative">
       
       {/* Sticky default Header with back navigation route to Contacts */}
       <Header

@@ -29,7 +29,7 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-20 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-900 flex justify-around items-center px-4 z-40 select-none pb-safe">
+    <nav className="fixed bottom-0 left-0 right-0 w-full md:max-w-md md:mx-auto h-20 bg-zinc-950/95 backdrop-blur-md border-t border-zinc-900 flex justify-around items-center px-4 z-40 select-none pb-safe">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         const Icon = tab.icon;

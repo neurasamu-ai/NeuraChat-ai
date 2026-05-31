@@ -326,7 +326,7 @@ function ChatDetailContent() {
   const hasTextOrMedia = inputText.trim().length > 0 || selectedImage !== null;
 
   return (
-    <div className="fixed inset-x-0 top-0 bottom-0 max-w-md mx-auto bg-zinc-950 text-white flex flex-col z-30 overflow-hidden border-x border-zinc-900 shadow-2xl">
+    <div className="fixed inset-x-0 top-0 bottom-0 w-full md:max-w-md md:mx-auto bg-zinc-950 text-white flex flex-col z-30 overflow-hidden md:border-x border-zinc-900 shadow-2xl">
       {/* Pink Glowing pulsing header component */}
       <Header
         title={name}
