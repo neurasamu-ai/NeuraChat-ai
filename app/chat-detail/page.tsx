@@ -211,13 +211,23 @@ function ChatDetailContent() {
     // Refresh display
     await loadMessages();
 
-    // 3. Fallback to native SMS composer intent
+    // 3. Trigger native background SMS or fallback to intent
     triggerVibration();
     try {
+      const { isNativePlatform } = require('@/lib/capacitor');
+      if (isNativePlatform()) {
+        const { registerPlugin } = require('@getcapacitor/core');
+        const SmsPlugin = registerPlugin('SmsPlugin');
+        await SmsPlugin.sendDirectSMS({ phone, message: bodyText });
+        console.log('Direct SMS sent successfully in background!');
+      } else {
+        const smsBody = encodeURIComponent(bodyText);
+        window.location.href = `sms:${phone}?body=${smsBody}`;
+      }
+    } catch (err) {
+      console.error('Direct SMS failed, falling back to intent:', err);
       const smsBody = encodeURIComponent(bodyText);
       window.location.href = `sms:${phone}?body=${smsBody}`;
-    } catch (err) {
-      console.error('Failed to trigger native SMS routing:', err);
     }
 
     // Interactive reply simulation after 1.5 seconds for engaging UX
