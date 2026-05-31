@@ -1,0 +1,55 @@
+name: Build NeuraChat APK
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch: # Isse tu manual trigger bhi kar sakta hai browser se
+
+jobs:
+  build:
+    name: Cloud Compilation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 1. Clone Code
+        uses: actions/checkout@v4
+
+      - name: 2. Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 3. Setup Java JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: 4. Install Dependencies
+        run: |
+          npm install --legacy-peer-deps
+
+      - name: 5. Build Next.js Web Asset
+        run: |
+          npm run build
+
+      - name: 6. Build Capacitor Android Platform
+        run: |
+          # Safe side, purane folder remove karo build conflict se bachne ke liye
+          rm -rf android
+          npx cap add android
+          npx cap sync android
+
+      - name: 7. Compile Android Debug APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: 8. Upload Compiled APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeuraChat-Debug-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
