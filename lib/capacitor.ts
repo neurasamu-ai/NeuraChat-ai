@@ -23,8 +23,7 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
   try {
     if (typeof window === 'undefined') return [];
 
-    const Capacitor = (window as any).Capacitor;
-    if (Capacitor && Capacitor.isPluginAvailable('Contacts')) {
+    if (isNativePlatform()) {
       const { Contacts } = require('@capacitor-community/contacts');
       
       // Request permissions
@@ -41,7 +40,7 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
           const syncedContacts: Contact[] = [];
           
           for (const capC of (result.contacts as CapContact[])) {
-            const name = capC.displayName || 'Unknown';
+            const name = capC.displayName || (capC as any).name?.display || 'Unknown';
             const phone = capC.phoneNumbers?.[0]?.number || '';
 
             if (phone) {
@@ -83,8 +82,7 @@ export async function syncDeviceCallLogs(): Promise<any[]> {
   try {
     if (typeof window === 'undefined') return [];
 
-    const Capacitor = (window as any).Capacitor;
-    if (Capacitor && Capacitor.isPluginAvailable('Contacts')) {
+    if (isNativePlatform()) {
       // In capacitor-community/contacts, direct call logging depends on android permission.
       // We check if permission flows exists or we generate a simulated entry log from existing contacts
       const { Contacts } = require('@capacitor-community/contacts');

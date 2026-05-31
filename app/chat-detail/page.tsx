@@ -318,6 +318,27 @@ function ChatDetailContent() {
 
   const triggerCallSimulation = (isVideo: boolean) => {
     triggerVibration();
+    
+    // Save real call log dynamically using dynamic require
+    try {
+      const { saveCallLog } = require('@/lib/db');
+      const newLog = {
+        id: 'call-' + Math.random().toString(36).substr(2, 9),
+        name: name,
+        phone: phone,
+        type: 'outgoing' as const,
+        timestamp: Date.now(),
+        duration: Math.floor(Math.random() * 45) + 15
+      };
+      saveCallLog(newLog);
+    } catch (e) {
+      console.error('Call logging failed:', e);
+    }
+
+    // Trigger REAL phone dialer call
+    window.location.href = `tel:${phone}`;
+    
+    // Keep beautiful screen active for premium visuals
     setCallTimer(0);
     setIsCallVideo(isVideo);
     setIsCallActive(true);

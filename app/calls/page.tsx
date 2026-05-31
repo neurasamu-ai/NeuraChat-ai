@@ -15,7 +15,8 @@ import {
   X,
   Delete,
   Trash2,
-  PhoneOff
+  PhoneOff,
+  MessageSquare
 } from 'lucide-react';
 import {
   getCallLogs,
@@ -35,6 +36,17 @@ export default function CallsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
+
+  // Dynamic caller name lookup from contacts database
+  const resolveCallerName = (phone: string, fallbackName: string) => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    const found = contacts.find(c => {
+      const cPhone = c.phone.replace(/\D/g, '');
+      return cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone);
+    });
+    if (found) return found.name;
+    return fallbackName !== 'Unknown' ? fallbackName : phone;
+  };
 
   // Dialer dialog states
   const [isDialerOpen, setIsDialerOpen] = useState(false);
@@ -247,24 +259,26 @@ export default function CallsPage() {
           /* Call Logs Feed List */
           <div className="space-y-2.5" id="calls-list">
             <AnimatePresence>
-              {filteredLogs.map((log) => (
-                <motion.div
-                  key={log.id}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -50 }}
-                  className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-900 hover:border-zinc-805 transition-all select-none"
-                >
-                  <div className="flex items-center gap-3">
-                    {/* Circle Avatar with initials fallback */}
-                    <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
-                      {log.name.slice(0, 2)}
-                    </div>
+              {filteredLogs.map((log) => {
+                const displayName = resolveCallerName(log.phone, log.name);
+                return (
+                  <motion.div
+                    key={log.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-900 hover:border-zinc-805 transition-all select-none"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Circle Avatar with initials fallback */}
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
+                        {displayName.slice(0, 2)}
+                      </div>
 
-                    <div className="min-w-0">
-                      <h4 className="text-xs font-semibold text-white font-sans truncate pr-2">
-                        {log.name}
-                      </h4>
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-semibold text-white font-sans truncate pr-2">
+                          {displayName}
+                        </h4>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         {getCallIcon(log.type)}
                         <span className="text-[10px] text-zinc-500 font-mono truncate">
@@ -299,7 +313,8 @@ export default function CallsPage() {
                     </button>
                   </div>
                 </motion.div>
-              ))}
+                );
+              })}
             </AnimatePresence>
           </div>
         )}
@@ -430,16 +445,33 @@ export default function CallsPage() {
                   ))}
                 </div>
 
-                {/* Green Call Trigger Button */}
-                <button
-                  type="button"
-                  onClick={() => handleDialCall()}
-                  disabled={!dialNumber}
-                  className="w-16 h-16 rounded-full bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-                  title="Call Phone intent"
-                >
-                  <Phone className="h-6 w-6 stroke-[2.5]" />
-                </button>
+                {/* Actions Row: SMS and Call */}
+                <div className="flex items-center gap-6 justify-center w-full">
+                  {/* SMS Button (Only active when number is entered) */}
+                  <button
+                    type="button"
+                    disabled={!dialNumber}
+                    onClick={() => {
+                      triggerVibration();
+                      window.location.href = `sms:${dialNumber}`;
+                    }}
+                    className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+                    title="Send SMS"
+                  >
+                    <MessageSquare className="h-5 w-5" />
+                  </button>
+
+                  {/* Green Call Trigger Button */}
+                  <button
+                    type="button"
+                    onClick={() => handleDialCall()}
+                    disabled={!dialNumber}
+                    className="w-16 h-16 rounded-full bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
+                    title="Call Phone intent"
+                  >
+                    <Phone className="h-6 w-6 stroke-[2.5]" />
+                  </button>
+                </div>
 
               </motion.div>
             </div>
