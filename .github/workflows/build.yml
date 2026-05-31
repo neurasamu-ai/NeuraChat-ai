@@ -3,7 +3,7 @@ name: Build NeuraChat APK
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: # Isse tu manual trigger bhi kar sakta hai browser se
+  workflow_dispatch:
 
 jobs:
   build:
@@ -34,11 +34,21 @@ jobs:
         run: |
           npm run build
 
-      - name: 6. Build Capacitor Android Platform
+      - name: 6. Build Capacitor Android Platform with Native Injections
         run: |
-          # Safe side, purane folder remove karo build conflict se bachne ke liye
           rm -rf android
           npx cap add android
+          
+          # Native directory path create karo
+          mkdir -p android/app/src/main/java/com/neurasamu/neurachat
+          
+          # Master Manifest overwrite karo
+          cp .github/manifests/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
+          
+          # Native Java helper classes inject karo
+          cp .github/native/*.java android/app/src/main/java/com/neurasamu/neurachat/
+          
+          # Platform sync karo
           npx cap sync android
 
       - name: 7. Compile Android Debug APK
