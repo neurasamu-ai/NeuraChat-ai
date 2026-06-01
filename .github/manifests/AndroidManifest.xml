@@ -93,7 +93,6 @@
         android:theme="@style/AppTheme"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
-        android:name="com.neurasamu.neurachat.MainActivity"
         android:allowBackup="true"
         android:supportsRtl="true"
         android:roundIcon="@mipmap/ic_launcher_round">
