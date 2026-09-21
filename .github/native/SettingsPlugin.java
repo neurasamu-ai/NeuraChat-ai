@@ -15,6 +15,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
+import com.getcapacitor.PermissionState;
 
 @CapacitorPlugin(
     name = "SettingsPlugin",
@@ -22,12 +24,53 @@ import com.getcapacitor.annotation.Permission;
         @Permission(alias = "camera", strings = { android.Manifest.permission.CAMERA }),
         @Permission(alias = "microphone", strings = { android.Manifest.permission.RECORD_AUDIO }),
         @Permission(alias = "contacts", strings = { android.Manifest.permission.READ_CONTACTS }),
-        @Permission(alias = "sms", strings = { android.Manifest.permission.READ_SMS, android.Manifest.permission.SEND_SMS, android.Manifest.permission.RECEIVE_SMS }),
-        @Permission(alias = "phone", strings = { android.Manifest.permission.READ_PHONE_STATE, android.Manifest.permission.CALL_PHONE, android.Manifest.permission.READ_CALL_LOG }),
+        @Permission(alias = "sms", strings = {
+            android.Manifest.permission.READ_SMS,
+            android.Manifest.permission.SEND_SMS,
+            android.Manifest.permission.RECEIVE_SMS
+        }),
+        @Permission(alias = "phone", strings = {
+            android.Manifest.permission.READ_PHONE_STATE,
+            android.Manifest.permission.CALL_PHONE,
+            android.Manifest.permission.READ_CALL_LOG,
+            android.Manifest.permission.WRITE_CALL_LOG
+        }),
         @Permission(alias = "notifications", strings = { "android.permission.POST_NOTIFICATIONS" })
     }
 )
 public class SettingsPlugin extends Plugin {
+
+    private static final String[] ALL_ALIASES = {
+        "sms", "phone", "contacts", "camera", "microphone", "notifications"
+    };
+
+    @PluginMethod
+    public void requestAllPermissions(PluginCall call) {
+        java.util.List<String> toRequest = new java.util.ArrayList<>();
+        for (String alias : ALL_ALIASES) {
+            PermissionState state = getPermissionState(alias);
+            if (state != PermissionState.GRANTED) {
+                toRequest.add(alias);
+            }
+        }
+
+        if (toRequest.isEmpty()) {
+            JSObject ret = new JSObject();
+            ret.put("done", true);
+            ret.put("alreadyGranted", true);
+            call.resolve(ret);
+            return;
+        }
+
+        requestPermissionForAliases(toRequest.toArray(new String[0]), call, "permissionsCallback");
+    }
+
+    @PermissionCallback
+    private void permissionsCallback(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("done", true);
+        call.resolve(ret);
+    }
 
     @PluginMethod
     public void openAppSettings(PluginCall call) {
@@ -40,44 +83,6 @@ public class SettingsPlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("Failed to open settings: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void openNotificationSettings(PluginCall call) {
-        try {
-            Context context = getContext();
-            Intent intent;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
-                intent.putExtra(Settings.EXTRA_APP_PACKAGE, context.getPackageName());
-            } else {
-                intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
-                intent.setData(Uri.fromParts("package", context.getPackageName(), null));
-            }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-            call.resolve();
-        } catch (Exception e) {
-            call.reject("Failed to open notification settings: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void checkPermission(PluginCall call) {
-        String perm = call.getString("permission");
-        if (perm == null) {
-            call.reject("permission is required");
-            return;
-        }
-        try {
-            Context context = getContext();
-            int result = ContextCompat.checkSelfPermission(context, perm);
-            JSObject ret = new JSObject();
-            ret.put("granted", result == PackageManager.PERMISSION_GRANTED);
-            call.resolve(ret);
-        } catch (Exception e) {
-            call.reject("Failed to check permission: " + e.getMessage());
         }
     }
 
