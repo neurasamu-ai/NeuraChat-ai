@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     android:installLocation="auto"
-    package="com.neurasamu.neurachat">
+    package="com.neurasamu.build.chat">
 
     <uses-feature
         android:name="android.hardware.telephony"
@@ -100,7 +100,7 @@
         <!-- MainActivity: Multi-Intent Launch-Pad -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|layoutDirection|fontScale|screenLayout|density"
-            android:name="com.neurasamu.neurachat.MainActivity"
+            android:name="com.neurasamu.build.chat.MainActivity"
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
@@ -146,7 +146,7 @@
         <!-- CallIntentProcessor: Outgoing Direct Dial Interceptor -->
         <activity
             android:theme="@android:style/Theme.NoDisplay"
-            android:name="com.neurasamu.neurachat.CallIntentProcessor"
+            android:name="com.neurasamu.build.chat.CallIntentProcessor"
             android:exported="true"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
@@ -178,7 +178,7 @@
 
         <!-- 1. SMS Receiver -->
         <receiver
-            android:name="com.neurasamu.neurachat.SmsReceiver"
+            android:name="com.neurasamu.build.chat.SmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
             <intent-filter>
@@ -188,7 +188,7 @@
 
         <!-- 2. MMS Receiver -->
         <receiver
-            android:name="com.neurasamu.neurachat.MmsReceiver"
+            android:name="com.neurasamu.build.chat.MmsReceiver"
             android:permission="android.permission.BROADCAST_WAP_PUSH"
             android:exported="true">
             <intent-filter>
@@ -199,7 +199,7 @@
 
         <!-- 3. Headless SMS Send Service -->
         <service
-            android:name="com.neurasamu.neurachat.HeadlessSmsSendService"
+            android:name="com.neurasamu.build.chat.HeadlessSmsSendService"
             android:permission="android.permission.SEND_RESPOND_VIA_MESSAGE"
             android:exported="true">
             <intent-filter>
@@ -214,7 +214,7 @@
 
         <!-- 4. Telecom InCallService implementation -->
         <service
-            android:name="com.neurasamu.neurachat.CallService"
+            android:name="com.neurasamu.build.chat.CallService"
             android:permission="android.permission.BIND_INCALL_SERVICE"
             android:exported="true"
             android:foregroundServiceType="phoneCall">
@@ -228,7 +228,7 @@
 
         <!-- 5. Boot Receiver for alarm initialization -->
         <receiver
-            android:name="com.neurasamu.neurachat.BootReceiver"
+            android:name="com.neurasamu.build.chat.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

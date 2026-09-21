@@ -1,4 +1,4 @@
-package com.neurasamu.neurachat;
+package com.neurasamu.build.chat;
 
 import android.telephony.SmsManager;
 import com.getcapacitor.JSObject;

@@ -1,10 +1,11 @@
-package com.neurasamu.neurachat;
+package com.neurasamu.build.chat;
 
 import android.content.Context;
 import android.media.AudioManager;
 import android.telecom.Call;
 import android.app.role.RoleManager;
 import android.content.Intent;
+import android.net.Uri;
 import android.telecom.TelecomManager;
 import android.os.Build;
 import androidx.activity.result.ActivityResult;
@@ -119,6 +120,37 @@ public class TelecomPlugin extends Plugin {
             }
         } else {
             call.reject("No active call to disconnect.");
+        }
+    }
+
+    @PluginMethod
+    public void placeCall(PluginCall call) {
+        String number = call.getString("number");
+        if (number == null || number.isEmpty()) {
+            call.reject("Number is required.");
+            return;
+        }
+
+        Context context = getContext();
+        TelecomManager telecomManager = (TelecomManager) context.getSystemService(Context.TELECOM_SERVICE);
+
+        if (telecomManager != null) {
+            try {
+                Uri uri = Uri.fromParts("tel", number, null);
+                android.os.Bundle extras = new android.os.Bundle();
+                extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false);
+
+                telecomManager.placeCall(uri, extras);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                call.resolve(ret);
+            } catch (SecurityException e) {
+                call.reject("Permission denied: " + e.getMessage());
+            } catch (Exception e) {
+                call.reject("Call failed: " + e.getMessage());
+            }
+        } else {
+            call.reject("TelecomManager is null.");
         }
     }
 

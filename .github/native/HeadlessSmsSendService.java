@@ -1,4 +1,4 @@
-package com.neurasamu.neurachat;
+package com.neurasamu.build.chat;
 
 import android.app.IntentService;
 import android.content.Intent;

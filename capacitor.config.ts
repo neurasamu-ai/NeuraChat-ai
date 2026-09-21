@@ -1,7 +1,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.neurasamu.neurachat',
+  appId: 'com.neurasamu.build.chat',
   appName: 'NeuraChat',
   webDir: 'out',
   server: {
