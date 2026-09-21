@@ -32,19 +32,7 @@ jobs:
     - name: Next.js Build and Export
       run: npm run build
 
-    - name: Create www folder for Capacitor
-      run: |
-        mkdir -p www
-        if [ -d "out" ]; then
-          cp -r out/. www/
-        else
-          echo "<html><body>App</body></html>" > www/index.html
-        fi
-
     - name: Add Android Platform
-      run: rm -rf android
-
-    - name: Fresh Cap Add
       run: |
         rm -rf android
         npx cap add android
@@ -54,9 +42,18 @@ jobs:
 
     - name: Copy Native Java Files
       run: |
-        cp .github/java/SmsReceiver.java android/app/src/main/java/com/neurasamu/neurachat/
-        cp .github/java/MmsReceiver.java android/app/src/main/java/com/neurasamu/neurachat/
-        cp .github/java/CallService.java android/app/src/main/java/com/neurasamu/neurachat/
+        TARGET=android/app/src/main/java/com/neurasamu/build/chat
+        mkdir -p $TARGET
+        cp .github/native/MainActivity.java $TARGET/
+        cp .github/native/SmsPlugin.java $TARGET/
+        cp .github/native/TelecomPlugin.java $TARGET/
+        cp .github/native/CallService.java $TARGET/
+        cp .github/native/CallIntentProcessor.java $TARGET/
+        cp .github/native/SmsReceiver.java $TARGET/
+        cp .github/native/MmsReceiver.java $TARGET/
+        cp .github/native/HeadlessSmsSendService.java $TARGET/
+        cp .github/native/BootReceiver.java $TARGET/
+
     - name: Sync Android
       run: npx cap sync android
 
@@ -71,4 +68,3 @@ jobs:
       with:
         name: NeuraChat-Debug-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
-
