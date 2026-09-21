@@ -40,6 +40,9 @@ jobs:
     - name: Copy Custom AndroidManifest
       run: cp .github/manifests/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 
+    - name: Remove native splash (blue X)
+      run: bash .github/scripts/remove-splash.sh android
+
     - name: Copy Native Java Files
       run: |
         TARGET=android/app/src/main/java/com/neurasamu/build/chat
