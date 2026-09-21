@@ -56,118 +56,148 @@
   transition: transform 0.1s ease;
 }
 
-/* --- LIGHT THEME BEAUTY OVERRIDES --- */
-html.light,
-html.light body,
-html.light .bg-black {
-  background-color: #f3f4f6 !important; /* light graybg-zinc-100 */
-  color: #0f172a !important; /* slate-900 key text content */
+/* --- LIGHT THEME (comprehensive) --- */
+html.light {
+  color-scheme: light;
 }
 
-html.light .bg-zinc-950 {
-  background-color: #ffffff !important;
+html.light body {
+  background-color: #f3f4f6 !important;
   color: #0f172a !important;
 }
+
+/* ============ BACKGROUNDS ============ */
+html.light .bg-black,
+html.light .bg-zinc-950 { background-color: #ffffff !important; }
+
+html.light [class*="bg-zinc-950/"] { background-color: rgba(255, 255, 255, 0.9) !important; }
 
 html.light .bg-zinc-900,
-html.light .bg-zinc-905 {
-  background-color: #f3f4f6 !important;
-  color: #1e293b !important;
+html.light .bg-zinc-905 { background-color: #f3f4f6 !important; }
+
+html.light [class*="bg-zinc-900/"] { background-color: rgba(243, 244, 246, 0.6) !important; }
+
+html.light .bg-zinc-850 { background-color: #e5e7eb !important; }
+html.light [class*="bg-zinc-850/"] { background-color: rgba(229, 231, 235, 0.6) !important; }
+
+html.light .bg-zinc-800 { background-color: #d1d5db !important; }
+html.light .bg-zinc-700 { background-color: #9ca3af !important; }
+
+/* ============ GRADIENT STOPS (Tailwind CSS vars) ============ */
+html.light [class*="from-zinc-950"],
+html.light [class*="from-zinc-900"] {
+  --tw-gradient-from: #ffffff !important;
+}
+html.light [class*="to-zinc-950"],
+html.light [class*="to-zinc-900"] {
+  --tw-gradient-to: #f3f4f6 !important;
+}
+html.light [class*="via-zinc-9"] {
+  --tw-gradient-via: #f3f4f6 !important;
 }
 
-html.light .bg-zinc-850 {
-  background-color: #e2e8f0 !important;
-}
-
-html.light .bg-zinc-800 {
-  background-color: #cbd5e1 !important;
-}
-
+/* ============ TEXT ============ */
 html.light .text-white,
-html.light h1,
-html.light h2,
-html.light h3,
-html.light h4,
-html.light p.text-white,
-html.light span.text-white {
-  color: #0f172a !important;
-}
+html.light h1, html.light h2, html.light h3, html.light h4,
+html.light h5, html.light h6 { color: #0f172a !important; }
 
-html.light .text-zinc-100 {
-  color: #0f172a !important;
-}
+html.light .text-zinc-100,
+html.light .text-zinc-200 { color: #1e293b !important; }
 
-html.light .text-zinc-200 {
-  color: #1e293b !important;
-}
+html.light .text-zinc-300 { color: #334155 !important; }
+html.light .text-zinc-400,
+html.light .text-zinc-450 { color: #475569 !important; }
+html.light .text-zinc-500 { color: #64748b !important; }
+html.light .text-zinc-600,
+html.light .text-zinc-650 { color: #94a3b8 !important; }
+html.light .text-zinc-700 { color: #a1a1aa !important; }
 
-html.light .text-zinc-300 {
-  color: #334155 !important;
-}
-
-html.light .text-zinc-400 {
-  color: #475569 !important;
-}
-
-html.light .text-zinc-500 {
-  color: #64748b !important;
-}
-
+/* ============ BORDERS ============ */
 html.light .border-zinc-900,
 html.light .border-zinc-805,
 html.light .border-zinc-802,
-html.light .border-zinc-700 {
+html.light .border-zinc-800,
+html.light .border-zinc-850,
+html.light .border-zinc-700 { border-color: #e2e8f0 !important; }
+
+html.light [class*="border-zinc-900/"] { border-color: rgba(226, 232, 240, 0.6) !important; }
+
+html.light .divide-zinc-900 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-zinc-90 > :not([hidden]) ~ :not([hidden]) {
   border-color: #e2e8f0 !important;
 }
-
-html.light .hover\:bg-zinc-900\/60:hover {
-  background-color: #f1f5f9 !important;
+html.light .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #cbd5e1 !important;
 }
 
-html.light .hover\:bg-zinc-850:hover {
-  background-color: #cbd5e1 !important;
-}
+/* ============ HOVERS ============ */
+html.light .hover\:bg-zinc-900\/60:hover { background-color: #e2e8f0 !important; }
+html.light .hover\:bg-zinc-900:hover { background-color: #e2e8f0 !important; }
+html.light .hover\:bg-zinc-850:hover { background-color: #cbd5e1 !important; }
+html.light .hover\:bg-zinc-800:hover { background-color: #cbd5e1 !important; }
+html.light .hover\:bg-zinc-700:hover { background-color: #94a3b8 !important; }
+html.light .hover\:text-white:hover { color: #0f172a !important; }
 
-/* Modals and Sheets Backdrop */
-html.light .fixed.inset-0.bg-black\/85,
-html.light .fixed.inset-0.bg-black\/90,
-html.light .fixed.inset-0.bg-black\/80 {
+/* ============ OVERLAYS / BACKDROPS ============ */
+html.light [class*="fixed"][class*="bg-black/80"],
+html.light [class*="fixed"][class*="bg-black/85"],
+html.light [class*="fixed"][class*="bg-black/90"],
+html.light [class*="fixed"][class*="bg-black/95"],
+html.light [class*="bg-black/80"],
+html.light [class*="bg-black/85"],
+html.light [class*="bg-black/90"],
+html.light [class*="bg-black/95"] {
   background-color: rgba(15, 23, 42, 0.4) !important;
-  backdrop-filter: blur(8px) !important;
 }
 
-/* Custom modal container box elements in light theme */
+/* ============ MODALS / SHEETS ============ */
 html.light #dialer-sheet-container,
 html.light #contact-action-sheet,
-html.light #settings-main-container div[role="dialog"],
 html.light .fixed.inset-0 .bg-zinc-950,
-html.light .fixed.inset-0 div.bg-zinc-950 {
+html.light .fixed.inset-0 div.bg-zinc-950,
+html.light .fixed.inset-0 .bg-zinc-900 {
   background-color: #ffffff !important;
   border-color: #cbd5e1 !important;
   color: #0f172a !important;
-  box-shadow: 0 -15px 30px -10px rgba(15, 23, 42, 0.15) !important;
 }
 
-/* Header style adjusting */
-html.light header,
-html.light header.bg-black\/80 {
-  background-color: rgba(255, 255, 255, 0.85) !important;
-  border-bottom: 1px solid #e2e8f0 !important;
-}
-
-/* Bottom Navigation */
-html.light nav,
-html.light nav.bg-black\/80 {
+/* ============ HEADER ============ */
+html.light header {
   background-color: rgba(255, 255, 255, 0.9) !important;
-  border-top: 1px solid #e2e8f0 !important;
+  border-bottom-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
-html.light .text-zinc-405,
-html.light .text-zinc-450 {
-  color: #334155 !important;
+/* chat-detail header is neon yellow — keep it visible, don't override the gradient */
+html.light #app-header-chat {
+  color: #18181b !important;
 }
 
-html.light .divide-zinc-90 > :not([hidden]) ~ :not([hidden]) {
+/* ============ BOTTOM NAV ============ */
+html.light nav {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-top-color: #e2e8f0 !important;
+}
+
+/* ============ INPUTS ============ */
+html.light input,
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
   border-color: #cbd5e1 !important;
 }
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
 
+/* ============ SETTINGS CARD specific ============ */
+html.light #profile-header-card {
+  background-image: linear-gradient(to top right, #ffffff, #f3f4f6) !important;
+  border-color: #cbd5e1 !important;
+}
+html.light #settings-core-options-list {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+}
