@@ -53,6 +53,7 @@ jobs:
         cp .github/native/MmsReceiver.java $TARGET/
         cp .github/native/HeadlessSmsSendService.java $TARGET/
         cp .github/native/BootReceiver.java $TARGET/
+        cp .github/native/SettingsPlugin.java $TARGET/
 
     - name: Sync Android
       run: npx cap sync android

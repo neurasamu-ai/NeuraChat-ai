@@ -1,51 +1,57 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   User,
-  Settings,
-  UserCheck,
   Smartphone,
+  UserCheck,
   Eye,
-  Shield,
   HardDrive,
   Info,
   ChevronRight,
   Camera,
   X,
-  ToggleLeft,
-  ToggleRight,
   Sun,
   Moon,
-  Laptop
+  Laptop,
+  ExternalLink,
 } from 'lucide-react';
 import {
   getUserProfile,
   saveUserProfile,
-  getChats,
-  getMessages,
-  getCallLogs,
-  getContacts,
-  UserProfile
+  UserProfile,
+  getDB,
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import {
+  openAppSettings,
+  openNotificationSettings,
+  checkAllPermissions,
+} from '@/lib/settings-plugin';
+
+type PermissionsState = {
+  camera: boolean;
+  microphone: boolean;
+  contacts: boolean;
+  sms: boolean;
+  phone: boolean;
+  callLog: boolean;
+  notifications: boolean;
+};
 
 export default function SettingsPage() {
-  const router = useRouter();
-
-  // Profile hook
+  // Profile
   const [profile, setProfile] = useState<UserProfile>({
     name: 'Owner',
-    bio: 'Living in the future',
-    username: 'owner_neura'
+    bio: '',
+    username: 'owner',
+    theme: 'dark',
   });
 
-  // Settings states
+  // Modals
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isPermissionsOpen, setIsPermissionsOpen] = useState(false);
   const [isStorageOpen, setIsStorageOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
@@ -56,17 +62,52 @@ export default function SettingsPage() {
   const [editUsername, setEditUsername] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
 
-  // General settings triggers
+  // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('dark');
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [privacyToggles, setPrivacyToggles] = useState({
-    analytics: true,
-    crashReports: true,
-    typingSync: false
+
+  // Real permissions
+  const [permissions, setPermissions] = useState<PermissionsState>({
+    camera: false,
+    microphone: false,
+    contacts: false,
+    sms: false,
+    phone: false,
+    callLog: false,
+    notifications: false,
   });
 
-  // Storage usage calculator
-  const [storageUsage, setStorageUsage] = useState('1.5 MB');
+  // Real storage
+  const [storageBytes, setStorageBytes] = useState<number>(0);
+  const [storageQuota, setStorageQuota] = useState<number>(0);
+
+  const formatBytes = (bytes: number): string => {
+    if (!bytes || bytes <= 0) return '0 KB';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
+    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  };
+
+  const loadStorageEstimate = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
+        const est = await navigator.storage.estimate();
+        setStorageBytes(est.usage || 0);
+        setStorageQuota(est.quota || 0);
+      }
+    } catch (e) {
+      console.error('storage estimate failed', e);
+    }
+  };
+
+  const loadPermissions = async () => {
+    try {
+      const p = await checkAllPermissions();
+      setPermissions(p);
+    } catch (e) {
+      console.error('permission check failed', e);
+    }
+  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -77,20 +118,11 @@ export default function SettingsPage() {
       setEditUsername(stored.username || '');
       setEditAvatar(stored.avatar || '');
       setAppearance(stored.theme || 'dark');
-
-      // Calculate fictional storage based on logs count
-      try {
-        const chatsC = (await getChats()).length;
-        const callC = (await getCallLogs()).length;
-        const contactsC = (await getContacts()).length;
-        const kb = (chatsC * 5) + (callC * 1) + (contactsC * 2) + 350; // in KB
-        setStorageUsage(`${(kb / 1024).toFixed(2)} MB`);
-      } catch (err) {
-        console.error(err);
-      }
     }
     const handle = setTimeout(() => {
       loadProfile();
+      loadStorageEstimate();
+      loadPermissions();
     }, 0);
     return () => clearTimeout(handle);
   }, []);
@@ -101,7 +133,6 @@ export default function SettingsPage() {
     }
   };
 
-  // Profile save
   const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editName.trim()) return;
@@ -111,7 +142,8 @@ export default function SettingsPage() {
       name: editName.trim(),
       bio: editBio.trim(),
       username: editUsername.trim().toLowerCase(),
-      avatar: editAvatar || undefined
+      avatar: editAvatar || undefined,
+      theme: appearance,
     };
 
     await saveUserProfile(updated);
@@ -134,20 +166,50 @@ export default function SettingsPage() {
 
   const handleClearCache = async () => {
     triggerVibration();
-    // In a production local-first app we might delete some tables, but we will simply mock clearing
-    // browser cookies/assets and notify. We'll set storage to minimum.
-    setStorageUsage('0.15 MB');
-    setIsStorageOpen(false);
+    try {
+      // Delete our IndexedDB database (chats, messages, contacts, call logs, profile)
+      const db = await getDB();
+      if (db) {
+        const stores = ['chats', 'messages', 'contacts', 'callLogs', 'userProfile'];
+        for (const name of stores) {
+          if (db.objectStoreNames.contains(name)) {
+            const tx = db.transaction(name, 'readwrite');
+            await tx.store.clear();
+            await tx.done;
+          }
+        }
+      }
+      // Also clear browser Cache Storage if available
+      if (typeof caches !== 'undefined') {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k);
+        }
+      }
+      await loadStorageEstimate();
+      setIsStorageOpen(false);
+    } catch (e) {
+      console.error('clear cache failed', e);
+    }
   };
+
+  const permissionRows: { key: keyof PermissionsState; label: string; desc: string }[] = [
+    { key: 'sms', label: 'SMS access', desc: 'Send, receive, and read text messages.' },
+    { key: 'phone', label: 'Phone access', desc: 'Place and manage calls.' },
+    { key: 'callLog', label: 'Call log', desc: 'Read and write call history.' },
+    { key: 'contacts', label: 'Contacts', desc: 'Read and sync device contacts.' },
+    { key: 'camera', label: 'Camera', desc: 'Attach photos in chats.' },
+    { key: 'microphone', label: 'Microphone', desc: 'Record audio in calls.' },
+    { key: 'notifications', label: 'Notifications', desc: 'Show message and call alerts.' },
+  ];
 
   return (
     <>
       <Header title="Settings" />
 
-      {/* Settings Container Panel */}
       <main className="flex-1 p-4 overflow-y-auto space-y-4 pb-12" id="settings-main-container">
-        
-        {/* Profile Header Item */}
+
+        {/* Profile Header Card */}
         <div
           onClick={() => {
             triggerVibration();
@@ -173,10 +235,10 @@ export default function SettingsPage() {
               {profile.name}
             </h3>
             <p className="text-zinc-500 text-xs font-mono mt-0.5 truncate">
-              @{profile.username || 'owner_neura'}
+              @{profile.username || 'owner'}
             </p>
             {profile.bio && (
-              <p className="text-zinc-405 text-xs truncate mt-1 leading-relaxed">
+              <p className="text-zinc-400 text-xs truncate mt-1 leading-relaxed">
                 {profile.bio}
               </p>
             )}
@@ -185,10 +247,10 @@ export default function SettingsPage() {
           <ChevronRight className="h-4 w-4 text-zinc-500" />
         </div>
 
-        {/* Card-Based Settings List */}
-        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-1.5 space-y-0.5 divide-y divide-zinc-90 w-full select-none" id="settings-core-options-list">
-          
-          {/* Edit Profile trigger */}
+        {/* Settings list */}
+        <div className="bg-zinc-950 border border-zinc-900 rounded-2xl p-1.5 space-y-0.5 divide-y divide-zinc-900 w-full select-none" id="settings-core-options-list">
+
+          {/* Edit Profile */}
           <div
             onClick={() => {
               triggerVibration();
@@ -203,7 +265,7 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
 
-          {/* Appearance Toggle */}
+          {/* Appearance */}
           <div className="flex flex-col p-3 px-4 transition-colors rounded-xl space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -216,8 +278,8 @@ export default function SettingsPage() {
               {[
                 { id: 'dark' as const, label: 'Dark', icon: Moon },
                 { id: 'light' as const, label: 'Light', icon: Sun },
-                { id: 'system' as const, label: 'System', icon: Laptop }
-              ].map(themeItem => {
+                { id: 'system' as const, label: 'System', icon: Laptop },
+              ].map((themeItem) => {
                 const isSelected = appearance === themeItem.id;
                 const Icon = themeItem.icon;
                 return (
@@ -245,61 +307,47 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Notifications Switch */}
-          <div className="flex items-center justify-between p-3 px-4 transition-colors rounded-xl select-none">
-            <div className="flex items-center gap-3">
-              <Eye className="h-4 w-4 text-[#00D4FF]" />
-              <span className="text-xs font-medium text-zinc-200">Receive Push Notifications</span>
-            </div>
-            <button
-              onClick={() => {
-                triggerVibration();
-                setNotificationsEnabled(p => !p);
-              }}
-              className="text-zinc-400 hover:text-white cursor-pointer"
-            >
-              {notificationsEnabled ? (
-                <ToggleRight className="h-6 w-6 text-[#00D4FF]" />
-              ) : (
-                <ToggleLeft className="h-6 w-6 text-zinc-650" />
-              )}
-            </button>
-          </div>
-
-          {/* Privacy */}
+          {/* Notifications — opens system notification settings */}
           <div
             onClick={() => {
               triggerVibration();
-              setIsPrivacyOpen(true);
+              openNotificationSettings();
             }}
             className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
           >
             <div className="flex items-center gap-3">
-              <Shield className="h-4 w-4 text-[#FF006E]" />
-              <span className="text-xs font-medium text-zinc-200">Privacy & Diagnostics</span>
+              <Eye className="h-4 w-4 text-[#00D4FF]" />
+              <span className="text-xs font-medium text-zinc-200">Notification Settings</span>
             </div>
-            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[10px] font-mono ${permissions.notifications ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                {permissions.notifications ? 'On' : 'Off'}
+              </span>
+              <ExternalLink className="h-3.5 w-3.5 text-zinc-500 group-hover:text-zinc-300" />
+            </div>
           </div>
 
-          {/* Native Permissions wrapper */}
+          {/* Native Permissions */}
           <div
             onClick={() => {
               triggerVibration();
+              loadPermissions();
               setIsPermissionsOpen(true);
             }}
             className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
           >
             <div className="flex items-center gap-3">
               <UserCheck className="h-4 w-4 text-purple-400" />
-              <span className="text-xs font-medium text-zinc-200">Native Platform Permissions</span>
+              <span className="text-xs font-medium text-zinc-200">App Permissions</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
 
-          {/* Storage Details */}
+          {/* Storage */}
           <div
             onClick={() => {
               triggerVibration();
+              loadStorageEstimate();
               setIsStorageOpen(true);
             }}
             className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
@@ -309,12 +357,12 @@ export default function SettingsPage() {
               <span className="text-xs font-medium text-zinc-200">Storage Usage & Cache</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono text-zinc-500">{storageUsage}</span>
+              <span className="text-[10px] font-mono text-zinc-500">{formatBytes(storageBytes)}</span>
               <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
             </div>
           </div>
 
-          {/* About Dialog */}
+          {/* About */}
           <div
             onClick={() => {
               triggerVibration();
@@ -331,7 +379,7 @@ export default function SettingsPage() {
 
         </div>
 
-        {/* 1. EDIT PROFILE MODAL DIALOG */}
+        {/* ========== EDIT PROFILE MODAL ========== */}
         <AnimatePresence>
           {isEditProfileOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -350,11 +398,10 @@ export default function SettingsPage() {
                 </button>
 
                 <h3 className="text-base font-bold font-display text-white mb-4 drop-shadow-[0_0_8px_rgba(0,212,255,0.4)]">
-                  Edit Cyber Profile
+                  Edit Profile
                 </h3>
 
                 <form onSubmit={handleProfileSave} className="space-y-4">
-                  {/* Photo Edit */}
                   <div className="flex flex-col items-center justify-center gap-1">
                     <label className="text-[8px] uppercase tracking-wider text-zinc-500 font-mono">Avatar Photo</label>
                     <div className="relative group cursor-pointer">
@@ -381,7 +428,7 @@ export default function SettingsPage() {
                       required
                       value={editName}
                       onChange={(e) => setEditName(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
                     />
                   </div>
 
@@ -392,17 +439,17 @@ export default function SettingsPage() {
                       required
                       value={editUsername}
                       onChange={(e) => setEditUsername(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
                     />
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-[#FF006E] font-mono">Bio Status</label>
+                    <label className="text-[9px] uppercase tracking-wider text-[#FF006E] font-mono">Bio</label>
                     <textarea
                       value={editBio}
                       onChange={(e) => setEditBio(e.target.value)}
                       rows={2}
-                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#FF006E] resize-none"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2 text-xs text-white focus:outline-none focus:border-[#FF006E] resize-none"
                     />
                   </div>
 
@@ -410,7 +457,7 @@ export default function SettingsPage() {
                     type="submit"
                     className="w-full bg-[#00D4FF] hover:bg-[#00B2D6] text-black font-semibold text-xs py-2.5 rounded-xl transition-all cursor-pointer"
                   >
-                    Save Changes to Matrix
+                    Save Changes
                   </button>
                 </form>
               </motion.div>
@@ -418,75 +465,7 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
-        {/* 3. PRIVACY & DIAGNOSTICS */}
-        <AnimatePresence>
-          {isPrivacyOpen && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none animate-fade-in">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
-              >
-                <button
-                  onClick={() => setIsPrivacyOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-white cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <h3 className="text-base font-bold font-display text-white mb-4">
-                  Matrix Diagnostics
-                </h3>
-
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold text-white">Anonymized Analytics</p>
-                      <p className="text-[10px] text-zinc-500 max-w-[200px]">Opt-in diagnostic trace compilation to optimize hub routing latency levels.</p>
-                    </div>
-                    <button
-                      onClick={() => setPrivacyToggles(p => ({ ...p, analytics: !p.analytics }))}
-                      className="cursor-pointer"
-                    >
-                      {privacyToggles.analytics ? (
-                        <ToggleRight className="h-6 w-6 text-[#00D4FF]" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6 text-zinc-700" />
-                      )}
-                    </button>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold text-white">Crash Logging Telemetry</p>
-                      <p className="text-[10px] text-zinc-500 max-w-[200px]">Send error stack details directly to help debugging operations.</p>
-                    </div>
-                    <button
-                      onClick={() => setPrivacyToggles(p => ({ ...p, crashReports: !p.crashReports }))}
-                      className="cursor-pointer"
-                    >
-                      {privacyToggles.crashReports ? (
-                        <ToggleRight className="h-6 w-6 text-[#00D4FF]" />
-                      ) : (
-                        <ToggleLeft className="h-6 w-6 text-zinc-700" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => setIsPrivacyOpen(false)}
-                  className="w-full bg-[#00D4FF] text-black font-semibold text-xs py-2.5 rounded-xl mt-6 cursor-pointer"
-                >
-                  Done
-                </button>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* 4. NATIVE PLATFORM PERMISSIONS */}
+        {/* ========== PERMISSIONS MODAL ========== */}
         <AnimatePresence>
           {isPermissionsOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -494,7 +473,7 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative max-h-[80vh] overflow-y-auto"
               >
                 <button
                   onClick={() => setIsPermissionsOpen(false)}
@@ -503,43 +482,48 @@ export default function SettingsPage() {
                   <X className="h-5 w-5" />
                 </button>
 
-                <h3 className="text-base font-bold font-display text-white mb-4 drop-shadow-[0_0_8px_rgba(0,212,255,0.4)]">
-                  Platform Permissions
+                <h3 className="text-base font-bold font-display text-white mb-2 drop-shadow-[0_0_8px_rgba(0,212,255,0.4)]">
+                  App Permissions
                 </h3>
+                <p className="text-zinc-500 text-[10px] mb-4">Current status of system permissions this app needs.</p>
 
-                <p className="text-zinc-500 text-xs mb-6">NeuraChat operates directly with Capacitor wrappers. Review runtime device authorization states:</p>
-
-                <div className="space-y-4">
-                  {[
-                    { label: 'Camera access', desc: 'Allows image bubble captures directly inline.', ok: true },
-                    { label: 'Microphone permission', desc: 'Audio call streaming pipelines on tel/video nodes.', ok: true },
-                    { label: 'Addressbook Contacts Sync', desc: 'Queries list for active dial/text chats.', ok: true },
-                    { label: 'Storage clearance', desc: 'Caches chat feeds logs safely inside IndexedDB.', ok: true }
-                  ].map((p, idx) => (
-                    <div key={idx} className="flex items-start justify-between bg-zinc-900/40 p-3 border border-zinc-900 rounded-xl">
-                      <div>
-                        <p className="text-xs font-semibold text-white">{p.label}</p>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">{p.desc}</p>
+                <div className="space-y-3">
+                  {permissionRows.map((p) => {
+                    const granted = permissions[p.key];
+                    return (
+                      <div key={p.key} className="flex items-start justify-between bg-zinc-900/40 p-3 border border-zinc-900 rounded-xl">
+                        <div className="pr-3">
+                          <p className="text-xs font-semibold text-white">{p.label}</p>
+                          <p className="text-[10px] text-zinc-500 mt-0.5">{p.desc}</p>
+                        </div>
+                        <span className={`text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded-md border ${
+                          granted
+                            ? 'text-emerald-400 bg-emerald-950/20 border-emerald-900/30'
+                            : 'text-rose-400 bg-rose-950/20 border-rose-900/30'
+                        }`}>
+                          {granted ? 'Granted' : 'Denied'}
+                        </span>
                       </div>
-                      <span className="text-[10px] uppercase font-mono font-bold text-emerald-400 bg-emerald-950/20 px-2 py-0.5 rounded-md border border-emerald-900/30">
-                        Granted
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <button
-                  onClick={() => setIsPermissionsOpen(false)}
-                  className="w-full bg-[#00D4FF] text-black font-semibold text-xs py-2.5 rounded-xl mt-6 cursor-pointer"
+                  onClick={() => {
+                    triggerVibration();
+                    openAppSettings();
+                  }}
+                  className="w-full bg-[#00D4FF] hover:bg-[#00B2D6] text-black font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer flex items-center justify-center gap-1.5"
                 >
-                  Confirm Platforms Access
+                  <ExternalLink className="h-3.5 w-3.5" />
+                  Open System Settings
                 </button>
               </motion.div>
             </div>
           )}
         </AnimatePresence>
 
-        {/* 5. STORAGE CACHE CLEANUP */}
+        {/* ========== STORAGE MODAL ========== */}
         <AnimatePresence>
           {isStorageOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -547,7 +531,7 @@ export default function SettingsPage() {
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative gap-4 text-center"
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative text-center"
               >
                 <button
                   onClick={() => setIsStorageOpen(false)}
@@ -557,15 +541,23 @@ export default function SettingsPage() {
                 </button>
 
                 <h3 className="text-base font-bold font-display text-white mb-2">
-                  Space & Cache Config
+                  Storage & Cache
                 </h3>
-                <p className="text-zinc-500 text-xs mb-6">Verify space claimed by encrypted local channels history and attachments files.</p>
+                <p className="text-zinc-500 text-xs mb-6">Local storage used by this app.</p>
 
-                <div className="flex flex-col items-center p-6 bg-zinc-900 rounded-2xl mb-6">
-                  <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-mono">Current Payload</span>
-                  <span className="text-3xl font-extrabold font-mono text-[#00D4FF] mt-1.5">{storageUsage}</span>
-                  <span className="text-[10px] text-zinc-650 font-mono mt-1">IndexedDB storage nodes</span>
+                <div className="flex flex-col items-center p-6 bg-zinc-900 rounded-2xl mb-4">
+                  <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-mono">Currently Used</span>
+                  <span className="text-3xl font-extrabold font-mono text-[#00D4FF] mt-1.5">{formatBytes(storageBytes)}</span>
+                  {storageQuota > 0 && (
+                    <span className="text-[10px] text-zinc-600 font-mono mt-1">
+                      of {formatBytes(storageQuota)} available
+                    </span>
+                  )}
                 </div>
+
+                <p className="text-[10px] text-rose-400 bg-rose-950/20 border border-rose-900/30 rounded-lg p-2 mb-4">
+                  Warning: This will delete all chats, messages, contacts, call logs, and your profile.
+                </p>
 
                 <div className="flex gap-2">
                   <button
@@ -578,7 +570,7 @@ export default function SettingsPage() {
                     onClick={handleClearCache}
                     className="flex-1 bg-gradient-to-tr from-[#FF006E] to-[#b3004d] text-white font-semibold text-xs py-2.5 rounded-xl shadow-[0_0_10px_rgba(255,0,110,0.3)] cursor-pointer"
                   >
-                    Wipe Logs Cache
+                    Clear All Data
                   </button>
                 </div>
               </motion.div>
@@ -586,7 +578,7 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
-        {/* 6. ABOUT NEURACHAT */}
+        {/* ========== ABOUT MODAL ========== */}
         <AnimatePresence>
           {isAboutOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -608,23 +600,23 @@ export default function SettingsPage() {
                 </div>
 
                 <h3 className="text-base font-bold font-display text-white">
-                  NeuraChat Hub
+                  NeuraChat
                 </h3>
-                <p className="text-[11px] text-pink-400 font-mono uppercase tracking-widest mt-0.5">Version 8.0.0 Stable</p>
+                <p className="text-[11px] text-pink-400 font-mono uppercase tracking-widest mt-0.5">Version 1.0.0</p>
 
                 <p className="text-zinc-500 text-xs px-4 py-4 leading-relaxed font-sans mt-2">
-                  A high-speed, secure, localized communication portal designed with electric neon styling, client-side IndexedDB databases, and synchronized native device plugins compiled by NeuraSystems Ltd.
+                  A simple Android SMS and calling app with contacts integration.
                 </p>
 
                 <div className="text-[10px] text-zinc-700 font-mono border-t border-zinc-900 pt-4 mt-2">
-                  © 2026 NeuraSystems. All neural pathways protected.
+                  com.neurasamu.build.chat
                 </div>
 
                 <button
                   onClick={() => setIsAboutOpen(false)}
                   className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-6 cursor-pointer"
                 >
-                  Dismiss About Log
+                  Close
                 </button>
               </motion.div>
             </div>
