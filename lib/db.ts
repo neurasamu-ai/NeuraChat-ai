@@ -193,27 +193,3 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
   await db.put('userProfile', profile, 'main');
 }
 
-export interface AiConfig {
-  apiUrl: string;
-  apiKey: string;
-  modelName: string;
-}
-
-export async function getAiConfig(): Promise<AiConfig | null> {
-  const db = await getDB();
-  if (!db) return null;
-  const config = await db.get('userProfile', 'aiConfig');
-  return config || null;
-}
-
-export async function saveAiConfig(config: AiConfig): Promise<void> {
-  const db = await getDB();
-  if (!db) return;
-  await db.put('userProfile', config, 'aiConfig');
-}
-
-export async function deleteAiConfig(): Promise<void> {
-  const db = await getDB();
-  if (!db) return;
-  await db.delete('userProfile', 'aiConfig');
-}

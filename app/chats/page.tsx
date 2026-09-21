@@ -13,14 +13,7 @@ import {
   X,
   UserPlus,
   RefreshCw,
-  MoreVertical,
   CheckCheck,
-  Bot,
-  Settings,
-  Send,
-  Key,
-  AlertCircle,
-  ArrowLeft
 } from 'lucide-react';
 import {
   getChats,
@@ -30,14 +23,6 @@ import {
   saveContact,
   Contact,
   Chat,
-  getAiConfig,
-  saveAiConfig,
-  deleteAiConfig,
-  getMessages,
-  saveMessage,
-  Message,
-  AiConfig,
-  getDB
 } from '@/lib/db';
 import { syncDeviceContacts } from '@/lib/capacitor';
 import Header from '@/components/Header';
@@ -66,278 +51,6 @@ export default function ChatsPage() {
   const [manualName, setManualName] = useState('');
   const [manualPhone, setManualPhone] = useState('');
   const [manualError, setManualError] = useState('');
-
-  // Neura_Ai States
-  const [isNeuraOpen, setIsNeuraOpen] = useState(false);
-  const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
-  const [neuraMessages, setNeuraMessages] = useState<Message[]>([]);
-  const [neuraInput, setNeuraInput] = useState('');
-  const [neuraLoading, setNeuraLoading] = useState(false);
-  const [currentAiConfig, setCurrentAiConfig] = useState<AiConfig | null>(null);
-
-  // API Config Form States
-  const [inputApiUrl, setInputApiUrl] = useState('');
-  const [inputApiKey, setInputApiKey] = useState('');
-  const [inputModelName, setInputModelName] = useState('');
-  const [apiError, setApiError] = useState('');
-
-  const loadNeuraData = async () => {
-    try {
-      const config = await getAiConfig();
-      setCurrentAiConfig(config);
-      if (config) {
-        setInputApiUrl(config.apiUrl);
-        setInputApiKey(config.apiKey);
-        setInputModelName(config.modelName);
-      }
-
-      const msgs = await getMessages('chat-neura-ai');
-      if (msgs.length === 0) {
-        // Initial welcome message from Neura_Ai
-        const welcome: Message = {
-          id: generateId('msg-neura-welcome'),
-          chatId: 'chat-neura-ai',
-          text: "Greetings! I am Neura_Ai, your on-device secure conversational assistant. Configure any LLM API endpoint from the gear icon to activate my core matrix.",
-          sender: 'contact',
-          timestamp: getCurrentTimestamp(),
-          status: 'read'
-        };
-        await saveMessage(welcome);
-        setNeuraMessages([welcome]);
-      } else {
-        setNeuraMessages(msgs);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadNeuraData();
-    }, 50);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handleSendNeuraMessage = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!neuraInput.trim() || neuraLoading) return;
-
-    triggerVibration();
-
-    const userText = neuraInput.trim();
-    setNeuraInput('');
-
-    // Save and render user message
-    const userMsg: Message = {
-      id: generateId('msg-neura-user'),
-      chatId: 'chat-neura-ai',
-      text: userText,
-      sender: 'user',
-      timestamp: getCurrentTimestamp(),
-      status: 'sent'
-    };
-    await saveMessage(userMsg);
-    setNeuraMessages(prev => [...prev, userMsg]);
-
-    // Check if configuration exists
-    if (!currentAiConfig || !currentAiConfig.apiKey || !currentAiConfig.apiUrl) {
-      // Prompt user to configure API settings
-      const neuraErrorMsg: Message = {
-        id: generateId('msg-neura-err'),
-        chatId: 'chat-neura-ai',
-        text: "System Alert: API connection variables are not certified. Please access the top-right Settings to add a functional endpoint, credential token, and model identifier.",
-        sender: 'contact',
-        timestamp: getCurrentTimestamp(),
-        status: 'read'
-      };
-      await saveMessage(neuraErrorMsg);
-      setNeuraMessages(prev => [...prev, neuraErrorMsg]);
-      return;
-    }
-
-    setNeuraLoading(true);
-
-    try {
-      let endpoint = currentAiConfig.apiUrl.trim();
-      const isGeminiNative = endpoint.includes('generateContent') || endpoint.includes('generativelanguage.googleapis.com');
-
-      // 1. Correctly filter out local system greetings and error alerts to avoid breaking raw payload structural validations
-      const filteredMessages = neuraMessages.concat(userMsg)
-        .filter(m => {
-          if (!m.text) return false;
-          // Skip Neura greeting messages so they don't count as assistant-first nodes
-          if (m.id.includes('msg-neura-welcome') || m.text.includes('Greetings! I am Neura_Ai')) return false;
-          // Skip settings instruction guides / errors
-          if (m.id.includes('msg-neura-err') || m.text.includes('System Alert:')) return false;
-          if (m.text.includes('Matrix transmission failure') || m.text.includes('Connection timed out') || m.text.includes('Endpoint returned error code')) return false;
-          return true;
-        });
-
-      // 2. Format with strict alternating roles starting with 'user'
-      const formattedMessages: { role: string; content: string }[] = [];
-      for (const m of filteredMessages) {
-        const role = m.sender === 'user' ? 'user' : 'assistant';
-        if (formattedMessages.length === 0) {
-          // Strict requirement: first message MUST be a 'user' message
-          if (role === 'user') {
-            formattedMessages.push({ role, content: m.text });
-          }
-        } else {
-          const lastMsg = formattedMessages[formattedMessages.length - 1];
-          if (lastMsg.role === role) {
-            // Merge consecutive role prompts with double spacing to fit strict standards
-            lastMsg.content += `\n\n${m.text}`;
-          } else {
-            formattedMessages.push({ role, content: m.text });
-          }
-        }
-      }
-
-      // If formatting pruned all elements, safely recover by sending the current user instruction directly
-      if (formattedMessages.length === 0) {
-        formattedMessages.push({ role: 'user', content: userText });
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout query
-
-      // Relay the parameters to our Next.js backend endpoint to bypass CORS and prevent 403 responses
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messages: formattedMessages,
-          endpoint: currentAiConfig.apiUrl.trim(),
-          apiKey: currentAiConfig.apiKey.trim(),
-          model: currentAiConfig.modelName.trim()
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Endpoint returned error code: ${response.status}`);
-      }
-
-      const result = await response.json();
-      let assistantResponseText = '';
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      if (result.choices && result.choices[0] && result.choices[0].message) {
-        assistantResponseText = result.choices[0].message.content;
-      } else if (result.candidates && result.candidates[0] && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts[0]) {
-        assistantResponseText = result.candidates[0].content.parts[0].text;
-      } else if (result.candidates && result.candidates[0] && result.candidates[0].content) {
-        assistantResponseText = result.candidates[0].content.parts[0].text;
-      } else {
-        assistantResponseText = JSON.stringify(result);
-      }
-
-      const assistantMsg: Message = {
-        id: generateId('msg-neura-assist'),
-        chatId: 'chat-neura-ai',
-        text: assistantResponseText || 'No response details identified.',
-        sender: 'contact',
-        timestamp: getCurrentTimestamp(),
-        status: 'read'
-      };
-
-      await saveMessage(assistantMsg);
-      setNeuraMessages(prev => [...prev, assistantMsg]);
-    } catch (err: any) {
-      console.error(err);
-      const errText = err.name === 'AbortError'
-        ? 'Connection timed out. Please check your system internet node and proxy configurations.'
-        : `Matrix transmission failure: ${err.message || 'Unknown network error'}.`;
-      const assistantMsg: Message = {
-        id: generateId('msg-neura-assist'),
-        chatId: 'chat-neura-ai',
-        text: errText,
-        sender: 'contact',
-        timestamp: getCurrentTimestamp(),
-        status: 'read'
-      };
-      await saveMessage(assistantMsg);
-      setNeuraMessages(prev => [...prev, assistantMsg]);
-    } finally {
-      setNeuraLoading(false);
-    }
-  };
-
-  const handleSaveApiSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setApiError('');
-
-    if (!inputApiUrl.trim() || !inputApiKey.trim() || !inputModelName.trim()) {
-      setApiError('All authentication parameters are required.');
-      return;
-    }
-
-    try {
-      const newConfig: AiConfig = {
-        apiUrl: inputApiUrl.trim(),
-        apiKey: inputApiKey.trim(),
-        modelName: inputModelName.trim()
-      };
-      await saveAiConfig(newConfig);
-      setCurrentAiConfig(newConfig);
-      setIsApiSettingsOpen(false);
-      triggerVibration();
-    } catch (err) {
-      setApiError('Failed to save parameters.');
-    }
-  };
-
-  const handleDeleteApiSettings = async () => {
-    try {
-      triggerVibration();
-      await deleteAiConfig();
-      setCurrentAiConfig(null);
-      setInputApiUrl('');
-      setInputApiKey('');
-      setInputModelName('');
-      setIsApiSettingsOpen(false);
-    } catch (err) {
-      setApiError('Failed to erase credentials.');
-    }
-  };
-
-  const handleClearNeuraChat = async () => {
-    triggerVibration();
-    try {
-      const db = await getDB();
-      if (!db) return;
-      const tx = db.transaction('messages', 'readwrite');
-      const index = tx.store.index('chatId');
-      let cursor = await index.openCursor(IDBKeyRange.only('chat-neura-ai'));
-      while (cursor) {
-        await cursor.delete();
-        cursor = await cursor.continue();
-      }
-      await tx.done;
-
-      const welcome: Message = {
-        id: generateId('msg-neura-welcome'),
-        chatId: 'chat-neura-ai',
-        text: "Greetings! I am Neura_Ai, your on-device secure conversational assistant. Configure any LLM API endpoint from the gear icon to activate my core matrix.",
-        sender: 'contact',
-        timestamp: getCurrentTimestamp(),
-        status: 'read'
-      };
-      await saveMessage(welcome);
-      setNeuraMessages([welcome]);
-    } catch (e) {
-      console.error(e);
-    }
-  };
 
   // Fetch chats and update
   const loadChatsData = async () => {
@@ -588,31 +301,18 @@ export default function ChatsPage() {
 
       {/* Main Content Area */}
       <main className="flex-1 p-4 overflow-y-auto" id="chats-main-container">
-        {/* Search Bar with Neura_Ai Button */}
+        {/* Search Bar */}
         <div className="flex gap-2.5 mb-4 items-center">
           <div className="relative flex-1" id="chat-search-bar">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search neural channels..."
+              placeholder="Search chats..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-9 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF]/30 transition-all"
             />
           </div>
-
-          <button
-            onClick={() => {
-              triggerVibration();
-              setIsNeuraOpen(true);
-            }}
-            className="px-3.5 py-2 hover:scale-[1.03] active:scale-95 bg-gradient-to-tr from-[#00D4FF]/10 to-[#FF006E]/10 hover:from-[#00D4FF]/20 hover:to-[#FF006E]/20 border border-[#00D4FF]/30 hover:border-[#00D4FF]/60 text-[#00D4FF] text-xs font-bold font-display rounded-xl tracking-wider shadow-[0_0_12px_rgba(0,212,255,0.15)] flex items-center gap-1.5 transition-all cursor-pointer h-[38px] select-none shrink-0"
-            title="Neura_Ai Chatbot"
-            id="neura-ai-trigger"
-          >
-            <Bot className="h-4 w-4 text-[#00D4FF]" />
-            <span>Neura_Ai</span>
-          </button>
         </div>
 
         {loading ? (
@@ -725,7 +425,7 @@ export default function ChatsPage() {
                   {/* Modal Header */}
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-lg font-bold font-display text-white drop-shadow-[0_0_6px_rgba(0,212,255,0.3)]">
-                      Establish Neural Channel
+                      New Chat
                     </h2>
                     <button
                       onClick={() => setIsNewChatOpen(false)}
@@ -773,7 +473,7 @@ export default function ChatsPage() {
                   {syncingContacts ? (
                     <div className="flex flex-col items-center justify-center h-32 py-12 gap-3">
                       <div className="w-8 h-8 rounded-full border-2 border-t-transparent border-[#00D4FF] animate-spin" />
-                      <span className="text-zinc-500 text-xs font-mono">Accessing phone contact nodes...</span>
+                      <span className="text-zinc-500 text-xs font-mono">Syncing phone contacts...</span>
                     </div>
                   ) : filteredContacts.length === 0 ? (
                     <div className="text-center py-10">
@@ -820,7 +520,7 @@ export default function ChatsPage() {
                 </button>
 
                 <h3 className="text-base font-bold font-display text-white mb-4 drop-shadow-[0_0_8px_rgba(255,0,110,0.4)]">
-                  Add Manual Contact Node
+                  Add Manual Contact
                 </h3>
 
                 <form onSubmit={handleAddManualContact} className="space-y-4">
@@ -868,214 +568,6 @@ export default function ChatsPage() {
           )}
         </AnimatePresence>
 
-        {/* NEURA_AI DIALOGUE MODAL */}
-        <AnimatePresence>
-          {isNeuraOpen && (
-            <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-50 flex flex-col select-none">
-              {/* Header */}
-              <header className="h-16 border-b border-zinc-900 bg-zinc-950/80 backdrop-blur-md flex items-center px-4 justify-between sticky top-0 shrink-0">
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setIsNeuraOpen(false)}
-                    className="p-1.5 rounded-full bg-zinc-900 text-zinc-400 hover:text-white cursor-pointer active:scale-95 transition-all"
-                  >
-                    <ArrowLeft className="h-4.5 w-4.5" />
-                  </button>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-bold text-sm tracking-wide text-white font-display">Neura_Ai</span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    </div>
-                    <p className="text-[10px] text-zinc-500 font-mono tracking-tight">
-                      {currentAiConfig ? `Model: ${currentAiConfig.modelName}` : 'Offline Mode'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleClearNeuraChat}
-                    title="Erase Chat History"
-                    className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-[#FF006E] transition-all cursor-pointer"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      triggerVibration();
-                      setIsApiSettingsOpen(true);
-                    }}
-                    title="API Server Settings"
-                    className="p-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-[#00D4FF] flex items-center gap-1 cursor-pointer transition-all text-xs font-semibold"
-                  >
-                    <Settings className="h-4 w-4" />
-                    <span>Add API</span>
-                  </button>
-                </div>
-              </header>
-
-              {/* Chat messages viewport */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar">
-                {neuraMessages.map((msg) => {
-                  const isUser = msg.sender === 'user';
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-2xl p-3 px-4 text-xs shadow-md leading-relaxed ${
-                          isUser
-                            ? 'bg-[#cbfe00] text-zinc-950 font-medium rounded-tr-none'
-                            : 'bg-zinc-900/80 border border-zinc-800/80 text-zinc-100 rounded-tl-none font-sans'
-                        }`}
-                      >
-                        <p className="whitespace-pre-wrap">{msg.text}</p>
-                        <span className="block text-[8px] text-zinc-500 font-mono mt-1 text-right">
-                          {formatTime(msg.timestamp)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-                {neuraLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-zinc-900/80 border border-zinc-800/80 text-zinc-100 rounded-2xl rounded-tl-none p-3 px-4 text-xs shadow-md flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF] animate-bounce [animation-delay:-0.3s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF] animate-bounce [animation-delay:-0.15s]" />
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#00D4FF] animate-bounce" />
-                      <span className="text-[10px] text-zinc-500 font-mono ml-1">Streaming neural link...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Chat input box footer */}
-              <footer className="p-3 border-t border-zinc-900 bg-zinc-950">
-                <form onSubmit={handleSendNeuraMessage} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={neuraInput}
-                    onChange={(e) => setNeuraInput(e.target.value)}
-                    placeholder={currentAiConfig ? "Transmit neuron signal..." : "Configure API first using 'Add API' button"}
-                    disabled={!currentAiConfig || neuraLoading}
-                    className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#00D4FF] disabled:opacity-50"
-                  />
-                  <button
-                    type="submit"
-                    disabled={!currentAiConfig || neuraLoading || !neuraInput.trim()}
-                    className="w-11 h-11 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-xl flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-30 disabled:scale-100 transition-all cursor-pointer"
-                  >
-                    <Send className="h-4.5 w-4.5" />
-                  </button>
-                </form>
-              </footer>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* NEURA_AI API CONFIGURATION POPUP */}
-        <AnimatePresence>
-          {isApiSettingsOpen && (
-            <div className="fixed inset-0 bg-black/95 backdrop-blur-md z-60 flex items-center justify-center p-6 select-none">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-              >
-                <button
-                  onClick={() => setIsApiSettingsOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-400 hover:text-white cursor-pointer transition-colors"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="p-1.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF]">
-                    <Key className="h-4.5 w-4.5" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold font-display text-white">
-                      AI Engine Credentials
-                    </h3>
-                    <p className="text-[10px] text-zinc-500">Add secure credentials for any compatible LLM endpoint.</p>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSaveApiSettings} className="space-y-3.5">
-                  {apiError && (
-                    <div className="p-2.5 rounded-xl bg-[#FF006E]/10 border border-[#FF006E]/20 flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-[#FF006E]" />
-                      <p className="text-[10px] text-[#FF006E] font-medium">{apiError}</p>
-                    </div>
-                  )}
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono block">
-                      Endpoint Base URL
-                    </label>
-                    <input
-                      type="url"
-                      required
-                      placeholder="e.g. https://api.deepseek.com/v1"
-                      value={inputApiUrl}
-                      onChange={(e) => setInputApiUrl(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono block">
-                      API Authorization Key / Token
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      placeholder="e.g. sk-************************"
-                      value={inputApiKey}
-                      onChange={(e) => setInputApiKey(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-150 focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[9px] uppercase tracking-wider text-zinc-500 font-mono block">
-                      Model Identifier / Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. deepseek-chat or gpt-4o"
-                      value={inputModelName}
-                      onChange={(e) => setInputModelName(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-150 focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  <div className="pt-2 flex flex-col gap-2">
-                    <button
-                      type="submit"
-                      className="w-full bg-[#00D4FF] hover:bg-[#00B2D6] text-black font-semibold text-xs py-2.5 rounded-xl cursor-pointer shadow-lg active:scale-95 transition-all"
-                    >
-                      Save Configuration
-                    </button>
-
-                    {currentAiConfig && (
-                      <button
-                        type="button"
-                        onClick={handleDeleteApiSettings}
-                        className="w-full border border-dashed border-[#FF006E]/30 hover:border-[#FF006E]/60 text-[#FF006E] text-center font-medium text-xs py-2 rounded-xl cursor-pointer active:scale-95 transition-all hover:bg-[#FF006E]/5"
-                      >
-                        Delete & Reset Connection
-                      </button>
-                    )}
-                  </div>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
       </main>
 
       {/* FAB To Open Contacts Menu - Now outside scroll container & positioned absolute */}

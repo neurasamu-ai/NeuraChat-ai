@@ -1,6 +1,0 @@
-{
-  "name": "NeuraChat",
-  "description": "Your Neural Communication Hub — a dark mode Android messaging and calling app with electric neon design, IndexedDB storage, and contacts integration.",
-  "requestFramePermissions": ["camera", "microphone"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}

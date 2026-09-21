@@ -1,20 +1,35 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://ai.google.dev/static/site-assets/images/share-ais-513315318.png" />
-</div>
+# NeuraChat
 
-# Run and deploy your AI Studio app
+A simple Android SMS and calling app.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/071f1777-26ab-4ea7-a0bb-bfa97b2616f5
+- **SMS** — send and receive text messages
+- **Calls** — dial, receive, and view call logs
+- **Contacts** — sync from device, add manually, favorites
 
-## Run Locally
+## Tech Stack
 
-**Prerequisites:**  Node.js
+- Next.js 15 (App Router, static export)
+- React 19
+- Capacitor 8 (Android)
+- IndexedDB (local storage)
+- Tailwind CSS 4
 
+## Build
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+Android APK builds run on **GitHub Actions** (`.github/workflows/build.yml`).
+
+Workflow:
+1. Push to `main`
+2. GitHub Actions builds Next.js static export
+3. Capacitor wraps it into an Android project
+4. Custom native Java files + AndroidManifest are injected
+5. Gradle assembles a debug APK
+6. APK is uploaded as a workflow artifact
+
+Download the APK from the **Actions** tab → latest run → **Artifacts**.
+
+## Package
+
+`com.neurasamu.build.chat`
