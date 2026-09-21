@@ -64,6 +64,11 @@ export default function ContactsPage() {
       return;
     }
     triggerVibration();
+    // Contacts with no phone can't do SMS/call — open action sheet instead.
+    if (!contact.phone) {
+      setActiveContact(contact);
+      return;
+    }
     router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
   };
 
@@ -74,6 +79,7 @@ export default function ContactsPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addName, setAddName] = useState('');
   const [addPhone, setAddPhone] = useState('');
+  const [addEmail, setAddEmail] = useState('');
   const [addAvatar, setAddAvatar] = useState<string>('');
   const [addError, setAddError] = useState('');
 
@@ -89,8 +95,22 @@ export default function ContactsPage() {
   };
 
   useEffect(() => {
-    const handle = setTimeout(() => {
-      loadContactsData();
+    const handle = setTimeout(async () => {
+      await loadContactsData();
+      // Auto-sync device contacts on first open if permission already granted.
+      // syncDeviceContacts() itself asks for permission if not yet granted.
+      if (typeof window !== 'undefined') {
+        const autoSynced = localStorage.getItem('contacts_autosync_v1');
+        if (!autoSynced) {
+          try {
+            await syncDeviceContacts();
+            await loadContactsData();
+            localStorage.setItem('contacts_autosync_v1', '1');
+          } catch (e) {
+            console.error('auto sync failed', e);
+          }
+        }
+      }
     }, 0);
     return () => clearTimeout(handle);
   }, []);
@@ -136,14 +156,26 @@ export default function ContactsPage() {
     e.preventDefault();
     setAddError('');
 
-    if (!addName.trim() || !addPhone.trim()) {
-      setAddError('Please fill out all fields.');
+    if (!addName.trim()) {
+      setAddError('Name is required.');
       return;
     }
 
     const cleanPhone = addPhone.replace(/\s+/g, '');
-    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
+    const cleanEmail = addEmail.trim();
+
+    if (!cleanPhone && !cleanEmail) {
+      setAddError('Provide at least a phone number or email.');
+      return;
+    }
+
+    if (cleanPhone && !/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
       setAddError('Please input a valid phone number (7-15 digits).');
+      return;
+    }
+
+    if (cleanEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+      setAddError('Please input a valid email address.');
       return;
     }
 
@@ -152,6 +184,7 @@ export default function ContactsPage() {
         id: generateId('contact'),
         name: addName.trim(),
         phone: cleanPhone,
+        email: cleanEmail || undefined,
         avatar: addAvatar || undefined,
         favorite: false
       };
@@ -159,6 +192,7 @@ export default function ContactsPage() {
       await saveContact(newContact);
       setAddName('');
       setAddPhone('');
+      setAddEmail('');
       setAddAvatar('');
       setIsAddOpen(false);
       loadContactsData();
@@ -205,7 +239,8 @@ export default function ContactsPage() {
   // Filter list
   const filteredContacts = contacts.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.phone.includes(searchQuery)
+    c.phone.includes(searchQuery) ||
+    (c.email || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Group rest alphabetically
@@ -361,9 +396,12 @@ export default function ContactsPage() {
                             {contact.name.slice(0, 2)}
                           </div>
                         )}
-                        <div>
-                          <p className="text-white text-xs font-semibold font-sans">{contact.name}</p>
-                          <p className="text-zinc-500 text-[9px] font-mono mt-0.5">{contact.phone}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-white text-xs font-semibold font-sans truncate">{contact.name}</p>
+                          <p className="text-zinc-500 text-[9px] font-mono mt-0.5 truncate">{contact.phone || 'No number'}</p>
+                          {contact.email && (
+                            <p className="text-[#00D4FF] text-[9px] font-mono mt-0.5 truncate">{contact.email}</p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -411,7 +449,12 @@ export default function ContactsPage() {
                     </div>
                   )}
                   <h3 className="text-base font-bold text-white font-display mb-0.5">{activeContact.name}</h3>
-                  <span className="text-xs text-zinc-500 font-mono">{activeContact.phone}</span>
+                  {activeContact.phone && (
+                    <span className="text-xs text-zinc-500 font-mono">{activeContact.phone}</span>
+                  )}
+                  {activeContact.email && (
+                    <span className="text-xs text-[#00D4FF] font-mono mt-0.5">{activeContact.email}</span>
+                  )}
                 </div>
 
                 {/* Direct Action Core Rows */}
@@ -555,14 +598,26 @@ export default function ContactsPage() {
 
                   <div className="space-y-1.5">
                     <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono block">
-                      Phone Number
+                      Phone Number <span className="text-zinc-600">(optional if email set)</span>
                     </label>
                     <input
                       type="tel"
-                      required
                       placeholder="e.g. +33155551212"
                       value={addPhone}
                       onChange={(e) => setAddPhone(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-[#00D4FF]"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono block">
+                      Email <span className="text-zinc-600">(optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="e.g. marie@example.com"
+                      value={addEmail}
+                      onChange={(e) => setAddEmail(e.target.value)}
                       className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-[#00D4FF]"
                     />
                   </div>

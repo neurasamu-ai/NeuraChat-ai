@@ -21,9 +21,19 @@ export interface CapContact {
     label?: string;
     value?: string;
   }>;
+  emails?: Array<{
+    label?: string;
+    address?: string;
+    value?: string;
+  }>;
+  name?: {
+    display?: string;
+    given?: string;
+    family?: string;
+  };
 }
 
-// Request contacts permission and fetch contacts from the device.
+// Request contacts permission and fetch contacts (name + phone + email) from the device.
 // Returns [] on web or when permission is denied.
 export async function syncDeviceContacts(): Promise<Contact[]> {
   const syncedContacts: Contact[] = [];
@@ -32,7 +42,6 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
     if (typeof window === 'undefined') return [];
 
     if (!isNativePlatform()) {
-      // Web has no native contacts — nothing to sync.
       return [];
     }
 
@@ -46,24 +55,40 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       projection: {
         name: true,
         phones: true,
+        emails: true,
       },
     });
 
     if (!result || !result.contacts) return [];
 
     for (const capC of (result.contacts as CapContact[])) {
-      const name = capC.displayName || (capC as any).name?.display || 'Unknown';
+      const name =
+        capC.displayName ||
+        capC.name?.display ||
+        capC.name?.given ||
+        capC.name?.family ||
+        'Unknown';
 
-      // Robust number extractor (handles both projection shapes)
+      // Robust phone extractor (handles both projection shapes)
       const phoneList = capC.phoneNumbers || capC.phones || [];
-      const rawPhone = (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
+      const rawPhone =
+        (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
 
-      if (rawPhone) {
-        const cleanPhone = rawPhone.replace(/\s+/g, '');
+      // Email extractor
+      const emailList = capC.emails || [];
+      const rawEmail =
+        (emailList[0] as any)?.address || (emailList[0] as any)?.value || '';
+
+      const cleanPhone = rawPhone ? rawPhone.replace(/\s+/g, '') : '';
+      const cleanEmail = rawEmail ? rawEmail.trim() : '';
+
+      // Save if we have at least a name AND (phone or email)
+      if (name && (cleanPhone || cleanEmail)) {
         const newContact: Contact = {
           id: `cap-${capC.contactId || Math.random().toString(36).substring(2, 11)}`,
           name,
           phone: cleanPhone,
+          email: cleanEmail || undefined,
           favorite: false,
         };
         await saveContact(newContact);
