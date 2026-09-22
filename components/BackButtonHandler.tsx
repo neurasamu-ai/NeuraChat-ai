@@ -19,10 +19,15 @@ export default function BackButtonHandler() {
     const setup = async () => {
       try {
         const { App } = await import('@capacitor/app');
-        listenerHandle = await App.addListener('backButton', ({ canGoBack }) => {
+        listenerHandle = await App.addListener('backButton', () => {
           if (ROOT_TABS.includes(pathname)) {
+            // On a root tab: minimize instead of killing the app.
             App.minimizeApp();
-          } else if (canGoBack && window.history.length > 1) {
+            return;
+          }
+
+          // Sub-page: go back if possible, else return to /calls.
+          if (window.history.length > 1) {
             router.back();
           } else {
             router.push('/calls');

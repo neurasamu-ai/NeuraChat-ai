@@ -40,8 +40,16 @@ export default function ContactsPage() {
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isLongPressActiveRef = React.useRef(false);
 
-  const startPress = (contact: Contact) => {
+  const touchStartPosRef = React.useRef<{ x: number; y: number } | null>(null);
+  const movedRef = React.useRef(false);
+  const SWIPE_THRESHOLD = 8; // px
+
+  const startPress = (contact: Contact, clientX?: number, clientY?: number) => {
     isLongPressActiveRef.current = false;
+    movedRef.current = false;
+    if (typeof clientX === 'number' && typeof clientY === 'number') {
+      touchStartPosRef.current = { x: clientX, y: clientY };
+    }
     longPressTimerRef.current = setTimeout(() => {
       isLongPressActiveRef.current = true;
       triggerVibration();
@@ -49,20 +57,39 @@ export default function ContactsPage() {
     }, 600);
   };
 
+  const movePress = (clientX: number, clientY: number) => {
+    if (!touchStartPosRef.current) return;
+    const dx = Math.abs(clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(clientY - touchStartPosRef.current.y);
+    if (dx > SWIPE_THRESHOLD || dy > SWIPE_THRESHOLD) {
+      movedRef.current = true;
+      // cancel long press since user is scrolling
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
+  };
+
   const endPress = () => {
     if (longPressTimerRef.current) {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    touchStartPosRef.current = null;
   };
 
   const handleContactClick = (contact: Contact) => {
+    // If the user swiped, don't treat it as a click.
+    if (movedRef.current) {
+      movedRef.current = false;
+      return;
+    }
     if (isLongPressActiveRef.current) {
       isLongPressActiveRef.current = false;
       return;
     }
     triggerVibration();
-    // Contacts with no phone can't do SMS/call — open action sheet instead.
     if (!contact.phone) {
       setActiveContact(contact);
       return;
@@ -307,14 +334,21 @@ export default function ContactsPage() {
                   {favorites.map(fav => (
                     <div
                       key={fav.id}
-                      onPointerDown={() => startPress(fav)}
+                      onPointerDown={(e) => startPress(fav, e.clientX, e.clientY)}
                       onPointerUp={endPress}
                       onPointerLeave={endPress}
                       onPointerCancel={endPress}
-                      onTouchStart={() => startPress(fav)}
+                      onTouchStart={(e) => {
+                        const t = e.touches[0];
+                        startPress(fav, t?.clientX, t?.clientY);
+                      }}
+                      onTouchMove={(e) => {
+                        const t = e.touches[0];
+                        if (t) movePress(t.clientX, t.clientY);
+                      }}
                       onTouchEnd={endPress}
                       onClick={() => handleContactClick(fav)}
-                      className="flex flex-col items-center flex-shrink-0 cursor-pointer text-center select-none touch-none"
+                      className="flex flex-col items-center flex-shrink-0 cursor-pointer text-center select-none touch-pan-y"
                     >
                       <div className="w-9 h-9 rounded-full border-2 border-amber-400/50 p-0.5 relative mb-1">
                         {fav.avatar ? (
@@ -352,14 +386,21 @@ export default function ContactsPage() {
                     {groupedContacts[letter].map(contact => (
                       <div
                         key={contact.id}
-                        onPointerDown={() => startPress(contact)}
+                        onPointerDown={(e) => startPress(contact, e.clientX, e.clientY)}
                         onPointerUp={endPress}
                         onPointerLeave={endPress}
                         onPointerCancel={endPress}
-                        onTouchStart={() => startPress(contact)}
+                        onTouchStart={(e) => {
+                          const t = e.touches[0];
+                          startPress(contact, t?.clientX, t?.clientY);
+                        }}
+                        onTouchMove={(e) => {
+                          const t = e.touches[0];
+                          if (t) movePress(t.clientX, t.clientY);
+                        }}
                         onTouchEnd={endPress}
                         onClick={() => handleContactClick(contact)}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-955 border border-zinc-900/60 hover:border-zinc-805 cursor-pointer active:bg-zinc-90 w-full select-none touch-none"
+                        className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-955 border border-zinc-900/60 hover:border-zinc-805 cursor-pointer active:bg-zinc-90 w-full select-none touch-pan-y"
                       >
                         {contact.avatar ? (
                           <img

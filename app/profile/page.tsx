@@ -134,7 +134,18 @@ function ProfileContent() {
       {/* Sticky default Header with back navigation route to Contacts */}
       <Header
         title="Node Profile"
-        backHref="/contacts"
+        onBack={() => {
+          if (isEditMode) {
+            setIsEditMode(false);
+            if (contact) {
+              setEditName(contact.name);
+              setEditPhone(contact.phone);
+              setEditAvatar(contact.avatar || '');
+            }
+          } else {
+            router.push('/contacts');
+          }
+        }}
         rightAction={
           <button
             onClick={handleToggleFavorite}
