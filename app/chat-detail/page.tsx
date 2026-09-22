@@ -39,6 +39,7 @@ import {
 import Header from '@/components/Header';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { chatIdFromPhone } from '@/lib/phone';
 import { getActiveSubscriptions, sendSms, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
@@ -48,7 +49,7 @@ function ChatDetailContent() {
   const phone = searchParams.get('phone') || '';
   const name = searchParams.get('name') || 'Neural Link';
   const avatar = searchParams.get('avatar') || '';
-  const chatId = `chat-${phone}`;
+  const chatId = chatIdFromPhone(phone);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -179,18 +180,20 @@ function ChatDetailContent() {
 
   // Actually send the SMS with a chosen subscription (or default SIM if none).
   const performSmsSend = async (text: string, subscriptionId?: number) => {
-    try {
-      if (isSmsPluginAvailable()) {
-        await sendSms(phone, text, subscriptionId);
-        console.log('Direct SMS sent via SIM', subscriptionId ?? 'default');
-      } else {
-        const smsBody = encodeURIComponent(text);
-        window.location.href = `sms:${phone}?body=${smsBody}`;
-      }
-    } catch (err) {
-      console.error('Direct SMS failed, falling back to intent:', err);
+    if (!isSmsPluginAvailable()) {
+      // Native plugin missing: let the OS handle it (default SMS app).
+      alertToast('Native SMS unavailable — opening system messenger');
       const smsBody = encodeURIComponent(text);
       window.location.href = `sms:${phone}?body=${smsBody}`;
+      return;
+    }
+    try {
+      await sendSms(phone, text, subscriptionId);
+      console.log('Direct SMS sent via SIM', subscriptionId ?? 'default');
+      alertToast('Message sent');
+    } catch (err: any) {
+      console.error('sendSms failed:', err);
+      alertToast('Send failed: ' + (err?.message || 'unknown error'));
     }
   };
 

@@ -61,3 +61,11 @@ export function isDuplicatePhone(
 ): boolean {
   return phonesMatch(a, b);
 }
+
+// Stable chat id for a phone number, shared across pages so that a
+// conversation opened from Contacts, Chats, or an incoming SMS lands in
+// the same thread.
+export function chatIdFromPhone(phone: string | undefined | null): string {
+  const norm = normalizePhone(phone) || (phone || '').replace(/\D/g, '');
+  return `chat-${norm}`;
+}

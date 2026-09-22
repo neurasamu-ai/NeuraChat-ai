@@ -9,13 +9,12 @@ import {
   isSmsPluginAvailable,
   IncomingSms,
 } from '@/lib/sms-plugin';
-import { normalizePhone } from '@/lib/phone';
+import { normalizePhone, chatIdFromPhone } from '@/lib/phone';
 
 // Normalizes a raw Android SMS sender into a stable chat key.
 // Android may deliver "03001234567", "+923001234567", or a shortcode.
 function chatIdFor(sender: string): string {
-  const norm = normalizePhone(sender) || sender;
-  return `chat-${norm}`;
+  return chatIdFromPhone(sender);
 }
 
 // Persists an incoming SMS as a Message + ensures a Chat entry exists.
