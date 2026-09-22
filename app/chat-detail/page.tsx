@@ -38,6 +38,7 @@ import {
 import Header from '@/components/Header';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { getActiveSubscriptions, sendSms, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
   const router = useRouter();
@@ -67,6 +68,11 @@ function ChatDetailContent() {
 
   // Simulated Voice/Video Call states
   const [isCallActive, setIsCallActive] = useState(false);
+  // SIM picker for outgoing SMS
+  const [simPickerOpen, setSimPickerOpen] = useState(false);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [pendingSmsText, setPendingSmsText] = useState<string>('');
+  const [rememberSim, setRememberSim] = useState(true);
   const [isCallVideo, setIsCallVideo] = useState(false);
   const [callTimer, setCallTimer] = useState(0);
 
@@ -192,6 +198,64 @@ function ChatDetailContent() {
     reader.readAsDataURL(file);
   };
 
+  // Actually send the SMS with a chosen subscription (or default SIM if none).
+  const performSmsSend = async (text: string, subscriptionId?: number) => {
+    try {
+      if (isSmsPluginAvailable()) {
+        await sendSms(phone, text, subscriptionId);
+        console.log('Direct SMS sent via SIM', subscriptionId ?? 'default');
+      } else {
+        const smsBody = encodeURIComponent(text);
+        window.location.href = `sms:${phone}?body=${smsBody}`;
+      }
+    } catch (err) {
+      console.error('Direct SMS failed, falling back to intent:', err);
+      const smsBody = encodeURIComponent(text);
+      window.location.href = `sms:${phone}?body=${smsBody}`;
+    }
+  };
+
+  // Decide whether we can send silently (1 SIM or remembered) or need a picker.
+  const dispatchSms = async (text: string) => {
+    if (!isSmsPluginAvailable()) {
+      // Non-native: just fall through to intent
+      await performSmsSend(text);
+      return;
+    }
+
+    const subs = await getActiveSubscriptions();
+    if (subs.length <= 1) {
+      // 0 or 1 SIM: no need to ask
+      await performSmsSend(text, subs[0]?.subscriptionId);
+      return;
+    }
+
+    // 2+ SIMs: check remembered preference
+    const remembered = getPreferredSimId();
+    if (remembered !== null && subs.some((x) => x.subscriptionId === remembered)) {
+      await performSmsSend(text, remembered);
+      return;
+    }
+
+    // Ask the user
+    setSubscriptions(subs);
+    setPendingSmsText(text);
+    setSimPickerOpen(true);
+  };
+
+  const handlePickSim = async (subscriptionId: number) => {
+    triggerVibration();
+    if (rememberSim) {
+      setPreferredSimId(subscriptionId);
+    }
+    const text = pendingSmsText;
+    setSimPickerOpen(false);
+    setPendingSmsText('');
+    if (text) {
+      await performSmsSend(text, subscriptionId);
+    }
+  };
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() && !selectedImage) return;
@@ -222,24 +286,9 @@ function ChatDetailContent() {
     // Refresh display
     await loadMessages();
 
-    // 3. Trigger native background SMS or fallback to intent
+    // 3. Dispatch SMS via selected/default SIM
     triggerVibration();
-    try {
-      const { isNativePlatform } = require('@/lib/capacitor');
-      if (isNativePlatform()) {
-        const { registerPlugin } = require('@capacitor/core');
-        const SmsPlugin = registerPlugin('SmsPlugin');
-        await SmsPlugin.sendDirectSMS({ phone, message: bodyText });
-        console.log('Direct SMS sent successfully in background!');
-      } else {
-        const smsBody = encodeURIComponent(bodyText);
-        window.location.href = `sms:${phone}?body=${smsBody}`;
-      }
-    } catch (err) {
-      console.error('Direct SMS failed, falling back to intent:', err);
-      const smsBody = encodeURIComponent(bodyText);
-      window.location.href = `sms:${phone}?body=${smsBody}`;
-    }
+    await dispatchSms(bodyText);
 
     // Interactive reply simulation after 1.5 seconds for engaging UX
     setTimeout(async () => {
@@ -367,6 +416,7 @@ function ChatDetailContent() {
 
   // ---- Back-button integration ----
   // Register in reverse priority: topmost UI consumes back first.
+  useBackHandler(simPickerOpen, () => setSimPickerOpen(false));
   useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
   useBackHandler(isShareOpen, () => setIsShareOpen(false));
   useBackHandler(isForwarding, () => {
@@ -878,6 +928,67 @@ function ChatDetailContent() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SIM PICKER MODAL (2+ SIMs) */}
+      <AnimatePresence>
+        {simPickerOpen && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
+            >
+              <button
+                onClick={() => {
+                  setSimPickerOpen(false);
+                  setPendingSmsText('');
+                }}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <h3 className="text-base font-bold font-display text-white mb-1">
+                Send SMS with
+              </h3>
+              <p className="text-xs text-zinc-500 mb-4">
+                Choose which SIM to send this message from.
+              </p>
+
+              <div className="space-y-2">
+                {subscriptions.map((sub) => (
+                  <button
+                    key={sub.subscriptionId}
+                    onClick={() => handlePickSim(sub.subscriptionId)}
+                    className="w-full bg-zinc-900 border border-zinc-800 hover:border-[#00D4FF]/40 hover:bg-zinc-850 rounded-xl p-3 flex items-center justify-between transition-all cursor-pointer active:scale-[0.98]"
+                  >
+                    <div className="text-left">
+                      <p className="text-xs font-semibold text-white">{sub.label}</p>
+                      {(sub.carrierName || sub.displayName) && (
+                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">
+                          {sub.carrierName || sub.displayName}
+                        </p>
+                      )}
+                    </div>
+                    <MessageSquare className="h-4 w-4 text-[#00D4FF]" />
+                  </button>
+                ))}
+              </div>
+
+              <label className="flex items-center gap-2 mt-4 text-[11px] text-zinc-400 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={rememberSim}
+                  onChange={(e) => setRememberSim(e.target.checked)}
+                  className="accent-[#00D4FF]"
+                />
+                Remember my choice
+              </label>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>

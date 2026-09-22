@@ -51,6 +51,7 @@ public class MainActivity extends BridgeActivity {
         perms.add("android.permission.GET_ACCOUNTS");
         perms.add(Manifest.permission.CALL_PHONE);
         perms.add(Manifest.permission.READ_PHONE_STATE);
+        perms.add(Manifest.permission.READ_PHONE_NUMBERS);
         perms.add(Manifest.permission.READ_CALL_LOG);
         perms.add(Manifest.permission.WRITE_CALL_LOG);
         perms.add(Manifest.permission.CAMERA);
