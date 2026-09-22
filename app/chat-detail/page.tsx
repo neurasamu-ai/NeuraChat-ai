@@ -22,7 +22,8 @@ import {
   PhoneOff,
   User,
   ExternalLink,
-  Users
+  Users,
+  MessageSquare
 } from 'lucide-react';
 import {
   getMessages,

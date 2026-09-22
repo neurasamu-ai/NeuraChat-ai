@@ -34,12 +34,6 @@ export interface CapContact {
   };
 }
 
-// Normalize a phone number for stable IDs and lookups
-function normalizePhone(raw?: string): string {
-  if (!raw) return '';
-  return raw.replace(/[^\d+]/g, '');
-}
-
 // Request contacts permission and fetch contacts (name + phone + email) from the device.
 // Idempotent: uses a stable id so repeated syncs update records instead of duplicating.
 function sourceLabelFor(accountType: string | null, accountName: string | null): string {
