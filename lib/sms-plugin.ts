@@ -24,6 +24,8 @@ export interface SmsPluginType {
     subscriptionId?: number;
   }): Promise<{ status: string; subscriptionId?: number }>;
   drainIncoming(): Promise<{ messages: IncomingSms[] }>;
+  isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
+  requestDefaultSmsRole(): Promise<{ launched: boolean }>;
   addListener(
     eventName: 'smsReceived',
     listener: (data: IncomingSms) => void
@@ -33,7 +35,30 @@ export interface SmsPluginType {
 const SmsPlugin = registerPlugin<SmsPluginType>('SmsPlugin');
 
 export function isSmsPluginAvailable(): boolean {
-  return Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('SmsPlugin');
+  if (typeof window === 'undefined') return false;
+  try {
+    if (Capacitor.getPlatform() !== 'android') return false;
+    try {
+      if (
+        typeof Capacitor.isPluginAvailable === 'function' &&
+        Capacitor.isPluginAvailable('SmsPlugin')
+      ) {
+        return true;
+      }
+    } catch {}
+    // Fallback for manually registered plugins.
+    try {
+      if (
+        typeof Capacitor.isNativePlatform === 'function' &&
+        Capacitor.isNativePlatform()
+      ) {
+        return true;
+      }
+    } catch {}
+    return false;
+  } catch {
+    return false;
+  }
 }
 
 export async function getActiveSubscriptions(): Promise<Subscription[]> {
@@ -97,5 +122,28 @@ export async function addSmsReceivedListener(
   } catch (e) {
     console.error('[Sms] addListener failed', e);
     return null;
+  }
+}
+
+
+export async function isDefaultSmsApp(): Promise<boolean> {
+  if (!isSmsPluginAvailable()) return true; // avoid annoying on unsupported
+  try {
+    const r = await SmsPlugin.isDefaultSmsApp();
+    return !!r.isDefault;
+  } catch (e) {
+    console.error('[Sms] isDefaultSmsApp failed', e);
+    return true;
+  }
+}
+
+export async function requestDefaultSmsRole(): Promise<boolean> {
+  if (!isSmsPluginAvailable()) return false;
+  try {
+    const r = await SmsPlugin.requestDefaultSmsRole();
+    return !!r.launched;
+  } catch (e) {
+    console.error('[Sms] requestDefaultSmsRole failed', e);
+    return false;
   }
 }

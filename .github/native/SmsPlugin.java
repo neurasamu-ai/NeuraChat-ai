@@ -4,6 +4,9 @@ import android.Manifest;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.app.role.RoleManager;
+import android.content.Intent;
+import android.os.Build;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Telephony;
@@ -221,5 +224,53 @@ public class SmsPlugin extends Plugin {
             Log.e(TAG, "sendDirectSMS failed", e);
             call.reject("SMS transmission failed: " + e.getMessage());
         }
+    }
+
+    @PluginMethod
+    public void isDefaultSmsApp(PluginCall call) {
+        boolean isDefault = false;
+        try {
+            String pkg = getContext().getPackageName();
+            String defaultPkg = Telephony.Sms.getDefaultSmsPackage(getContext());
+            isDefault = pkg.equals(defaultPkg);
+        } catch (Exception e) {
+            Log.w(TAG, "isDefaultSmsApp check failed", e);
+        }
+        JSObject ret = new JSObject();
+        ret.put("isDefault", isDefault);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void requestDefaultSmsRole(PluginCall call) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager rm = (RoleManager) getContext().getSystemService(Context.ROLE_SERVICE);
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
+                    Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_SMS);
+                    getActivity().startActivity(intent);
+                    JSObject ret = new JSObject();
+                    ret.put("launched", true);
+                    call.resolve(ret);
+                    return;
+                }
+            } else {
+                // Pre-Android 10 fallback
+                Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
+                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, getContext().getPackageName());
+                getActivity().startActivity(intent);
+                JSObject ret = new JSObject();
+                ret.put("launched", true);
+                call.resolve(ret);
+                return;
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "requestDefaultSmsRole failed", e);
+            call.reject("Request failed: " + e.getMessage());
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("launched", false);
+        call.resolve(ret);
     }
 }
