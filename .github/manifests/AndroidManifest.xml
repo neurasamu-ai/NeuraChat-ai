@@ -111,24 +111,6 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Support for Default Dialer Intents -->
-            <intent-filter>
-                <action android:name="android.intent.action.DIAL" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="tel" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.DIAL" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <action android:name="android.intent.action.DIAL" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="tel" />
-            </intent-filter>
-
             <!-- Support for Default SMS sending intents -->
             <intent-filter>
                 <action android:name="android.intent.action.SENDTO" />
@@ -150,24 +132,9 @@
 
         </activity>
 
-        <!-- CallIntentProcessor: Outgoing Direct Dial Interceptor -->
-        <activity
-            android:theme="@android:style/Theme.NoDisplay"
-            android:name="com.neurasamu.build.chat.CallIntentProcessor"
-            android:exported="true"
-            android:excludeFromRecents="true"
-            android:launchMode="singleTask"
-            android:noHistory="true">
-            <intent-filter>
-                <action android:name="android.intent.action.CALL" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:scheme="tel" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.CALL" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </activity>
+        <!-- CallIntentProcessor kept for future default-dialer flow.
+             Intent filters removed so that tel: URLs go to the system dialer
+             until the app is explicitly set as the default dialer. -->
 
         <provider
             android:name="androidx.core.content.FileProvider"

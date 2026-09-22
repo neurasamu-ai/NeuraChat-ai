@@ -68,14 +68,11 @@ function ChatDetailContent() {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Simulated Voice/Video Call states
-  const [isCallActive, setIsCallActive] = useState(false);
   // SIM picker for outgoing SMS
   const [simPickerOpen, setSimPickerOpen] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [pendingSmsText, setPendingSmsText] = useState<string>('');
   const [rememberSim, setRememberSim] = useState(true);
-  const [isCallVideo, setIsCallVideo] = useState(false);
-  const [callTimer, setCallTimer] = useState(0);
 
   // Profile sharing states
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -106,25 +103,6 @@ function ChatDetailContent() {
     };
     fetchForwardContacts();
   }, []);
-
-  // Timer for Voice/Video Calls
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isCallActive) {
-      interval = setInterval(() => {
-        setCallTimer(prev => prev + 1);
-      }, 1000);
-    }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
-  }, [isCallActive]);
-
-  const formatCallDuration = (sec: number) => {
-    const mins = Math.floor(sec / 60);
-    const secs = sec % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
 
   // Load message logs
   const loadMessages = async () => {
@@ -389,30 +367,13 @@ function ChatDetailContent() {
 
   const triggerCallSimulation = (isVideo: boolean) => {
     triggerVibration();
-    
-    // Save real call log dynamically using dynamic require
+    // Dial via system intent. The OS dialer (or the user's default dialer)
+    // takes over. No fake in-app call screen is shown.
     try {
-      const { saveCallLog } = require('@/lib/db');
-      const newLog = {
-        id: 'call-' + Math.random().toString(36).substr(2, 9),
-        name: name,
-        phone: phone,
-        type: 'outgoing' as const,
-        timestamp: Date.now(),
-        duration: Math.floor(Math.random() * 45) + 15
-      };
-      saveCallLog(newLog);
+      window.location.href = `tel:${phone}`;
     } catch (e) {
-      console.error('Call logging failed:', e);
+      console.error('Dial failed:', e);
     }
-
-    // Trigger REAL phone dialer call
-    window.location.href = `tel:${phone}`;
-    
-    // Keep beautiful screen active for premium visuals
-    setCallTimer(0);
-    setIsCallVideo(isVideo);
-    setIsCallActive(true);
   };
 
   // ---- Back-button integration ----
@@ -424,7 +385,6 @@ function ChatDetailContent() {
     setIsForwarding(false);
     setSelectedMsgIds([]);
   });
-  useBackHandler(isCallActive, () => setIsCallActive(false));
   useBackHandler(selectedMsgIds.length > 0 && !isForwarding, () => setSelectedMsgIds([]));
   useBackHandler(!!activeMessage, () => setActiveMessage(null));
 
@@ -661,73 +621,6 @@ function ChatDetailContent() {
           <Send className="h-4 w-4" />
         </button>
       </form>
-
-      {/* Simulated Fulscreen Voice/Video call Dialog overlay */}
-      <AnimatePresence>
-        {isCallActive && (
-          <div className="fixed inset-0 bg-zinc-950/95 z-50 flex flex-col items-center justify-between p-8 text-center select-none">
-            {/* Top right close cross (X) button */}
-            <div className="w-full flex justify-end">
-              <button
-                onClick={() => setIsCallActive(false)}
-                className="p-1.5 bg-zinc-900 hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-white cursor-pointer transition-all active:scale-90"
-                title="End stream"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Center profile node and waves */}
-            <div className="space-y-6 flex-1 flex flex-col items-center justify-center">
-              <div className="relative">
-                <div className="absolute inset-0 rounded-full bg-[#cbfe00]/25 animate-ping" />
-                {avatar ? (
-                  <img
-                    src={avatar}
-                    alt={name}
-                    className="w-24 h-24 rounded-full object-cover border-2 border-[#cbfe00]"
-                  />
-                ) : (
-                  <div className="w-24 h-24 rounded-full bg-zinc-900 border-2 border-[#cbfe00] flex items-center justify-center text-[#cbfe00] font-bold text-3xl select-none">
-                    {name.slice(0, 2).toUpperCase()}
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold tracking-tight text-white">{name}</h3>
-                <p className="text-[#cbfe00] text-xs uppercase tracking-wider font-mono font-bold animate-pulse">
-                  {isCallVideo ? 'Video Calling...' : 'Voice Calling...'}
-                </p>
-                <p className="text-zinc-550 font-mono text-sm">{formatCallDuration(callTimer)}</p>
-              </div>
-
-              {isCallVideo && (
-                <div className="w-48 h-32 bg-zinc-900 border border-zinc-805 rounded-xl overflow-hidden mt-4 relative">
-                  <div className="absolute inset-0 bg-gradient-to-tr from-[#cbfe00]/10 to-transparent animate-pulse" />
-                  <span className="absolute bottom-2 left-2 text-[9px] font-mono uppercase bg-black/60 px-1.5 py-0.5 rounded text-[#cbfe00]">
-                    Deck Cam: active
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Controls */}
-            <div className="flex items-center justify-center gap-6 mb-8">
-              <button
-                type="button"
-                onClick={() => {
-                  triggerVibration();
-                  setIsCallActive(false);
-                }}
-                className="w-16 h-16 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center active:scale-90 transition-all cursor-pointer shadow-[0_0_15px_rgba(220,38,38,0.4)]"
-              >
-                <PhoneOff className="h-6 w-6" />
-              </button>
-            </div>
-          </div>
-        )}
-      </AnimatePresence>
 
       {/* Side-floating Tool Dock for multi-selection without backdrop blur */}
       <AnimatePresence>
