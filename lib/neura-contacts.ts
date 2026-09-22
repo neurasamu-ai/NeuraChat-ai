@@ -40,15 +40,53 @@ export function isContactsPluginAvailable(): boolean {
   return Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('NeuraContactsPlugin');
 }
 
+// Built-in options that are always available in the app.
+// The native plugin adds Device / Google accounts / SIMs on top.
+const BUILTIN_ACCOUNTS: WritableAccount[] = [
+  {
+    id: 'neurachat',
+    label: 'NeuraChat',
+    accountType: 'neurachat.local',
+    accountName: 'NeuraChat',
+    writable: true,
+  },
+  {
+    // Device/local phone contacts. Always available; requires WRITE_CONTACTS
+    // permission which we request on first launch.
+    id: 'device',
+    label: 'Device',
+    accountType: null,
+    accountName: null,
+    writable: true,
+  },
+];
+
 export async function getWritableAccounts(): Promise<WritableAccount[]> {
-  if (!isContactsPluginAvailable()) return [];
+  // Always start with NeuraChat; it is app-local and never depends on the OS.
+  const merged = new Map<string, WritableAccount>();
+  for (const a of BUILTIN_ACCOUNTS) merged.set(a.id, a);
+
+  if (!isContactsPluginAvailable()) {
+    console.warn('[NeuraContacts] plugin not available, showing built-ins only');
+    return Array.from(merged.values());
+  }
+
   try {
     const r = await NeuraContacts.getWritableAccounts();
-    return r.accounts || [];
+    const list = r.accounts || [];
+    console.log('[NeuraContacts] accounts from native:', list);
+    for (const a of list) {
+      if (!a || !a.id) continue;
+      // native "neurachat" entry is redundant with BUILTIN; keep native's
+      // richer "device"/"google"/"sim" entries.
+      if (a.id === 'neurachat') continue;
+      merged.set(a.id, a);
+    }
   } catch (e) {
     console.error('[NeuraContacts] getWritableAccounts failed', e);
-    return [];
   }
+
+  return Array.from(merged.values());
 }
 
 export async function saveContactToAccount(opts: {

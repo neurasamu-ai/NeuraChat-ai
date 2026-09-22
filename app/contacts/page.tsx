@@ -156,6 +156,22 @@ export default function ContactsPage() {
     })();
   }, []);
 
+  // Reload accounts whenever the Add Contact dialog is opened.
+  // The plugin may have been unavailable at first mount (permission prompt
+  // still pending); by the time the user opens the dialog it is ready.
+  useEffect(() => {
+    if (!isAddOpen) return;
+    (async () => {
+      try {
+        const list = await getWritableAccounts();
+        console.log('[contacts] accounts on open:', list);
+        if (list.length > 0) setAccounts(list);
+      } catch (e) {
+        console.error('accounts reload failed', e);
+      }
+    })();
+  }, [isAddOpen]);
+
   useEffect(() => {
     let cancelled = false;
 
