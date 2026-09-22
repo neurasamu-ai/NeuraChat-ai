@@ -6,6 +6,7 @@ import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.provider.Settings;
+import android.util.Log;
 
 import androidx.core.content.ContextCompat;
 
@@ -40,12 +41,15 @@ import com.getcapacitor.PermissionState;
 )
 public class SettingsPlugin extends Plugin {
 
+    private static final String TAG = "NeuraSettings";
+
     private static final String[] ALL_ALIASES = {
         "sms", "phone", "contacts", "camera", "microphone", "notifications"
     };
 
     @PluginMethod
     public void requestAllPermissions(PluginCall call) {
+        Log.d(TAG, "requestAllPermissions called");
         java.util.List<String> toRequest = new java.util.ArrayList<>();
         for (String alias : ALL_ALIASES) {
             PermissionState state = getPermissionState(alias);
@@ -54,6 +58,7 @@ public class SettingsPlugin extends Plugin {
             }
         }
 
+        Log.d(TAG, "missing permissions to request: " + toRequest);
         if (toRequest.isEmpty()) {
             JSObject ret = new JSObject();
             ret.put("done", true);
@@ -67,6 +72,7 @@ public class SettingsPlugin extends Plugin {
 
     @PermissionCallback
     private void permissionsCallback(PluginCall call) {
+        Log.d(TAG, "permissionsCallback triggered");
         JSObject ret = new JSObject();
         ret.put("done", true);
         call.resolve(ret);
@@ -95,7 +101,8 @@ public class SettingsPlugin extends Plugin {
         ret.put("microphone", ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
         ret.put("contacts", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED);
         ret.put("sms", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
-                && ContextCompat.checkSelfPermission(context, android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED);
+                && ContextCompat.checkSelfPermission(context, android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED
+                && ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED);
         ret.put("phone", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED);
         ret.put("callLog", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED);

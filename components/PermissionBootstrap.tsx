@@ -1,33 +1,62 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { requestAllPermissions, isSettingsPluginAvailable } from '@/lib/settings-plugin';
-
-const ASKED_KEY = 'permission_bootstrap_done_v1';
+import {
+  checkAllPermissions,
+  requestAllPermissions,
+  isSettingsPluginAvailable,
+} from '@/lib/settings-plugin';
 
 export default function PermissionBootstrap() {
-  const done = useRef(false);
+  const ran = useRef(false);
 
   useEffect(() => {
-    if (done.current) return;
-    done.current = true;
+    if (ran.current) return;
+    ran.current = true;
 
     if (typeof window === 'undefined') return;
-    if (!isSettingsPluginAvailable()) return;
+    if (!isSettingsPluginAvailable()) {
+      console.log('[PermBootstrap] SettingsPlugin not available');
+      return;
+    }
 
-    // Ask only once (first launch). User can still grant later via system settings.
-    if (localStorage.getItem(ASKED_KEY) === '1') return;
+    let cancelled = false;
 
-    const timer = setTimeout(async () => {
-      try {
-        await requestAllPermissions();
-        localStorage.setItem(ASKED_KEY, '1');
-      } catch (e) {
-        console.error('permission bootstrap failed', e);
+    const run = async (attempt = 0) => {
+      if (cancelled) return;
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, 1500));
       }
-    }, 800); // small delay so UI is ready
+      if (cancelled) return;
 
-    return () => clearTimeout(timer);
+      try {
+        const perms = await checkAllPermissions();
+        console.log('[PermBootstrap] current:', perms);
+
+        const anyMissing = Object.values(perms).some((v) => v === false);
+        if (!anyMissing) {
+          console.log('[PermBootstrap] all granted');
+          return;
+        }
+
+        console.log('[PermBootstrap] requesting missing permissions...');
+        await requestAllPermissions();
+        console.log('[PermBootstrap] request done');
+      } catch (e) {
+        console.error('[PermBootstrap] error', e);
+        if (attempt < 2 && !cancelled) {
+          run(attempt + 1);
+        }
+      }
+    };
+
+    // First attempt after bridge is likely ready
+    const t = setTimeout(() => run(0), 1500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, []);
 
   return null;
