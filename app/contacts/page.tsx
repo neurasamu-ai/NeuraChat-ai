@@ -30,6 +30,7 @@ import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { normalizePhone } from '@/lib/phone';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -270,11 +271,19 @@ export default function ContactsPage() {
   };
 
   // Filter list
-  const filteredContacts = contacts.filter(c =>
-    c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.phone.includes(searchQuery) ||
-    (c.email || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredContacts = contacts.filter(c => {
+    const q = searchQuery.toLowerCase();
+    const qDigits = searchQuery.replace(/\D/g, '');
+    if (c.name.toLowerCase().includes(q)) return true;
+    if ((c.email || '').toLowerCase().includes(q)) return true;
+    if (qDigits) {
+      const nPhone = normalizePhone(c.phone);
+      const nQuery = normalizePhone(searchQuery);
+      if (nPhone && nQuery && nPhone.includes(nQuery)) return true;
+      if (c.phone.replace(/\D/g, '').includes(qDigits)) return true;
+    }
+    return false;
+  });
 
   // Group rest alphabetically
   const groupedContacts: { [key: string]: Contact[] } = {};

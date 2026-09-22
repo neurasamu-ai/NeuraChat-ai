@@ -30,6 +30,7 @@ import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp, getRandomCallDuration, triggerDial } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { normalizePhone, phonesMatch } from '@/lib/phone';
 
 export default function CallsPage() {
   const router = useRouter();
@@ -40,11 +41,7 @@ export default function CallsPage() {
 
   // Dynamic caller name lookup from contacts database
   const resolveCallerName = (phone: string, fallbackName: string) => {
-    const cleanPhone = phone.replace(/\D/g, '');
-    const found = contacts.find(c => {
-      const cPhone = c.phone.replace(/\D/g, '');
-      return cPhone.endsWith(cleanPhone) || cleanPhone.endsWith(cPhone);
-    });
+    const found = contacts.find(c => phonesMatch(c.phone, phone));
     if (found) return found.name;
     return fallbackName !== 'Unknown' ? fallbackName : phone;
   };
@@ -57,6 +54,7 @@ export default function CallsPage() {
   const isLongPressActiveRef = React.useRef(false);
   const backspaceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const backspaceLongPressRef = React.useRef(false);
+  const numberInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const startPress = (char: string) => {
     isLongPressActiveRef.current = false;
@@ -79,20 +77,19 @@ export default function CallsPage() {
   // Derived resolved contact
   const resolvedContact = React.useMemo(() => {
     if (!dialNumber) return null;
-    return contacts.find(c =>
-      c.phone.replace(/\D/g, '').endsWith(dialNumber.replace(/\D/g, '')) ||
-      dialNumber.replace(/\D/g, '').endsWith(c.phone.replace(/\D/g, ''))
-    ) || null;
+    return contacts.find(c => phonesMatch(c.phone, dialNumber)) || null;
   }, [dialNumber, contacts]);
 
   // Real-time matched contacts list based on dialed digits subsequence/sequence
   const matchedContacts = React.useMemo(() => {
     if (!dialNumber) return [];
-    const query = dialNumber.replace(/\D/g, '');
+    const query = normalizePhone(dialNumber);
     if (!query) return [];
+    const rawDigits = dialNumber.replace(/\D/g, '');
     return contacts.filter(c => {
-      const normalizedPhone = c.phone.replace(/\D/g, '');
-      return normalizedPhone.includes(query);
+      const normalized = normalizePhone(c.phone);
+      if (!normalized) return false;
+      return normalized.includes(query) || normalized.includes(rawDigits);
     });
   }, [dialNumber, contacts]);
 
@@ -127,12 +124,48 @@ export default function CallsPage() {
   // Numpad key pressure handlers
   const handleNumPress = (char: string) => {
     triggerVibration();
-    setDialNumber(prev => prev + char);
+    const input = numberInputRef.current;
+    if (input) {
+      const start = input.selectionStart ?? dialNumber.length;
+      const end = input.selectionEnd ?? dialNumber.length;
+      const next = dialNumber.slice(0, start) + char + dialNumber.slice(end);
+      setDialNumber(next);
+      // Move cursor to just after the inserted char
+      requestAnimationFrame(() => {
+        const pos = start + char.length;
+        try { input.setSelectionRange(pos, pos); } catch {}
+      });
+    } else {
+      setDialNumber(prev => prev + char);
+    }
   };
 
   const handleBackspace = () => {
     triggerVibration();
-    setDialNumber(prev => prev.slice(0, -1));
+    const input = numberInputRef.current;
+    if (input) {
+      const start = input.selectionStart ?? dialNumber.length;
+      const end = input.selectionEnd ?? dialNumber.length;
+      let next = dialNumber;
+      let cursor = start;
+      if (start !== end) {
+        // remove selection
+        next = dialNumber.slice(0, start) + dialNumber.slice(end);
+        cursor = start;
+      } else if (start > 0) {
+        // remove char before cursor
+        next = dialNumber.slice(0, start - 1) + dialNumber.slice(end);
+        cursor = start - 1;
+      } else {
+        return;
+      }
+      setDialNumber(next);
+      requestAnimationFrame(() => {
+        try { input.setSelectionRange(cursor, cursor); } catch {}
+      });
+    } else {
+      setDialNumber(prev => prev.slice(0, -1));
+    }
   };
 
   // Dial Trigger via window.location.href = tel:NUMBER
@@ -405,9 +438,21 @@ export default function CallsPage() {
                 {/* Dialer Header: Number Display Area */}
                 <div className="w-full text-center mb-3 mt-2 relative px-8 flex flex-col items-center justify-center min-h-[3rem]">
                   <div className="flex items-center justify-center w-full relative min-h-[2.5rem] px-10">
-                    <span className="text-2xl font-bold font-mono text-white tracking-widest break-all select-all">
-                      {dialNumber || ' '}
-                    </span>
+                    <input
+                      ref={numberInputRef}
+                      type="text"
+                      inputMode="none"
+                      value={dialNumber}
+                      onChange={(e) => {
+                        // Allow only digits, plus, star, hash; keep cursor at end on manual change
+                        const cleaned = e.target.value.replace(/[^\d+*#]/g, '');
+                        setDialNumber(cleaned);
+                      }}
+                      placeholder=" "
+                      autoComplete="off"
+                      spellCheck={false}
+                      className="w-full bg-transparent text-2xl font-bold font-mono text-white tracking-widest text-center outline-none caret-[#00D4FF] px-10"
+                    />
 
                     {dialNumber && (
                       <button
