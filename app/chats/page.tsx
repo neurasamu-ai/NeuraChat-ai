@@ -177,19 +177,9 @@ export default function ChatsPage() {
 
   const handleSelectContactForChat = async (contact: Contact) => {
     setIsNewChatOpen(false);
-    // Open or create chat
-    const existingChatId = `chat-${contact.phone}`;
-    const newChat: Chat = {
-      id: existingChatId,
-      name: contact.name,
-      phone: contact.phone,
-      avatar: contact.avatar || '',
-      lastMessage: '',
-      timestamp: getCurrentTimestamp(),
-      unread: 0,
-      archived: false
-    };
-    await saveChat(newChat);
+    // Don't persist a chat entry here. Chat is created on first send
+    // in chat-detail (ensureChatExists). This keeps the Chat tab clean
+    // until the user actually messages the contact.
     router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
   };
 

@@ -123,26 +123,33 @@ function ChatDetailContent() {
   const loadMessages = async () => {
     if (!phone) return;
     try {
+      // Only load existing messages. Chat entry is created on first send.
       const logs = await getMessages(chatId);
       setMessages(logs);
-      // Ensure the chat exists in the active channel list too
-      const currentChats = await getChats();
-      const chatExists = currentChats.some(c => c.id === chatId);
-      if (!chatExists) {
-        const matchingChat: Chat = {
-          id: chatId,
-          name,
-          phone,
-          avatar,
-          lastMessage: '',
-          timestamp: getCurrentTimestamp(),
-          unread: 0,
-          archived: false
-        };
-        await saveChat(matchingChat);
-      }
     } catch (e) {
       console.error(e);
+    }
+  };
+
+  // Ensure a chat entry exists for this contact.
+  const ensureChatExists = async () => {
+    try {
+      const currentChats = await getChats();
+      const exists = currentChats.some(c => c.id === chatId);
+      if (exists) return;
+      const matchingChat: Chat = {
+        id: chatId,
+        name,
+        phone,
+        avatar,
+        lastMessage: '',
+        timestamp: getCurrentTimestamp(),
+        unread: 0,
+        archived: false,
+      };
+      await saveChat(matchingChat);
+    } catch (e) {
+      console.error('ensureChatExists failed', e);
     }
   };
 
@@ -202,7 +209,10 @@ function ChatDetailContent() {
       status: 'sent'
     };
 
-    // 2. Save locally in IndexedDB
+    // 2. Ensure chat entry exists before saving the first message
+    await ensureChatExists();
+
+    // 3. Save locally in IndexedDB
     await saveMessage(newMsg);
     
     // Clear inputs immediately

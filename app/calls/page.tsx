@@ -55,6 +55,8 @@ export default function CallsPage() {
 
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isLongPressActiveRef = React.useRef(false);
+  const backspaceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const backspaceLongPressRef = React.useRef(false);
 
   const startPress = (char: string) => {
     isLongPressActiveRef.current = false;
@@ -346,25 +348,6 @@ export default function CallsPage() {
                   <X className="h-5 w-5" />
                 </button>
 
-                {/* Dialer Header: Number Display Area */}
-                <div className="w-full text-center mb-3 mt-2 relative px-8 flex flex-col items-center justify-center min-h-[3rem]">
-                  <div className="flex items-center justify-center w-full relative min-h-[2.5rem] px-10">
-                    <span className="text-2xl font-bold font-mono text-white tracking-widest break-all select-all">
-                      {dialNumber || ' '}
-                    </span>
-
-                    {dialNumber && (
-                      <button
-                        onClick={handleBackspace}
-                        className="absolute right-2 p-1 rounded text-zinc-500 hover:text-white transition-colors cursor-pointer active:scale-90"
-                        title="Backspace"
-                      >
-                        <Delete className="h-5 w-5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-
                 {/* Match List Area (Red Circle space) */}
                 <div className="w-full max-w-[280px] min-h-[4rem] mb-4 flex flex-col items-center justify-center">
                   {dialNumber ? (
@@ -417,6 +400,53 @@ export default function CallsPage() {
                   ) : (
                     <span className="text-[10px] text-zinc-600 font-mono italic">Enter digits to search database...</span>
                   )}
+                </div>
+
+                {/* Dialer Header: Number Display Area */}
+                <div className="w-full text-center mb-3 mt-2 relative px-8 flex flex-col items-center justify-center min-h-[3rem]">
+                  <div className="flex items-center justify-center w-full relative min-h-[2.5rem] px-10">
+                    <span className="text-2xl font-bold font-mono text-white tracking-widest break-all select-all">
+                      {dialNumber || ' '}
+                    </span>
+
+                    {dialNumber && (
+                      <button
+                        onClick={() => {
+                          // If long press already cleared, skip single delete
+                          if (backspaceLongPressRef.current) {
+                            backspaceLongPressRef.current = false;
+                            return;
+                          }
+                          handleBackspace();
+                        }}
+                        onPointerDown={() => {
+                          backspaceLongPressRef.current = false;
+                          if (backspaceTimerRef.current) clearTimeout(backspaceTimerRef.current);
+                          backspaceTimerRef.current = setTimeout(() => {
+                            backspaceLongPressRef.current = true;
+                            triggerVibration();
+                            setDialNumber('');
+                          }, 600);
+                        }}
+                        onPointerUp={() => {
+                          if (backspaceTimerRef.current) {
+                            clearTimeout(backspaceTimerRef.current);
+                            backspaceTimerRef.current = null;
+                          }
+                        }}
+                        onPointerLeave={() => {
+                          if (backspaceTimerRef.current) {
+                            clearTimeout(backspaceTimerRef.current);
+                            backspaceTimerRef.current = null;
+                          }
+                        }}
+                        className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90"
+                        title="Backspace (long press to clear)"
+                      >
+                        <Delete className="h-7 w-7" />
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Numpad Keypad grid */}

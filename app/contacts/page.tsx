@@ -16,7 +16,8 @@ import {
   MoreVertical,
   Mail,
   Camera,
-  Trash2
+  Trash2,
+  Info
 } from 'lucide-react';
 import {
   getContacts,
@@ -45,12 +46,20 @@ export default function ContactsPage() {
   const movedRef = React.useRef(false);
   const SWIPE_THRESHOLD = 8; // px
 
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
   const startPress = (contact: Contact, clientX?: number, clientY?: number) => {
     isLongPressActiveRef.current = false;
     movedRef.current = false;
     if (typeof clientX === 'number' && typeof clientY === 'number') {
       touchStartPosRef.current = { x: clientX, y: clientY };
     }
+    cancelLongPress();
     longPressTimerRef.current = setTimeout(() => {
       isLongPressActiveRef.current = true;
       triggerVibration();
@@ -64,32 +73,37 @@ export default function ContactsPage() {
     const dy = Math.abs(clientY - touchStartPosRef.current.y);
     if (dx > SWIPE_THRESHOLD || dy > SWIPE_THRESHOLD) {
       movedRef.current = true;
-      // cancel long press since user is scrolling
-      if (longPressTimerRef.current) {
-        clearTimeout(longPressTimerRef.current);
-        longPressTimerRef.current = null;
+      cancelLongPress();
+    }
+  };
+
+  // Only cancels the long-press timer. Does NOT clear start position,
+  // because pointerleave fires during scroll and would otherwise lose it.
+  const endPress = (clientX?: number, clientY?: number) => {
+    cancelLongPress();
+    if (
+      touchStartPosRef.current &&
+      typeof clientX === 'number' &&
+      typeof clientY === 'number'
+    ) {
+      const dx = Math.abs(clientX - touchStartPosRef.current.x);
+      const dy = Math.abs(clientY - touchStartPosRef.current.y);
+      if (dx > SWIPE_THRESHOLD || dy > SWIPE_THRESHOLD) {
+        movedRef.current = true;
       }
     }
   };
 
-  const endPress = () => {
-    if (longPressTimerRef.current) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
-    }
-    touchStartPosRef.current = null;
-  };
-
   const handleContactClick = (contact: Contact) => {
-    // If the user swiped, don't treat it as a click.
-    if (movedRef.current) {
-      movedRef.current = false;
-      return;
-    }
-    if (isLongPressActiveRef.current) {
-      isLongPressActiveRef.current = false;
-      return;
-    }
+    const wasMoved = movedRef.current;
+    const wasLongPress = isLongPressActiveRef.current;
+    // reset for next interaction
+    movedRef.current = false;
+    isLongPressActiveRef.current = false;
+    touchStartPosRef.current = null;
+
+    if (wasMoved || wasLongPress) return;
+
     triggerVibration();
     if (!contact.phone) {
       setActiveContact(contact);
@@ -340,9 +354,8 @@ export default function ContactsPage() {
                     <div
                       key={fav.id}
                       onPointerDown={(e) => startPress(fav, e.clientX, e.clientY)}
-                      onPointerUp={endPress}
-                      onPointerLeave={endPress}
-                      onPointerCancel={endPress}
+                      onPointerUp={(e) => endPress(e.clientX, e.clientY)}
+                      onPointerCancel={(e) => endPress(e.clientX, e.clientY)}
                       onTouchStart={(e) => {
                         const t = e.touches[0];
                         startPress(fav, t?.clientX, t?.clientY);
@@ -351,7 +364,10 @@ export default function ContactsPage() {
                         const t = e.touches[0];
                         if (t) movePress(t.clientX, t.clientY);
                       }}
-                      onTouchEnd={endPress}
+                      onTouchEnd={(e) => {
+                        const t = e.changedTouches[0];
+                        endPress(t?.clientX, t?.clientY);
+                      }}
                       onClick={() => handleContactClick(fav)}
                       className="flex flex-col items-center flex-shrink-0 cursor-pointer text-center select-none touch-pan-y"
                     >
@@ -392,9 +408,8 @@ export default function ContactsPage() {
                       <div
                         key={contact.id}
                         onPointerDown={(e) => startPress(contact, e.clientX, e.clientY)}
-                        onPointerUp={endPress}
-                        onPointerLeave={endPress}
-                        onPointerCancel={endPress}
+                        onPointerUp={(e) => endPress(e.clientX, e.clientY)}
+                        onPointerCancel={(e) => endPress(e.clientX, e.clientY)}
                         onTouchStart={(e) => {
                           const t = e.touches[0];
                           startPress(contact, t?.clientX, t?.clientY);
@@ -403,9 +418,12 @@ export default function ContactsPage() {
                           const t = e.touches[0];
                           if (t) movePress(t.clientX, t.clientY);
                         }}
-                        onTouchEnd={endPress}
+                        onTouchEnd={(e) => {
+                          const t = e.changedTouches[0];
+                          endPress(t?.clientX, t?.clientY);
+                        }}
                         onClick={() => handleContactClick(contact)}
-                        className="flex items-center gap-2 p-1.5 rounded-lg bg-zinc-955 border border-zinc-900/60 hover:border-zinc-805 cursor-pointer active:bg-zinc-90 w-full select-none touch-pan-y"
+                        className="flex items-center gap-2 p-1.5 pr-1 rounded-lg bg-zinc-955 border border-zinc-900/60 hover:border-zinc-805 cursor-pointer active:bg-zinc-90 w-full select-none touch-pan-y"
                       >
                         {contact.avatar ? (
                           <img
@@ -425,6 +443,46 @@ export default function ContactsPage() {
                             <p className="text-[#00D4FF] text-[9px] font-mono mt-0.5 truncate">{contact.email}</p>
                           )}
                         </div>
+                        {contact.phone && (
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerVibration();
+                                router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
+                              }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] hover:bg-[#00D4FF]/20 active:scale-90 transition-all"
+                              title="SMS"
+                            >
+                              <MessageSquare className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerVibration();
+                                window.location.href = `tel:${contact.phone}`;
+                              }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
+                              title="Call"
+                            >
+                              <Phone className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                triggerVibration();
+                                setActiveContact(contact);
+                              }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-300 hover:bg-zinc-800 active:scale-90 transition-all"
+                              title="Details"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
