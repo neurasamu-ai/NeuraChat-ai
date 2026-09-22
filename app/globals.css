@@ -236,3 +236,39 @@ html.light #settings-core-options-list {
 @keyframes splash-fade-in {
   to { opacity: 1; }
 }
+
+/* --- NeuraChat brand: live neon pulse --- */
+.neura-brand {
+  display: inline-flex;
+  font-family: var(--font-display, inherit);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.neura-brand .neura-blue {
+  color: #00D4FF;
+  animation: neura-pulse-blue 2.4s ease-in-out infinite;
+}
+.neura-brand .neura-pink {
+  color: #FF006E;
+  animation: neura-pulse-pink 2.4s ease-in-out infinite;
+}
+@keyframes neura-pulse-blue {
+  0%, 100% {
+    text-shadow: 0 0 4px rgba(0,212,255,0.5), 0 0 10px rgba(0,212,255,0.25);
+    opacity: 0.95;
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(0,212,255,0.9), 0 0 22px rgba(0,212,255,0.55);
+    opacity: 1;
+  }
+}
+@keyframes neura-pulse-pink {
+  0%, 100% {
+    text-shadow: 0 0 4px rgba(255,0,110,0.5), 0 0 10px rgba(255,0,110,0.25);
+    opacity: 0.95;
+  }
+  50% {
+    text-shadow: 0 0 10px rgba(255,0,110,0.9), 0 0 22px rgba(255,0,110,0.55);
+    opacity: 1;
+  }
+}

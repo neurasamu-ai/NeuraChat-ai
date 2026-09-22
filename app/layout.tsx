@@ -3,6 +3,7 @@ import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
 import ConsoleInterceptor from '@/components/ConsoleInterceptor';
 import ThemeManager from '@/components/ThemeManager';
+import BackButtonHandler from '@/components/BackButtonHandler';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -24,12 +25,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${poppins.variable} dark`}>
       <body
-        className="bg-black text-white antialiased font-sans min-h-screen flex flex-col justify-between overflow-x-hidden"
+        className="bg-black text-white antialiased font-sans h-[100dvh] flex flex-col overflow-hidden"
         suppressHydrationWarning
       >
         <ConsoleInterceptor />
         <ThemeManager />
-        <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 pb-20">
+        <BackButtonHandler />
+        <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 min-h-0">
           {children}
         </div>
       </body>

@@ -72,13 +72,16 @@ export default function Header({
   }
 
   // DEFAULT HEADER FOR STANDARD PAGES
+  // On root tabs (no back navigation), show the live NeuraChat brand.
+  const isRootTab = !backHref && !onBack;
+
   return (
     <header
       className="sticky top-0 left-0 right-0 h-16 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-900 text-white flex items-center px-4 justify-between z-40 select-none"
       id="app-header-default"
     >
       <div className="w-10 flex justify-start">
-        {backHref || onBack ? (
+        {!isRootTab ? (
           <button
             onClick={handleBack}
             className="p-2 -ml-2 rounded-full hover:bg-zinc-900 active:scale-90 transition-all cursor-pointer"
@@ -91,9 +94,16 @@ export default function Header({
       </div>
 
       <div className="flex-1 flex justify-center text-center">
-        <h1 className="font-bold text-lg tracking-tight font-display text-white drop-shadow-[0_0_8px_rgba(0,212,255,0.4)]">
-          {title}
-        </h1>
+        {isRootTab ? (
+          <span className="neura-brand text-2xl" aria-label="NeuraChat">
+            <span className="neura-blue">Neura</span>
+            <span className="neura-pink">Chat</span>
+          </span>
+        ) : (
+          <h1 className="font-bold text-lg tracking-tight font-display text-white drop-shadow-[0_0_8px_rgba(0,212,255,0.4)]">
+            {title}
+          </h1>
+        )}
       </div>
 
       <div className="w-10 flex justify-end">
