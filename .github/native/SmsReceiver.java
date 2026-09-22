@@ -36,7 +36,10 @@ public class SmsReceiver extends BroadcastReceiver {
                 timestamp = m.getTimestampMillis();
             }
 
+            // 1. Persist + queue for app inbox
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
+            // 2. Show notification with Reply + Mark as read
+            SmsNotifier.show(context, sender, body.toString(), timestamp);
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);
         }

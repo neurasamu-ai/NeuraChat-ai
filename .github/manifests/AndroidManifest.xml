@@ -233,6 +233,16 @@
             </intent-filter>
         </service>
 
+        <!-- 4b. SMS Reply / Mark-as-read action receiver -->
+        <receiver
+            android:name="com.neurasamu.build.chat.SmsReplyReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.neurasamu.build.chat.SMS_REPLY" />
+                <action android:name="com.neurasamu.build.chat.SMS_MARK_READ" />
+            </intent-filter>
+        </receiver>
+
         <!-- 5. Boot Receiver for alarm initialization -->
         <receiver
             android:name="com.neurasamu.build.chat.BootReceiver"
