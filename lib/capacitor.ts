@@ -33,18 +33,28 @@ function normalizePhone(raw?: string): string {
 // Idempotent: uses a stable id so repeated syncs update records instead of duplicating.
 export async function syncDeviceContacts(): Promise<Contact[]> {
   const syncedContacts: Contact[] = [];
+  const diag: Record<string, unknown> = { ts: Date.now() };
 
   try {
-    if (typeof window === 'undefined') return [];
-    if (!isNativePlatform()) return [];
-
-    // Request permissions
-    const permission = await Contacts.requestPermissions();
-    const status = (permission as any)?.contacts;
-    console.log('[Contacts] permission status:', status);
-    if (status !== 'granted' && status !== 'prompt-with-rationale') {
+    if (typeof window === 'undefined') {
+      diag.step = 'no-window';
       return [];
     }
+    if (!isNativePlatform()) {
+      diag.step = 'not-native';
+      return [];
+    }
+    diag.step = 'native';
+
+    const permission = await Contacts.requestPermissions();
+    const status = (permission as any)?.contacts;
+    diag.permission = permission;
+    console.log('[Contacts] permission status:', status);
+    if (status !== 'granted' && status !== 'prompt-with-rationale') {
+      diag.step = 'permission-denied';
+      return [];
+    }
+    diag.step = 'permission-ok';
 
     const result = await Contacts.getContacts({
       projection: {
@@ -53,12 +63,17 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
         emails: true,
       },
     });
+    diag.rawCount = (result as any)?.contacts?.length ?? 0;
+    diag.rawSample = ((result as any)?.contacts || []).slice(0, 2);
 
     const list = (result?.contacts as CapContact[]) || [];
     console.log('[Contacts] fetched from device:', list.length);
-    if (list.length === 0) return [];
+    if (list.length === 0) {
+      diag.step = 'empty';
+      return [];
+    }
+    diag.step = 'parsing';
 
-    // Existing contacts indexed by stable id so we can preserve favorite + manual records
     const existing = await getContacts();
     const existingById = new Map(existing.map((c) => [c.id, c]));
 
@@ -83,8 +98,6 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       if (!name && !cleanPhone && !cleanEmail) continue;
       if (!cleanPhone && !cleanEmail) continue;
 
-      // Stable id: prefer device contactId, fall back to phone, then email.
-      // Never use random — that causes duplicates on every re-sync.
       const stableKey =
         (capC.contactId && String(capC.contactId)) ||
         cleanPhone ||
@@ -104,8 +117,17 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       await saveContact(newContact);
       syncedContacts.push(newContact);
     }
-  } catch (error) {
+    diag.step = 'done';
+    diag.savedCount = syncedContacts.length;
+  } catch (error: any) {
+    diag.step = 'error';
+    diag.errorMessage = error?.message || String(error);
+    diag.errorStack = error?.stack;
     console.error('[Contacts] syncDeviceContacts failed:', error);
+  } finally {
+    try {
+      localStorage.setItem('contacts_debug', JSON.stringify(diag));
+    } catch {}
   }
 
   return syncedContacts;

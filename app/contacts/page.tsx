@@ -34,6 +34,7 @@ export default function ContactsPage() {
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [debugInfo, setDebugInfo] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Search press handling or timer state reference
@@ -95,19 +96,23 @@ export default function ContactsPage() {
   useEffect(() => {
     const handle = setTimeout(async () => {
       await loadContactsData();
-      // Auto-sync device contacts on first open if permission already granted.
-      // syncDeviceContacts() itself asks for permission if not yet granted.
-      if (typeof window !== 'undefined') {
-        const autoSynced = localStorage.getItem('contacts_autosync_v1');
-        if (!autoSynced) {
-          try {
-            await syncDeviceContacts();
-            await loadContactsData();
-            localStorage.setItem('contacts_autosync_v1', '1');
-          } catch (e) {
-            console.error('auto sync failed', e);
-          }
+
+      if (typeof window === 'undefined') return;
+      if (!isNativePlatform()) return;
+
+      // Auto-sync device contacts every time page opens. Idempotent.
+      try {
+        const synced = await syncDeviceContacts();
+        if (synced.length > 0) {
+          await loadContactsData();
         }
+      } catch (e) {
+        console.error('auto sync failed', e);
+      } finally {
+        try {
+          const raw = localStorage.getItem('contacts_debug') || '{}';
+          setDebugInfo(raw);
+        } catch {}
       }
     }, 0);
     return () => clearTimeout(handle);
@@ -284,6 +289,11 @@ export default function ContactsPage() {
             <p className="text-zinc-600 text-[11px] px-8 leading-normal">
               You can also add a contact manually.
             </p>
+            {debugInfo && (
+              <pre className="mt-4 mx-4 text-[9px] text-[#00D4FF] bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-left break-all whitespace-pre-wrap max-h-64 overflow-y-auto">
+                {debugInfo}
+              </pre>
+            )}
           </div>
         ) : (
           <div className="space-y-4" id="contacts-feed">
