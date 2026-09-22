@@ -4,6 +4,7 @@ import './globals.css';
 import ConsoleInterceptor from '@/components/ConsoleInterceptor';
 import ThemeManager from '@/components/ThemeManager';
 import BackButtonHandler from '@/components/BackButtonHandler';
+import SmsInboxBridge from '@/components/SmsInboxBridge';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ConsoleInterceptor />
         <ThemeManager />
         <BackButtonHandler />
+        <SmsInboxBridge />
         <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 min-h-0">
           {children}
         </div>

@@ -141,6 +141,13 @@
                 <data android:scheme="sms_body" />
             </intent-filter>
 
+            <!-- Required for Default SMS app (Android 4.4+) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <!-- CallIntentProcessor: Outgoing Direct Dial Interceptor -->

@@ -4,14 +4,41 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.provider.Telephony;
+import android.telephony.SmsMessage;
 import android.util.Log;
 
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TAG = "NeuraSmsReceiver";
+
     @Override
     public void onReceive(Context context, Intent intent) {
-        if (Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(intent.getAction())) {
-            Log.d(TAG, "SMS delivery broadcast intercepted successfully.");
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (!Telephony.Sms.Intents.SMS_DELIVER_ACTION.equals(action)
+                && !Telephony.Sms.Intents.SMS_RECEIVED_ACTION.equals(action)) {
+            return;
+        }
+
+        try {
+            SmsMessage[] messages = Telephony.Sms.Intents.getMessagesFromIntent(intent);
+            if (messages == null || messages.length == 0) return;
+
+            // Concatenate multi-part SMS from same sender
+            StringBuilder body = new StringBuilder();
+            String sender = null;
+            long timestamp = System.currentTimeMillis();
+
+            for (SmsMessage m : messages) {
+                if (m == null) continue;
+                if (sender == null) sender = m.getDisplayOriginatingAddress();
+                String part = m.getMessageBody();
+                if (part != null) body.append(part);
+                timestamp = m.getTimestampMillis();
+            }
+
+            SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
+        } catch (Exception e) {
+            Log.e(TAG, "onReceive failed", e);
         }
     }
 }
