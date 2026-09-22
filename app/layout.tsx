@@ -3,7 +3,6 @@ import { Inter, Poppins } from 'next/font/google';
 import './globals.css';
 import ConsoleInterceptor from '@/components/ConsoleInterceptor';
 import ThemeManager from '@/components/ThemeManager';
-import PermissionBootstrap from '@/components/PermissionBootstrap';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -30,7 +29,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       >
         <ConsoleInterceptor />
         <ThemeManager />
-        <PermissionBootstrap />
         <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 pb-20">
           {children}
         </div>
