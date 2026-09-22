@@ -25,7 +25,7 @@ import {
   deleteContact,
   Contact
 } from '@/lib/db';
-import { syncDeviceContacts } from '@/lib/capacitor';
+import { syncDeviceContacts, isNativePlatform } from '@/lib/capacitor';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';

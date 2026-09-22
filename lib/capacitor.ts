@@ -1,7 +1,7 @@
 'use client';
 
 import { Contacts } from '@capacitor-community/contacts';
-import { saveContact, Contact } from './db';
+import { saveContact, getContacts, Contact } from './db';
 
 // Safely checks if running on a native Capacitor platform
 export function isNativePlatform(): boolean {
@@ -11,21 +11,11 @@ export function isNativePlatform(): boolean {
 
 // Interface of Capacitor-Community contacts item
 export interface CapContact {
-  contactId: string;
-  displayName: string;
-  phoneNumbers?: Array<{
-    label: string;
-    number: string;
-  }>;
-  phones?: Array<{
-    label?: string;
-    value?: string;
-  }>;
-  emails?: Array<{
-    label?: string;
-    address?: string;
-    value?: string;
-  }>;
+  contactId?: string;
+  displayName?: string;
+  phoneNumbers?: Array<{ label?: string; number?: string }>;
+  phones?: Array<{ label?: string; value?: string }>;
+  emails?: Array<{ label?: string; address?: string; value?: string }>;
   name?: {
     display?: string;
     given?: string;
@@ -33,21 +23,26 @@ export interface CapContact {
   };
 }
 
+// Normalize a phone number for stable IDs and lookups
+function normalizePhone(raw?: string): string {
+  if (!raw) return '';
+  return raw.replace(/[^\d+]/g, '');
+}
+
 // Request contacts permission and fetch contacts (name + phone + email) from the device.
-// Returns [] on web or when permission is denied.
+// Idempotent: uses a stable id so repeated syncs update records instead of duplicating.
 export async function syncDeviceContacts(): Promise<Contact[]> {
   const syncedContacts: Contact[] = [];
 
   try {
     if (typeof window === 'undefined') return [];
-
-    if (!isNativePlatform()) {
-      return [];
-    }
+    if (!isNativePlatform()) return [];
 
     // Request permissions
     const permission = await Contacts.requestPermissions();
-    if (permission.contacts !== 'granted' && permission.contacts !== 'prompt-with-rationale') {
+    const status = (permission as any)?.contacts;
+    console.log('[Contacts] permission status:', status);
+    if (status !== 'granted' && status !== 'prompt-with-rationale') {
       return [];
     }
 
@@ -59,44 +54,58 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       },
     });
 
-    if (!result || !result.contacts) return [];
+    const list = (result?.contacts as CapContact[]) || [];
+    console.log('[Contacts] fetched from device:', list.length);
+    if (list.length === 0) return [];
 
-    for (const capC of (result.contacts as CapContact[])) {
+    // Existing contacts indexed by stable id so we can preserve favorite + manual records
+    const existing = await getContacts();
+    const existingById = new Map(existing.map((c) => [c.id, c]));
+
+    for (const capC of list) {
       const name =
         capC.displayName ||
         capC.name?.display ||
         capC.name?.given ||
         capC.name?.family ||
-        'Unknown';
+        '';
 
-      // Robust phone extractor (handles both projection shapes)
       const phoneList = capC.phoneNumbers || capC.phones || [];
       const rawPhone =
         (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
+      const cleanPhone = normalizePhone(rawPhone);
 
-      // Email extractor
       const emailList = capC.emails || [];
       const rawEmail =
         (emailList[0] as any)?.address || (emailList[0] as any)?.value || '';
+      const cleanEmail = rawEmail ? String(rawEmail).trim() : '';
 
-      const cleanPhone = rawPhone ? rawPhone.replace(/\s+/g, '') : '';
-      const cleanEmail = rawEmail ? rawEmail.trim() : '';
+      if (!name && !cleanPhone && !cleanEmail) continue;
+      if (!cleanPhone && !cleanEmail) continue;
 
-      // Save if we have at least a name AND (phone or email)
-      if (name && (cleanPhone || cleanEmail)) {
-        const newContact: Contact = {
-          id: `cap-${capC.contactId || Math.random().toString(36).substring(2, 11)}`,
-          name,
-          phone: cleanPhone,
-          email: cleanEmail || undefined,
-          favorite: false,
-        };
-        await saveContact(newContact);
-        syncedContacts.push(newContact);
-      }
+      // Stable id: prefer device contactId, fall back to phone, then email.
+      // Never use random — that causes duplicates on every re-sync.
+      const stableKey =
+        (capC.contactId && String(capC.contactId)) ||
+        cleanPhone ||
+        cleanEmail;
+      const id = `cap-${stableKey}`;
+
+      const prev = existingById.get(id);
+      const newContact: Contact = {
+        id,
+        name: name || prev?.name || 'Unknown',
+        phone: cleanPhone || prev?.phone || '',
+        email: cleanEmail || prev?.email,
+        avatar: prev?.avatar,
+        favorite: prev?.favorite ?? false,
+      };
+
+      await saveContact(newContact);
+      syncedContacts.push(newContact);
     }
   } catch (error) {
-    console.error('Error in syncDeviceContacts Native call:', error);
+    console.error('[Contacts] syncDeviceContacts failed:', error);
   }
 
   return syncedContacts;
