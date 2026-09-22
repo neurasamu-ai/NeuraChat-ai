@@ -1,12 +1,21 @@
 'use client';
 
+import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
 import { saveContact, getContacts, Contact } from './db';
 
-// Safely checks if running on a native Capacitor platform
+// Robust native check — uses the official Capacitor API.
+// Note: `window.Capacitor.isNative` no longer exists in modern Capacitor.
 export function isNativePlatform(): boolean {
   if (typeof window === 'undefined') return false;
-  return !!(window as any).Capacitor?.isNative;
+  try {
+    const platform = Capacitor.getPlatform();
+    if (platform === 'android' || platform === 'ios') return true;
+  } catch {}
+  try {
+    if (Capacitor.isNativePlatform?.()) return true;
+  } catch {}
+  return false;
 }
 
 // Interface of Capacitor-Community contacts item
@@ -33,28 +42,17 @@ function normalizePhone(raw?: string): string {
 // Idempotent: uses a stable id so repeated syncs update records instead of duplicating.
 export async function syncDeviceContacts(): Promise<Contact[]> {
   const syncedContacts: Contact[] = [];
-  const diag: Record<string, unknown> = { ts: Date.now() };
 
   try {
-    if (typeof window === 'undefined') {
-      diag.step = 'no-window';
-      return [];
-    }
-    if (!isNativePlatform()) {
-      diag.step = 'not-native';
-      return [];
-    }
-    diag.step = 'native';
+    if (typeof window === 'undefined') return [];
+    if (!isNativePlatform()) return [];
 
     const permission = await Contacts.requestPermissions();
     const status = (permission as any)?.contacts;
-    diag.permission = permission;
     console.log('[Contacts] permission status:', status);
-    if (status !== 'granted' && status !== 'prompt-with-rationale') {
-      diag.step = 'permission-denied';
+    if (status !== 'granted' && status !== 'prompt-with-rationale' && status !== 'limited') {
       return [];
     }
-    diag.step = 'permission-ok';
 
     const result = await Contacts.getContacts({
       projection: {
@@ -63,16 +61,10 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
         emails: true,
       },
     });
-    diag.rawCount = (result as any)?.contacts?.length ?? 0;
-    diag.rawSample = ((result as any)?.contacts || []).slice(0, 2);
 
     const list = (result?.contacts as CapContact[]) || [];
     console.log('[Contacts] fetched from device:', list.length);
-    if (list.length === 0) {
-      diag.step = 'empty';
-      return [];
-    }
-    diag.step = 'parsing';
+    if (list.length === 0) return [];
 
     const existing = await getContacts();
     const existingById = new Map(existing.map((c) => [c.id, c]));
@@ -117,17 +109,8 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       await saveContact(newContact);
       syncedContacts.push(newContact);
     }
-    diag.step = 'done';
-    diag.savedCount = syncedContacts.length;
-  } catch (error: any) {
-    diag.step = 'error';
-    diag.errorMessage = error?.message || String(error);
-    diag.errorStack = error?.stack;
+  } catch (error) {
     console.error('[Contacts] syncDeviceContacts failed:', error);
-  } finally {
-    try {
-      localStorage.setItem('contacts_debug', JSON.stringify(diag));
-    } catch {}
   }
 
   return syncedContacts;
