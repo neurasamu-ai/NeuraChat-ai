@@ -37,7 +37,55 @@ export interface NeuraContactsPluginType {
 const NeuraContacts = registerPlugin<NeuraContactsPluginType>('NeuraContactsPlugin');
 
 export function isContactsPluginAvailable(): boolean {
-  return Capacitor.getPlatform() === 'android' && Capacitor.isPluginAvailable('NeuraContactsPlugin');
+  if (typeof window === 'undefined') return false;
+  try {
+    const platform = Capacitor.getPlatform();
+    if (platform !== 'android') return false;
+
+    // Canonical check first.
+    try {
+      if (
+        typeof Capacitor.isPluginAvailable === 'function' &&
+        Capacitor.isPluginAvailable('NeuraContactsPlugin')
+      ) {
+        return true;
+      }
+    } catch {}
+
+    // Fallback: manually registered plugins (via registerPlugin in
+    // MainActivity) are not always reflected by isPluginAvailable.
+    // If we are on native Android we assume the plugin is present.
+    try {
+      if (
+        typeof Capacitor.isNativePlatform === 'function' &&
+        Capacitor.isNativePlatform()
+      ) {
+        return true;
+      }
+    } catch {}
+
+    return false;
+  } catch (e) {
+    console.error('[NeuraContacts] availability check error:', e);
+    return false;
+  }
+}
+
+export function contactsPluginDiagnostics(): string {
+  try {
+    const platform = Capacitor.getPlatform();
+    const isNative =
+      typeof Capacitor.isNativePlatform === 'function'
+        ? Capacitor.isNativePlatform()
+        : 'n/a';
+    const isAvail =
+      typeof Capacitor.isPluginAvailable === 'function'
+        ? Capacitor.isPluginAvailable('NeuraContactsPlugin')
+        : 'n/a';
+    return `platform=${platform} isNative=${isNative} isPluginAvailable=${isAvail}`;
+  } catch (e) {
+    return `diag-error ${e}`;
+  }
 }
 
 // Built-in options that are always available in the app.
