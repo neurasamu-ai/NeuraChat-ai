@@ -40,6 +40,9 @@ jobs:
     - name: Copy Custom AndroidManifest
       run: cp .github/manifests/AndroidManifest.xml android/app/src/main/AndroidManifest.xml
 
+    - name: Install ImageMagick
+      run: sudo apt-get update && sudo apt-get install -y imagemagick
+
     - name: Set App Icon
       run: bash .github/scripts/set-app-icon.sh android assets/icon.png
 
