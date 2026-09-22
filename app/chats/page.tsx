@@ -12,7 +12,6 @@ import {
   CheckSquare,
   X,
   UserPlus,
-  RefreshCw,
   CheckCheck,
 } from 'lucide-react';
 import {
@@ -24,7 +23,6 @@ import {
   Contact,
   Chat,
 } from '@/lib/db';
-import { syncDeviceContacts } from '@/lib/capacitor';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
@@ -44,7 +42,6 @@ export default function ChatsPage() {
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
-  const [syncingContacts, setSyncingContacts] = useState(false);
 
   // Manual Contact Add States
   const [isManualAddOpen, setIsManualAddOpen] = useState(false);
@@ -169,27 +166,11 @@ export default function ChatsPage() {
   // Contacts sync & add functions
   const openNewChat = async () => {
     setIsNewChatOpen(true);
-    setSyncingContacts(true);
     try {
       const stored = await getContacts();
       setContacts(stored);
     } catch (e) {
       console.error(e);
-    } finally {
-      setSyncingContacts(false);
-    }
-  };
-
-  const handleSyncContacts = async () => {
-    setSyncingContacts(true);
-    try {
-      const synced = await syncDeviceContacts();
-      const latest = await getContacts();
-      setContacts(latest);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSyncingContacts(false);
     }
   };
 
@@ -435,23 +416,14 @@ export default function ChatsPage() {
                     </button>
                   </div>
 
-                  {/* Manual Contact option at top & Sync Buttons */}
-                  <div className="flex gap-2 mb-4">
+                  {/* Manual Contact option */}
+                  <div className="mb-4">
                     <button
                       onClick={() => setIsManualAddOpen(true)}
-                      className="flex-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-medium active:scale-97 transition-all cursor-pointer"
+                      className="w-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-medium active:scale-97 transition-all cursor-pointer"
                     >
                       <UserPlus className="h-4 w-4 text-[#00D4FF]" />
                       Add Manual Contact
-                    </button>
-
-                    <button
-                      onClick={handleSyncContacts}
-                      disabled={syncingContacts}
-                      className="flex-1 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-medium active:scale-97 transition-all disabled:opacity-50 cursor-pointer"
-                    >
-                      <RefreshCw className={`h-4 w-4 text-[#FF006E] ${syncingContacts ? 'animate-spin' : ''}`} />
-                      Sync Phone Contacts
                     </button>
                   </div>
 
@@ -470,14 +442,9 @@ export default function ChatsPage() {
 
                 {/* Contacts List container */}
                 <div className="flex-1 overflow-y-auto pr-1 select-none py-1 no-scrollbar space-y-1.5 h-64">
-                  {syncingContacts ? (
-                    <div className="flex flex-col items-center justify-center h-32 py-12 gap-3">
-                      <div className="w-8 h-8 rounded-full border-2 border-t-transparent border-[#00D4FF] animate-spin" />
-                      <span className="text-zinc-500 text-xs font-mono">Syncing phone contacts...</span>
-                    </div>
-                  ) : filteredContacts.length === 0 ? (
+                  {filteredContacts.length === 0 ? (
                     <div className="text-center py-10">
-                      <p className="text-zinc-500 text-xs font-sans">No indexed contacts match your check.</p>
+                      <p className="text-zinc-500 text-xs font-sans">No contacts yet. Grant contacts permission to see your phone contacts here.</p>
                     </div>
                   ) : (
                     filteredContacts.map((contact) => (

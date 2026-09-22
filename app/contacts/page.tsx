@@ -13,7 +13,6 @@ import {
   Settings,
   X,
   UserPlus,
-  RefreshCw,
   MoreVertical,
   Mail,
   Camera,
@@ -36,7 +35,6 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [syncing, setSyncing] = useState(false);
 
   // Search press handling or timer state reference
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -133,21 +131,6 @@ export default function ContactsPage() {
   const triggerVibration = () => {
     if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
       window.navigator.vibrate(25);
-    }
-  };
-
-  // Sync Contacts handler
-  const handleSync = async () => {
-    triggerVibration();
-    setSyncing(true);
-    try {
-      await syncDeviceContacts();
-      const updated = await getContacts();
-      setContacts(updated);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -259,19 +242,7 @@ export default function ContactsPage() {
 
   return (
     <>
-      <Header
-        title="Contacts"
-        rightAction={
-          <button
-            onClick={handleSync}
-            disabled={syncing}
-            className="p-2 -mr-2 text-zinc-400 hover:text-[#00D4FF] disabled:opacity-50 transition-colors cursor-pointer"
-            title="Sync Contacts"
-          >
-            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin text-[#00D4FF]' : ''}`} />
-          </button>
-        }
-      />
+      <Header title="Contacts" />
 
       {/* Main Panel */}
       <main className="flex-1 p-3 overflow-y-auto" id="contacts-main-container">
@@ -307,16 +278,12 @@ export default function ContactsPage() {
             <p className="text-zinc-400 font-semibold text-xs font-display mb-1">
               No contacts saved
             </p>
-            <p className="text-zinc-600 text-[11px] px-8 leading-normal mb-4">
-              Create a manual contact or trigger device sync inside the header tap.
+            <p className="text-zinc-600 text-[11px] px-8 leading-normal mb-2">
+              Your phone contacts appear here automatically once contacts permission is granted.
             </p>
-            <button
-              onClick={handleSync}
-              className="bg-[#00D4FF]/10 text-[#00D4FF] border border-[#00D4FF]/20 py-2 px-4 rounded-lg text-[11px] font-semibold hover:bg-[#00D4FF]/20 active:scale-97 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <RefreshCw className="h-3 w-3" />
-              Sync Contacts Node
-            </button>
+            <p className="text-zinc-600 text-[11px] px-8 leading-normal">
+              You can also add a contact manually.
+            </p>
           </div>
         ) : (
           <div className="space-y-4" id="contacts-feed">
