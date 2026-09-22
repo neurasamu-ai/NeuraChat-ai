@@ -31,6 +31,7 @@ import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
+import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -121,6 +122,10 @@ export default function ContactsPage() {
   const [addName, setAddName] = useState('');
   const [addPhone, setAddPhone] = useState('');
   const [addEmail, setAddEmail] = useState('');
+  const [accounts, setAccounts] = useState<WritableAccount[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('neurachat');
   const [addAvatar, setAddAvatar] = useState<string>('');
   const [addError, setAddError] = useState('');
 
@@ -134,6 +139,22 @@ export default function ContactsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getWritableAccounts();
+        if (list.length > 0) {
+          setAccounts(list);
+          if (!list.some(a => a.id === 'neurachat')) {
+            setSelectedAccountId(list[0].id);
+          }
+        }
+      } catch (e) {
+        console.error('accounts load failed', e);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,13 +235,34 @@ export default function ContactsPage() {
     }
 
     try {
+      const chosen = accounts.find(a => a.id === selectedAccountId);
+
+      // If user chose a non-NeuraChat account, save to Android Contacts
+      if (chosen && chosen.id !== 'neurachat') {
+        const res = await saveContactToAccount({
+          name: addName.trim(),
+          phone: cleanPhone || undefined,
+          email: cleanEmail || undefined,
+          accountType: chosen.accountType,
+          accountName: chosen.accountName,
+        });
+        if (!res.success) {
+          setAddError(res.error || 'Save to account failed.');
+          return;
+        }
+      }
+
+      // Always keep a local record so the app UI reflects the change immediately.
       const newContact: Contact = {
         id: generateId('contact'),
         name: addName.trim(),
         phone: cleanPhone,
         email: cleanEmail || undefined,
         avatar: addAvatar || undefined,
-        favorite: false
+        favorite: false,
+        sourceLabel: chosen?.label || 'NeuraChat',
+        accountType: chosen?.accountType || undefined,
+        accountName: chosen?.accountName || undefined,
       };
 
       await saveContact(newContact);
@@ -229,6 +271,10 @@ export default function ContactsPage() {
       setAddEmail('');
       setAddAvatar('');
       setIsAddOpen(false);
+      // Re-sync so the newly created device contact shows with its source.
+      if (chosen && chosen.id !== 'neurachat') {
+        try { await syncDeviceContacts(); } catch {}
+      }
       loadContactsData();
       triggerVibration();
     } catch (err) {
@@ -264,10 +310,33 @@ export default function ContactsPage() {
 
   // Remove contact entirely from active sheet context
   const handleRemoveContact = async (contactId: string) => {
+    // Open confirmation instead of instant delete
+    const target = contacts.find(c => c.id === contactId) || null;
+    if (target) setDeleteTarget(target);
+  };
+
+  const performDelete = async (scope: 'local' | 'both') => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     triggerVibration();
-    await deleteContact(contactId);
-    setActiveContact(null);
-    loadContactsData();
+    try {
+      // Delete from Android Contacts if requested and we have a rawContactId
+      if (scope === 'both' && deleteTarget.rawContactId) {
+        const ok = await deleteRawContact(deleteTarget.rawContactId);
+        if (!ok) {
+          console.warn('Device delete returned false');
+        }
+      }
+      // Always remove from local app db
+      await deleteContact(deleteTarget.id);
+      setDeleteTarget(null);
+      setActiveContact(null);
+      loadContactsData();
+    } catch (e) {
+      console.error('delete failed', e);
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // Filter list
@@ -299,6 +368,7 @@ export default function ContactsPage() {
   // ---- Back-button integration ----
   useBackHandler(isAddOpen, () => setIsAddOpen(false));
   useBackHandler(!!activeContact, () => setActiveContact(null));
+  useBackHandler(!!deleteTarget, () => setDeleteTarget(null));
 
   const alphabetHeaders = Object.keys(groupedContacts).sort();
   const favorites = filteredContacts.filter(c => c.favorite);
@@ -450,6 +520,11 @@ export default function ContactsPage() {
                           <p className="text-zinc-500 text-[9px] font-mono mt-0.5 truncate">{contact.phone || 'No number'}</p>
                           {contact.email && (
                             <p className="text-[#00D4FF] text-[9px] font-mono mt-0.5 truncate">{contact.email}</p>
+                          )}
+                          {contact.sourceLabel && (
+                            <p className="text-zinc-600 text-[8px] font-mono mt-0.5 truncate">
+                              {contact.sourceLabel}
+                            </p>
                           )}
                         </div>
                         {contact.phone && (
@@ -711,13 +786,99 @@ export default function ContactsPage() {
                     />
                   </div>
 
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono block">
+                      Save to
+                    </label>
+                    <select
+                      value={selectedAccountId}
+                      onChange={(e) => setSelectedAccountId(e.target.value)}
+                      className="w-full bg-zinc-900 border border-zinc-805 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-[#00D4FF] cursor-pointer"
+                    >
+                      {accounts.length === 0 ? (
+                        <option value="neurachat">NeuraChat</option>
+                      ) : (
+                        accounts.map((acc) => (
+                          <option key={acc.id} value={acc.id}>
+                            {acc.label}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+
                   <button
                     type="submit"
                     className="w-full bg-[#00D4FF] hover:bg-[#00B2D6] text-black font-semibold text-xs py-3 rounded-xl shadow-[0_0_12px_rgba(0,212,255,0.3)] active:scale-95 transition-all mt-2 cursor-pointer"
                   >
-                    Save Contact Node
+                    Save Contact
                   </button>
                 </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+        {/* DELETE CONFIRMATION MODAL */}
+        <AnimatePresence>
+          {deleteTarget && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
+              >
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  className="absolute top-4 right-4 text-zinc-400 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold font-display text-white mb-1">
+                  Delete Contact
+                </h3>
+                <p className="text-xs text-zinc-500 mb-4">
+                  {deleteTarget.name}
+                  {deleteTarget.sourceLabel ? ` · ${deleteTarget.sourceLabel}` : ''}
+                </p>
+
+                <p className="text-[11px] text-zinc-400 mb-4 leading-relaxed">
+                  Choose what to delete. Deleting from the device/account source
+                  will remove the contact from your phone as well.
+                </p>
+
+                <div className="space-y-2">
+                  <button
+                    onClick={() => performDelete('local')}
+                    disabled={deleting}
+                    className="w-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 text-white text-xs py-2.5 rounded-xl cursor-pointer disabled:opacity-50"
+                  >
+                    Remove from NeuraChat only
+                  </button>
+
+                  {deleteTarget.rawContactId ? (
+                    <button
+                      onClick={() => performDelete('both')}
+                      disabled={deleting}
+                      className="w-full bg-red-950/30 border border-red-900/40 hover:bg-red-900/30 text-red-400 text-xs py-2.5 rounded-xl cursor-pointer disabled:opacity-50"
+                    >
+                      Delete from {deleteTarget.sourceLabel || 'device'}
+                    </button>
+                  ) : (
+                    <p className="text-[10px] text-zinc-600 text-center pt-1">
+                      Device delete unavailable for this contact.
+                    </p>
+                  )}
+
+                  <button
+                    onClick={() => setDeleteTarget(null)}
+                    disabled={deleting}
+                    className="w-full bg-zinc-900 text-zinc-400 text-xs py-2.5 rounded-xl cursor-pointer disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </motion.div>
             </div>
           )}
