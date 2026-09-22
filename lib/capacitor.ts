@@ -3,6 +3,8 @@
 import { Capacitor } from '@capacitor/core';
 import { Contacts } from '@capacitor-community/contacts';
 import { saveContact, getContacts, Contact } from './db';
+import { getContactsWithSources, isContactsPluginAvailable } from './neura-contacts';
+import { normalizePhone } from './phone';
 
 // Robust native check — uses the official Capacitor API.
 // Note: `window.Capacitor.isNative` no longer exists in modern Capacitor.
@@ -40,6 +42,15 @@ function normalizePhone(raw?: string): string {
 
 // Request contacts permission and fetch contacts (name + phone + email) from the device.
 // Idempotent: uses a stable id so repeated syncs update records instead of duplicating.
+function sourceLabelFor(accountType: string | null, accountName: string | null): string {
+  if (!accountType) return 'Device';
+  if (accountType === 'com.google') return 'Google';
+  if (accountType.startsWith('com.android.contacts.sim')) return accountName || 'SIM';
+  if (accountType.startsWith('com.android.exchange')) return 'Exchange';
+  if (accountType.startsWith('com.whatsapp')) return 'WhatsApp';
+  return accountName || accountType;
+}
+
 export async function syncDeviceContacts(): Promise<Contact[]> {
   const syncedContacts: Contact[] = [];
 
@@ -47,23 +58,56 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
     if (typeof window === 'undefined') return [];
     if (!isNativePlatform()) return [];
 
+    // Prefer our own NeuraContactsPlugin (richer data: account, rawContactId)
+    if (isContactsPluginAvailable()) {
+      const rows = await getContactsWithSources();
+      if (rows.length > 0) {
+        const existing = await getContacts();
+        const existingById = new Map(existing.map((c) => [c.id, c]));
+
+        for (const row of rows) {
+          const name = row.name || '';
+          const phone = normalizePhone(row.phone || '');
+          const email = (row.email || '').trim();
+
+          if (!name && !phone && !email) continue;
+          if (!phone && !email) continue;
+
+          const stableKey = row.contactId || phone || email;
+          const id = `cap-${stableKey}`;
+          const prev = existingById.get(id);
+
+          const newContact: Contact = {
+            id,
+            name: name || prev?.name || 'Unknown',
+            phone: row.phone || prev?.phone || '',
+            email: email || prev?.email,
+            avatar: prev?.avatar,
+            favorite: prev?.favorite ?? false,
+            accountType: row.accountType || undefined,
+            accountName: row.accountName || undefined,
+            rawContactId: row.rawContactId || undefined,
+            contactId: row.contactId || undefined,
+            sourceLabel: sourceLabelFor(row.accountType, row.accountName),
+          };
+          await saveContact(newContact);
+          syncedContacts.push(newContact);
+        }
+        return syncedContacts;
+      }
+    }
+
+    // Fallback: community contacts plugin (no account info)
     const permission = await Contacts.requestPermissions();
     const status = (permission as any)?.contacts;
-    console.log('[Contacts] permission status:', status);
     if (status !== 'granted' && status !== 'prompt-with-rationale' && status !== 'limited') {
       return [];
     }
 
     const result = await Contacts.getContacts({
-      projection: {
-        name: true,
-        phones: true,
-        emails: true,
-      },
+      projection: { name: true, phones: true, emails: true },
     });
-
     const list = (result?.contacts as CapContact[]) || [];
-    console.log('[Contacts] fetched from device:', list.length);
     if (list.length === 0) return [];
 
     const existing = await getContacts();
@@ -76,27 +120,20 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
         capC.name?.given ||
         capC.name?.family ||
         '';
-
       const phoneList = capC.phoneNumbers || capC.phones || [];
-      const rawPhone =
-        (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
+      const rawPhone = (phoneList[0] as any)?.number || (phoneList[0] as any)?.value || '';
       const cleanPhone = normalizePhone(rawPhone);
-
       const emailList = capC.emails || [];
-      const rawEmail =
-        (emailList[0] as any)?.address || (emailList[0] as any)?.value || '';
+      const rawEmail = (emailList[0] as any)?.address || (emailList[0] as any)?.value || '';
       const cleanEmail = rawEmail ? String(rawEmail).trim() : '';
 
       if (!name && !cleanPhone && !cleanEmail) continue;
       if (!cleanPhone && !cleanEmail) continue;
 
-      const stableKey =
-        (capC.contactId && String(capC.contactId)) ||
-        cleanPhone ||
-        cleanEmail;
+      const stableKey = (capC.contactId && String(capC.contactId)) || cleanPhone || cleanEmail;
       const id = `cap-${stableKey}`;
-
       const prev = existingById.get(id);
+
       const newContact: Contact = {
         id,
         name: name || prev?.name || 'Unknown',
@@ -104,8 +141,8 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
         email: cleanEmail || prev?.email,
         avatar: prev?.avatar,
         favorite: prev?.favorite ?? false,
+        sourceLabel: prev?.sourceLabel || 'Device',
       };
-
       await saveContact(newContact);
       syncedContacts.push(newContact);
     }

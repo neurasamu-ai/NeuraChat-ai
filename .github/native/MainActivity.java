@@ -33,6 +33,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SmsPlugin.class);
         registerPlugin(TelecomPlugin.class);
         registerPlugin(SettingsPlugin.class);
+        registerPlugin(NeuraContactsPlugin.class);
 
         requestAllPermissions();
     }
@@ -46,6 +47,8 @@ public class MainActivity extends BridgeActivity {
         perms.add(Manifest.permission.SEND_SMS);
         perms.add(Manifest.permission.RECEIVE_SMS);
         perms.add(Manifest.permission.READ_CONTACTS);
+        perms.add(Manifest.permission.WRITE_CONTACTS);
+        perms.add("android.permission.GET_ACCOUNTS");
         perms.add(Manifest.permission.CALL_PHONE);
         perms.add(Manifest.permission.READ_PHONE_STATE);
         perms.add(Manifest.permission.READ_CALL_LOG);

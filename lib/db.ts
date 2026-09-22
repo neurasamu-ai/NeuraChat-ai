@@ -28,6 +28,12 @@ export interface Contact {
   email?: string;
   avatar?: string;
   favorite: boolean;
+  // Source information (populated for device contacts)
+  accountType?: string;    // e.g. "com.google", "com.android.contacts.sim", "local"
+  accountName?: string;    // e.g. user@gmail.com, "SIM 1"
+  rawContactId?: string;   // Android RawContacts._ID (for delete/update)
+  contactId?: string;      // Android Contacts._ID
+  sourceLabel?: string;    // friendly label: "Device", "Google", "SIM 1", "NeuraChat"
 }
 
 export interface CallLog {
