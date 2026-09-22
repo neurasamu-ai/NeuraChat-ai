@@ -236,25 +236,36 @@ export default function ContactsPage() {
 
     try {
       const chosen = accounts.find(a => a.id === selectedAccountId);
+      const isNativeSave = !!chosen && chosen.id !== 'neurachat';
 
-      // If user chose a non-NeuraChat account, save to Android Contacts
-      if (chosen && chosen.id !== 'neurachat') {
+      let nativeRawId: string | undefined;
+      let nativeContactId: string | undefined;
+
+      // Save to a real Android account (Device / Google / SIM)
+      if (isNativeSave) {
         const res = await saveContactToAccount({
           name: addName.trim(),
           phone: cleanPhone || undefined,
           email: cleanEmail || undefined,
-          accountType: chosen.accountType,
-          accountName: chosen.accountName,
+          accountType: chosen!.accountType,
+          accountName: chosen!.accountName,
         });
         if (!res.success) {
-          setAddError(res.error || 'Save to account failed.');
+          // Show the real error and don't pretend to save.
+          setAddError(res.error || 'Could not save to selected account.');
           return;
         }
+        nativeRawId = res.rawContactId;
+        nativeContactId = res.contactId;
       }
 
-      // Always keep a local record so the app UI reflects the change immediately.
+      // Local record — use the same stable id the sync produces so a later
+      // re-sync updates this row instead of creating a duplicate.
+      const stableKey = nativeContactId || generateId('contact');
+      const localId = nativeContactId ? `cap-${nativeContactId}` : stableKey;
+
       const newContact: Contact = {
-        id: generateId('contact'),
+        id: localId,
         name: addName.trim(),
         phone: cleanPhone,
         email: cleanEmail || undefined,
@@ -263,6 +274,8 @@ export default function ContactsPage() {
         sourceLabel: chosen?.label || 'NeuraChat',
         accountType: chosen?.accountType || undefined,
         accountName: chosen?.accountName || undefined,
+        rawContactId: nativeRawId,
+        contactId: nativeContactId,
       };
 
       await saveContact(newContact);
@@ -271,14 +284,11 @@ export default function ContactsPage() {
       setAddEmail('');
       setAddAvatar('');
       setIsAddOpen(false);
-      // Re-sync so the newly created device contact shows with its source.
-      if (chosen && chosen.id !== 'neurachat') {
-        try { await syncDeviceContacts(); } catch {}
-      }
       loadContactsData();
       triggerVibration();
     } catch (err) {
-      setAddError('Internal database save conflict.');
+      console.error('add contact failed', err);
+      setAddError('Save failed. Please try again.');
     }
   };
 

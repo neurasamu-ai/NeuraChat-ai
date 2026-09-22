@@ -189,9 +189,30 @@ public class NeuraContactsPlugin extends Plugin {
             android.content.ContentProviderResult[] results = cr.applyBatch(ContactsContract.AUTHORITY, ops);
 
             if (results != null && results.length > 0 && results[0] != null && results[0].uri != null) {
+                android.net.Uri rawUri = results[0].uri; // content://com.android.contacts/raw_contacts/<id>
+                String rawContactId = rawUri.getLastPathSegment();
+                String contactId = null;
+                if (rawContactId != null) {
+                    Cursor c = cr.query(
+                        RawContacts.CONTENT_URI,
+                        new String[] { RawContacts.CONTACT_ID },
+                        RawContacts._ID + " = ?",
+                        new String[] { rawContactId },
+                        null
+                    );
+                    if (c != null) {
+                        if (c.moveToFirst()) {
+                            contactId = c.getString(0);
+                        }
+                        c.close();
+                    }
+                }
+
                 JSObject ret = new JSObject();
                 ret.put("success", true);
-                ret.put("uri", results[0].uri.toString());
+                ret.put("uri", rawUri.toString());
+                if (rawContactId != null) ret.put("rawContactId", rawContactId);
+                if (contactId != null) ret.put("contactId", contactId);
                 call.resolve(ret);
             } else {
                 call.reject("Contact insert returned no result");

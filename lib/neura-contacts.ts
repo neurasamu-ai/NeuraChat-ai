@@ -30,7 +30,7 @@ export interface NeuraContactsPluginType {
     email?: string;
     accountType: string | null;
     accountName: string | null;
-  }): Promise<{ success: boolean; uri?: string }>;
+  }): Promise<{ success: boolean; uri?: string; rawContactId?: string; contactId?: string }>;
   deleteContactRaw(options: { rawContactId: string }): Promise<{ deleted: number }>;
 }
 
@@ -57,13 +57,27 @@ export async function saveContactToAccount(opts: {
   email?: string;
   accountType: string | null;
   accountName: string | null;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{
+  success: boolean;
+  error?: string;
+  uri?: string;
+  rawContactId?: string;
+  contactId?: string;
+}> {
   if (!isContactsPluginAvailable()) {
-    return { success: false, error: 'Not available on this platform' };
+    return { success: false, error: 'Native contacts plugin not available on this device' };
   }
   try {
-    await NeuraContacts.saveContact(opts);
-    return { success: true };
+    const r = await NeuraContacts.saveContact(opts);
+    if (!r || !r.success) {
+      return { success: false, error: 'Insert did not return success' };
+    }
+    return {
+      success: true,
+      uri: r.uri,
+      rawContactId: r.rawContactId,
+      contactId: r.contactId,
+    };
   } catch (e: any) {
     console.error('[NeuraContacts] saveContact failed', e);
     return { success: false, error: e?.message || String(e) };

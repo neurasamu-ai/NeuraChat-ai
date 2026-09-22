@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   User,
   Smartphone,
-  HardDrive,
   Info,
   ChevronRight,
   Camera,
@@ -18,7 +17,6 @@ import {
   getUserProfile,
   saveUserProfile,
   UserProfile,
-  getDB,
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
@@ -35,7 +33,6 @@ export default function SettingsPage() {
 
   // Modals
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
-  const [isStorageOpen, setIsStorageOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Edit fields
@@ -47,29 +44,8 @@ export default function SettingsPage() {
   // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
 
-  // Real storage
-  const [storageBytes, setStorageBytes] = useState<number>(0);
-  const [storageQuota, setStorageQuota] = useState<number>(0);
 
-  const formatBytes = (bytes: number): string => {
-    if (!bytes || bytes <= 0) return '0 KB';
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
-  };
 
-  const loadStorageEstimate = async () => {
-    try {
-      if (typeof navigator !== 'undefined' && navigator.storage && navigator.storage.estimate) {
-        const est = await navigator.storage.estimate();
-        setStorageBytes(est.usage || 0);
-        setStorageQuota(est.quota || 0);
-      }
-    } catch (e) {
-      console.error('storage estimate failed', e);
-    }
-  };
 
   useEffect(() => {
     async function loadProfile() {
@@ -83,7 +59,6 @@ export default function SettingsPage() {
     }
     const handle = setTimeout(() => {
       loadProfile();
-      loadStorageEstimate();
     }, 0);
     return () => clearTimeout(handle);
   }, []);
@@ -125,37 +100,8 @@ export default function SettingsPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleClearCache = async () => {
-    triggerVibration();
-    try {
-      // Delete our IndexedDB database (chats, messages, contacts, call logs, profile)
-      const db = await getDB();
-      if (db) {
-        const stores = ['chats', 'messages', 'contacts', 'callLogs', 'userProfile'];
-        for (const name of stores) {
-          if (db.objectStoreNames.contains(name)) {
-            const tx = db.transaction(name, 'readwrite');
-            await tx.store.clear();
-            await tx.done;
-          }
-        }
-      }
-      // Also clear browser Cache Storage if available
-      if (typeof caches !== 'undefined') {
-        const keys = await caches.keys();
-        for (const k of keys) {
-          await caches.delete(k);
-        }
-      }
-      await loadStorageEstimate();
-      setIsStorageOpen(false);
-    } catch (e) {
-      console.error('clear cache failed', e);
-    }
-  };
 
   // ---- Back-button integration ----
-  useBackHandler(isStorageOpen, () => setIsStorageOpen(false));
   useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
@@ -263,24 +209,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Storage */}
-          <div
-            onClick={() => {
-              triggerVibration();
-              loadStorageEstimate();
-              setIsStorageOpen(true);
-            }}
-            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
-          >
-            <div className="flex items-center gap-3">
-              <HardDrive className="h-4 w-4 text-[#00D4FF]" />
-              <span className="text-xs font-medium text-zinc-200">Storage Usage & Cache</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-mono text-zinc-500">{formatBytes(storageBytes)}</span>
-              <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-            </div>
-          </div>
 
           {/* About */}
           <div
@@ -385,60 +313,6 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
-        {/* ========== STORAGE MODAL ========== */}
-        <AnimatePresence>
-          {isStorageOpen && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative text-center"
-              >
-                <button
-                  onClick={() => setIsStorageOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-white cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <h3 className="text-base font-bold font-display text-white mb-2">
-                  Storage & Cache
-                </h3>
-                <p className="text-zinc-500 text-xs mb-6">Local storage used by this app.</p>
-
-                <div className="flex flex-col items-center p-6 bg-zinc-900 rounded-2xl mb-4">
-                  <span className="text-[11px] text-zinc-500 uppercase tracking-wider font-mono">Currently Used</span>
-                  <span className="text-3xl font-extrabold font-mono text-[#00D4FF] mt-1.5">{formatBytes(storageBytes)}</span>
-                  {storageQuota > 0 && (
-                    <span className="text-[10px] text-zinc-600 font-mono mt-1">
-                      of {formatBytes(storageQuota)} available
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-[10px] text-rose-400 bg-rose-950/20 border border-rose-900/30 rounded-lg p-2 mb-4">
-                  Warning: This will delete all chats, messages, contacts, call logs, and your profile.
-                </p>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setIsStorageOpen(false)}
-                    className="flex-1 bg-zinc-900 text-zinc-400 font-semibold text-xs py-2.5 rounded-xl cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleClearCache}
-                    className="flex-1 bg-gradient-to-tr from-[#FF006E] to-[#b3004d] text-white font-semibold text-xs py-2.5 rounded-xl shadow-[0_0_10px_rgba(255,0,110,0.3)] cursor-pointer"
-                  >
-                    Clear All Data
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
 
         {/* ========== ABOUT MODAL ========== */}
         <AnimatePresence>
