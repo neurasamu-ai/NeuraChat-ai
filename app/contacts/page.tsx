@@ -28,6 +28,7 @@ import { syncDeviceContacts, isNativePlatform } from '@/lib/capacitor';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -271,6 +272,10 @@ export default function ContactsPage() {
     }
     groupedContacts[key].push(c);
   });
+
+  // ---- Back-button integration ----
+  useBackHandler(isAddOpen, () => setIsAddOpen(false));
+  useBackHandler(!!activeContact, () => setActiveContact(null));
 
   const alphabetHeaders = Object.keys(groupedContacts).sort();
   const favorites = filteredContacts.filter(c => c.favorite);

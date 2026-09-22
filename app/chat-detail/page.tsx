@@ -37,6 +37,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 function ChatDetailContent() {
   const router = useRouter();
@@ -353,6 +354,18 @@ function ChatDetailContent() {
     setIsCallVideo(isVideo);
     setIsCallActive(true);
   };
+
+  // ---- Back-button integration ----
+  // Register in reverse priority: topmost UI consumes back first.
+  useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
+  useBackHandler(isShareOpen, () => setIsShareOpen(false));
+  useBackHandler(isForwarding, () => {
+    setIsForwarding(false);
+    setSelectedMsgIds([]);
+  });
+  useBackHandler(isCallActive, () => setIsCallActive(false));
+  useBackHandler(selectedMsgIds.length > 0 && !isForwarding, () => setSelectedMsgIds([]));
+  useBackHandler(!!activeMessage, () => setActiveMessage(null));
 
   const hasTextOrMedia = inputText.trim().length > 0 || selectedImage !== null;
 

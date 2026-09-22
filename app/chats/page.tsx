@@ -26,6 +26,7 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -222,6 +223,10 @@ export default function ChatsPage() {
       setManualError('Failed to save contact.');
     }
   };
+
+  // ---- Back-button integration for modals ----
+  useBackHandler(isManualAddOpen, () => setIsManualAddOpen(false));
+  useBackHandler(isNewChatOpen && !isManualAddOpen, () => setIsNewChatOpen(false));
 
   // Search filtering
   const filteredChats = chats.filter(chat =>

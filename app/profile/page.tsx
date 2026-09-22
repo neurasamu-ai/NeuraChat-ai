@@ -23,6 +23,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 function ProfileContent() {
   const router = useRouter();
@@ -127,6 +128,16 @@ function ProfileContent() {
       setContact(updatedContact);
     }
   };
+
+  // Back exits edit mode instead of leaving the page.
+  useBackHandler(isEditMode, () => {
+    setIsEditMode(false);
+    if (contact) {
+      setEditName(contact.name);
+      setEditPhone(contact.phone);
+      setEditAvatar(contact.avatar || '');
+    }
+  });
 
   return (
     <div className="flex flex-col h-screen w-full md:max-w-md md:mx-auto bg-zinc-950 text-white relative">

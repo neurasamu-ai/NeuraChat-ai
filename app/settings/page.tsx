@@ -22,6 +22,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 export default function SettingsPage() {
   // Profile
@@ -29,7 +30,7 @@ export default function SettingsPage() {
     name: 'Owner',
     bio: '',
     username: 'owner',
-    theme: 'dark',
+    theme: 'system',
   });
 
   // Modals
@@ -44,7 +45,7 @@ export default function SettingsPage() {
   const [editAvatar, setEditAvatar] = useState('');
 
   // Appearance
-  const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('dark');
+  const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
 
   // Real storage
   const [storageBytes, setStorageBytes] = useState<number>(0);
@@ -78,7 +79,7 @@ export default function SettingsPage() {
       setEditBio(stored.bio || '');
       setEditUsername(stored.username || '');
       setEditAvatar(stored.avatar || '');
-      setAppearance(stored.theme || 'dark');
+      setAppearance(stored.theme || 'system');
     }
     const handle = setTimeout(() => {
       loadProfile();
@@ -152,6 +153,11 @@ export default function SettingsPage() {
       console.error('clear cache failed', e);
     }
   };
+
+  // ---- Back-button integration ----
+  useBackHandler(isStorageOpen, () => setIsStorageOpen(false));
+  useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
+  useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
   return (
     <>

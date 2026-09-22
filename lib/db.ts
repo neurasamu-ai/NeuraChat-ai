@@ -183,9 +183,9 @@ export async function deleteCallLog(id: string): Promise<void> {
 // USER PROFILE OPERATIONS
 export async function getUserProfile(): Promise<UserProfile> {
   const db = await getDB();
-  if (!db) return { name: 'Owner', bio: 'Living in the future', username: 'owner_neura', theme: 'dark' };
+  if (!db) return { name: 'Owner', bio: 'Living in the future', username: 'owner_neura', theme: 'system' };
   const profile = await db.get('userProfile', 'main');
-  return profile || { name: 'Owner', bio: 'Living in the future', username: 'owner_neura', theme: 'dark' };
+  return profile || { name: 'Owner', bio: 'Living in the future', username: 'owner_neura', theme: 'system' };
 }
 
 export async function saveUserProfile(profile: UserProfile): Promise<void> {

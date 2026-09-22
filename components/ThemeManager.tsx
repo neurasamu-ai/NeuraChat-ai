@@ -32,7 +32,7 @@ export default function ThemeManager() {
     const initTheme = async () => {
       try {
         const profile = await getUserProfile();
-        const selectedTheme = profile.theme || 'dark';
+        const selectedTheme = profile.theme || 'system';
         applyTheme(selectedTheme);
       } catch (err) {
         console.error('Failed to load theme:', err);
@@ -50,8 +50,17 @@ export default function ThemeManager() {
     };
 
     window.addEventListener('neurachat-theme-change', handleThemeChange);
+
+    // React to OS theme changes when in "system" mode
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemChange = () => {
+      applyTheme('system');
+    };
+    mediaQuery.addEventListener('change', handleSystemChange);
+
     return () => {
       window.removeEventListener('neurachat-theme-change', handleThemeChange);
+      mediaQuery.removeEventListener('change', handleSystemChange);
     };
   }, []);
 

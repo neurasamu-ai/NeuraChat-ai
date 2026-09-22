@@ -29,6 +29,7 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp, getRandomCallDuration, triggerDial } from '@/lib/utils';
+import { useBackHandler } from '@/lib/use-back-handler';
 
 export default function CallsPage() {
   const router = useRouter();
@@ -197,6 +198,9 @@ export default function CallsPage() {
         return <PhoneMissed className="h-4 w-4 text-[#FF006E]" />;
     }
   };
+
+  // ---- Back-button integration ----
+  useBackHandler(isDialerOpen, () => setIsDialerOpen(false));
 
   const filteredLogs = callLogs.filter(log => {
     if (activeFilter === 'all') return true;
@@ -453,7 +457,11 @@ export default function CallsPage() {
                     disabled={!dialNumber}
                     onClick={() => {
                       triggerVibration();
-                      window.location.href = `sms:${dialNumber}`;
+                      const num = dialNumber.replace(/\s+/g, '');
+                      if (!num) return;
+                      setIsDialerOpen(false);
+                      setDialNumber('');
+                      router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`);
                     }}
                     className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
                     title="Send SMS"

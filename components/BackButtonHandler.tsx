@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
+import { tryHandleBack } from '@/lib/back-stack';
 
 const ROOT_TABS = ['/chats', '/calls', '/contacts', '/settings'];
 
@@ -20,13 +21,16 @@ export default function BackButtonHandler() {
       try {
         const { App } = await import('@capacitor/app');
         listenerHandle = await App.addListener('backButton', () => {
+          // 1. Topmost open modal/sheet/overlay consumes back first.
+          if (tryHandleBack()) return;
+
+          // 2. Root tab: minimize instead of killing the app.
           if (ROOT_TABS.includes(pathname)) {
-            // On a root tab: minimize instead of killing the app.
             App.minimizeApp();
             return;
           }
 
-          // Sub-page: go back if possible, else return to /calls.
+          // 3. Sub-page: navigate back.
           if (window.history.length > 1) {
             router.back();
           } else {
