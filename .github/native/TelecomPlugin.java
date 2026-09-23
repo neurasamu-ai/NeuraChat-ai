@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.telecom.TelecomManager;
 import android.os.Build;
+import android.util.Log;
 import androidx.activity.result.ActivityResult;
 
 import com.getcapacitor.JSObject;
@@ -19,6 +20,8 @@ import com.getcapacitor.annotation.ActivityCallback;
 
 @CapacitorPlugin(name = "TelecomPlugin")
 public class TelecomPlugin extends Plugin {
+
+    private static final String TAG = "NeuraTelecom";
     private static TelecomPlugin instance;
 
     @Override
@@ -120,6 +123,55 @@ public class TelecomPlugin extends Plugin {
             }
         } else {
             call.reject("No active call to disconnect.");
+        }
+    }
+
+    // Robust call dispatcher: tries TelecomManager first (works when we
+    // hold the default-dialer role), falls back to ACTION_CALL (works with
+    // CALL_PHONE permission regardless of role).
+    @PluginMethod
+    public void call(PluginCall call) {
+        String number = call.getString("number");
+        if (number == null || number.trim().isEmpty()) {
+            call.reject("Number is required.");
+            return;
+        }
+        String cleaned = number.replaceAll("[^+0-9*#]", "");
+        Context ctx = getContext();
+
+        // Attempt 1: TelecomManager.placeCall
+        try {
+            TelecomManager tm = (TelecomManager) ctx.getSystemService(Context.TELECOM_SERVICE);
+            if (tm != null) {
+                android.net.Uri uri = android.net.Uri.fromParts("tel", cleaned, null);
+                android.os.Bundle extras = new android.os.Bundle();
+                extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false);
+                tm.placeCall(uri, extras);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("method", "telecom");
+                call.resolve(ret);
+                return;
+            }
+        } catch (SecurityException se) {
+            Log.w(TAG, "TelecomManager.placeCall denied, falling back", se);
+        } catch (Exception e) {
+            Log.w(TAG, "TelecomManager.placeCall failed, falling back", e);
+        }
+
+        // Attempt 2: ACTION_CALL intent
+        try {
+            Intent intent = new Intent(Intent.ACTION_CALL);
+            intent.setData(android.net.Uri.parse("tel:" + cleaned));
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("method", "intent");
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "ACTION_CALL failed", e);
+            call.reject("Call failed: " + e.getMessage());
         }
     }
 

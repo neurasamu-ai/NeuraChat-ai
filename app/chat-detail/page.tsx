@@ -40,6 +40,7 @@ import Header from '@/components/Header';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
+import { placeCall } from '@/lib/telecom-plugin';
 import { getActiveSubscriptions, sendSms, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
@@ -390,14 +391,15 @@ function ChatDetailContent() {
     alertToast("Chat cleared");
   };
 
-  const triggerCallSimulation = (isVideo: boolean) => {
+  const triggerCallSimulation = async (isVideo: boolean) => {
     triggerVibration();
-    // Dial via system intent. The OS dialer (or the user's default dialer)
-    // takes over. No fake in-app call screen is shown.
-    try {
-      window.location.href = `tel:${phone}`;
-    } catch (e) {
-      console.error('Dial failed:', e);
+    if (!phone) {
+      alertToast('No phone number for this contact', 'error');
+      return;
+    }
+    const res = await placeCall(phone);
+    if (!res.success) {
+      alertToast('Call failed: ' + (res.error || 'unknown'), 'error');
     }
   };
 

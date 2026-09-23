@@ -28,8 +28,9 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
-import { generateId, getCurrentTimestamp, getRandomCallDuration, triggerDial } from '@/lib/utils';
+import { generateId, getCurrentTimestamp, getRandomCallDuration } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { placeCall } from '@/lib/telecom-plugin';
 import { normalizePhone, phonesMatch } from '@/lib/phone';
 
 export default function CallsPage() {
@@ -191,9 +192,12 @@ export default function CallsPage() {
     setDialNumber('');
     loadCallsAndContacts();
 
-    // Route to native dial call
+    // Route to native call (TelecomManager or ACTION_CALL fallback)
     try {
-      triggerDial(finalNumber);
+      const res = await placeCall(finalNumber);
+      if (!res.success) {
+        console.error('Call failed:', res.error);
+      }
     } catch (err) {
       console.error('Call routing failed:', err);
     }
