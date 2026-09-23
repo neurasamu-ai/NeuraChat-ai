@@ -84,9 +84,8 @@ public class SmsReplyReceiver extends BroadcastReceiver {
                 context.getContentResolver().insert(Telephony.Sms.Sent.CONTENT_URI, values);
             } catch (Exception ignore) {}
 
-            // Also queue to app inbox so it shows in NeuraChat chat
-            SmsPlugin.receiveIncomingSms(context, sender, text, System.currentTimeMillis());
-            // Note: this queues as incoming; message body will appear in chat.
+            // Queue to app inbox as OUTGOING so the chat shows it as sent by user.
+            SmsPlugin.receiveOutgoingSms(context, sender, text, System.currentTimeMillis());
 
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);

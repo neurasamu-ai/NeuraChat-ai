@@ -12,8 +12,10 @@ export interface Subscription {
 
 export interface IncomingSms {
   sender: string;
+  address?: string;
   body: string;
   timestamp: number;
+  direction?: 'incoming' | 'outgoing';
 }
 
 export interface SmsPluginType {
@@ -27,7 +29,7 @@ export interface SmsPluginType {
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
   requestDefaultSmsRole(): Promise<{ launched: boolean }>;
   addListener(
-    eventName: 'smsReceived',
+    eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
   ): Promise<{ remove: () => void }>;
 }
@@ -145,5 +147,18 @@ export async function requestDefaultSmsRole(): Promise<boolean> {
   } catch (e) {
     console.error('[Sms] requestDefaultSmsRole failed', e);
     return false;
+  }
+}
+
+
+export async function addSmsSentListener(
+  cb: (msg: IncomingSms) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isSmsPluginAvailable()) return null;
+  try {
+    return await SmsPlugin.addListener('smsSent', cb);
+  } catch (e) {
+    console.error('[Sms] addListener(smsSent) failed', e);
+    return null;
   }
 }

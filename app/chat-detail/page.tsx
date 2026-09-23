@@ -141,13 +141,55 @@ function ChatDetailContent() {
     }
   };
 
+  // Mark this chat as read whenever it is opened.
+  const markChatRead = async () => {
+    try {
+      const chats = await getChats();
+      const c = chats.find((x) => x.id === chatId);
+      if (c && (c.unread || 0) > 0) {
+        c.unread = 0;
+        await saveChat(c);
+      }
+    } catch (e) {
+      console.error('markChatRead failed', e);
+    }
+  };
+
   useEffect(() => {
-    const handle = setTimeout(() => {
-      loadMessages();
+    const handle = setTimeout(async () => {
+      await loadMessages();
+      await markChatRead();
     }, 0);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone]);
+
+  // Live reload when an SMS for this chat is saved by the bridge.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { chatId?: string } | undefined;
+      if (!detail || !detail.chatId || detail.chatId === chatId) {
+        loadMessages();
+        markChatRead();
+      }
+    };
+    window.addEventListener('neura-sms-updated', handler);
+    return () => window.removeEventListener('neura-sms-updated', handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // Reload when returning to foreground (in case the bridge missed something).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadMessages();
+        markChatRead();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
 
   // Scroll to bottom whenever messages list gets updated
   useEffect(() => {

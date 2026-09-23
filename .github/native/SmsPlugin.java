@@ -61,22 +61,36 @@ public class SmsPlugin extends Plugin {
 
     // ---- Called from SmsReceiver (may run when app is dead) ----
     public static void receiveIncomingSms(Context context, String sender, String body, long timestamp) {
-        Log.d(TAG, "receiveIncomingSms from " + sender);
+        enqueue(context, sender, body, timestamp, "incoming");
+    }
 
-        // 1. Persist to Telephony.Sms.Inbox so other apps (and our own default
-        //    SMS app contract) can see this message. Required when we are the
-        //    default SMS app.
+    // Called when this app sends an SMS (from chat, SIM picker, or notification reply).
+    public static void receiveOutgoingSms(Context context, String recipient, String body, long timestamp) {
+        enqueue(context, recipient, body, timestamp, "outgoing");
+    }
+
+    private static void enqueue(Context context, String address, String body, long timestamp, String direction) {
+        Log.d(TAG, "enqueue " + direction + " with " + address);
+
+        // 1. Persist to the system SMS provider (Inbox for incoming, Sent for
+        //    outgoing). Required when we hold the default SMS app role.
         try {
+            boolean isOutgoing = "outgoing".equals(direction);
             ContentValues values = new ContentValues();
-            values.put(Telephony.Sms.ADDRESS, sender);
+            values.put(Telephony.Sms.ADDRESS, address);
             values.put(Telephony.Sms.BODY, body);
             values.put(Telephony.Sms.DATE, timestamp);
-            values.put(Telephony.Sms.READ, 0);
-            values.put(Telephony.Sms.SEEN, 0);
-            values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_INBOX);
-            context.getContentResolver().insert(Telephony.Sms.Inbox.CONTENT_URI, values);
+            values.put(Telephony.Sms.READ, isOutgoing ? 1 : 0);
+            values.put(Telephony.Sms.SEEN, isOutgoing ? 1 : 0);
+            values.put(Telephony.Sms.TYPE, isOutgoing
+                ? Telephony.Sms.MESSAGE_TYPE_SENT
+                : Telephony.Sms.MESSAGE_TYPE_INBOX);
+            android.net.Uri target = isOutgoing
+                ? Telephony.Sms.Sent.CONTENT_URI
+                : Telephony.Sms.Inbox.CONTENT_URI;
+            context.getContentResolver().insert(target, values);
         } catch (Exception e) {
-            Log.w(TAG, "inbox write failed (not default SMS app?)", e);
+            Log.w(TAG, "provider write failed (not default SMS app?)", e);
         }
 
         // 2. Queue for our JS layer
@@ -85,9 +99,10 @@ public class SmsPlugin extends Plugin {
             String existing = prefs.getString(QUEUE_KEY, "[]");
             JSONArray arr = new JSONArray(existing);
             JSONObject item = new JSONObject();
-            item.put("sender", sender == null ? "" : sender);
+            item.put("address", address == null ? "" : address);
             item.put("body", body == null ? "" : body);
             item.put("timestamp", timestamp);
+            item.put("direction", direction);
             arr.put(item);
             // Keep only last 200
             if (arr.length() > 200) {
@@ -105,10 +120,12 @@ public class SmsPlugin extends Plugin {
         // 3. Live notify if JS is listening
         if (instance != null) {
             JSObject data = new JSObject();
-            data.put("sender", sender == null ? "" : sender);
+            data.put("sender", address == null ? "" : address);
+            data.put("address", address == null ? "" : address);
             data.put("body", body == null ? "" : body);
             data.put("timestamp", timestamp);
-            instance.notifyListeners("smsReceived", data);
+            data.put("direction", direction);
+            instance.notifyListeners(direction.equals("outgoing") ? "smsSent" : "smsReceived", data);
         }
     }
 
@@ -204,17 +221,8 @@ public class SmsPlugin extends Plugin {
                 smsManager.sendTextMessage(phone, null, message, null, null);
             }
 
-            // Also persist to Telephony.Sms.Sent if we're the default SMS app
-            try {
-                ContentValues values = new ContentValues();
-                values.put(Telephony.Sms.ADDRESS, phone);
-                values.put(Telephony.Sms.BODY, message);
-                values.put(Telephony.Sms.DATE, System.currentTimeMillis());
-                values.put(Telephony.Sms.READ, 1);
-                values.put(Telephony.Sms.SEEN, 1);
-                values.put(Telephony.Sms.TYPE, Telephony.Sms.MESSAGE_TYPE_SENT);
-                getContext().getContentResolver().insert(Telephony.Sms.Sent.CONTENT_URI, values);
-            } catch (Exception ignore) {}
+            // Persist + queue as outgoing so the app shows it as sent.
+            receiveOutgoingSms(getContext(), phone, message, System.currentTimeMillis());
 
             JSObject ret = new JSObject();
             ret.put("status", "sent");

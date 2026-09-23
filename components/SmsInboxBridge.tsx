@@ -6,6 +6,7 @@ import { generateId } from '@/lib/utils';
 import {
   drainIncomingSms,
   addSmsReceivedListener,
+  addSmsSentListener,
   isSmsPluginAvailable,
   IncomingSms,
 } from '@/lib/sms-plugin';
@@ -17,30 +18,33 @@ function chatIdFor(sender: string): string {
   return chatIdFromPhone(sender);
 }
 
-// Persists an incoming SMS as a Message + ensures a Chat entry exists.
+// Persists an SMS (incoming or outgoing) as a Message + ensures a Chat exists.
 async function persistIncoming(msg: IncomingSms) {
-  if (!msg || !msg.sender) return;
+  const address = msg.address || msg.sender;
+  if (!msg || !address) return;
 
-  const senderNorm = normalizePhone(msg.sender) || msg.sender;
-  const chatId = chatIdFor(msg.sender);
+  const isOutgoing = msg.direction === 'outgoing';
+  const chatId = chatIdFor(address);
 
-  // Ensure chat exists and bump unread.
+  // Ensure chat exists.
   try {
     const chats = await getChats();
     const existing = chats.find((c) => c.id === chatId);
     if (existing) {
       existing.lastMessage = msg.body || '';
       existing.timestamp = msg.timestamp || Date.now();
-      existing.unread = (existing.unread || 0) + 1;
+      if (!isOutgoing) {
+        existing.unread = (existing.unread || 0) + 1;
+      }
       await saveChat(existing);
     } else {
       const newChat: Chat = {
         id: chatId,
-        name: msg.sender,
-        phone: msg.sender,
+        name: address,
+        phone: address,
         lastMessage: msg.body || '',
         timestamp: msg.timestamp || Date.now(),
-        unread: 1,
+        unread: isOutgoing ? 0 : 1,
         archived: false,
       };
       await saveChat(newChat);
@@ -49,22 +53,21 @@ async function persistIncoming(msg: IncomingSms) {
     console.error('[SmsInbox] chat upsert failed', e);
   }
 
-  // Save the message body.
   const newMsg: Message = {
-    id: generateId('sms-in'),
+    id: generateId(isOutgoing ? 'sms-out' : 'sms-in'),
     chatId,
     text: msg.body || '',
-    sender: 'contact',
+    sender: isOutgoing ? 'user' : 'contact',
     timestamp: msg.timestamp || Date.now(),
-    status: 'received',
+    status: isOutgoing ? 'sent' : 'received',
   };
 
   try {
-    // Avoid duplicates when both drain and live-listener deliver the same SMS.
     const existingMsgs = await getMessages(chatId);
     const dup = existingMsgs.some(
       (m) =>
         m.text === newMsg.text &&
+        m.sender === newMsg.sender &&
         Math.abs((m.timestamp || 0) - (newMsg.timestamp || 0)) < 5000
     );
     if (dup) {
@@ -72,7 +75,10 @@ async function persistIncoming(msg: IncomingSms) {
       return;
     }
     await saveMessage(newMsg);
-    console.log('[SmsInbox] saved incoming from', msg.sender, 'suffix', senderNorm.slice(-4));
+    console.log('[SmsInbox] saved', isOutgoing ? 'outgoing' : 'incoming', 'msg');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('neura-sms-updated', { detail: { chatId } }));
+    }
   } catch (e) {
     console.error('[SmsInbox] message save failed', e);
   }
@@ -83,6 +89,7 @@ export default function SmsInboxBridge() {
     if (typeof window === 'undefined') return;
 
     let listenerHandle: { remove: () => void } | null = null;
+    let listenerHandleOut: { remove: () => void } | null = null;
     let cancelled = false;
 
     const start = async () => {
@@ -109,14 +116,24 @@ export default function SmsInboxBridge() {
         console.error('[SmsInbox] drain failed', e);
       }
 
-      // Subscribe to live SMS
+      // Subscribe to live incoming SMS
       try {
         listenerHandle = await addSmsReceivedListener(async (msg) => {
           await persistIncoming(msg);
         });
-        console.log('[SmsInbox] live listener attached');
+        console.log('[SmsInbox] live incoming listener attached');
       } catch (e) {
-        console.error('[SmsInbox] listener attach failed', e);
+        console.error('[SmsInbox] incoming listener attach failed', e);
+      }
+
+      // Subscribe to live outgoing SMS (sent from app or notification reply)
+      try {
+        listenerHandleOut = await addSmsSentListener(async (msg) => {
+          await persistIncoming(msg);
+        });
+        console.log('[SmsInbox] live outgoing listener attached');
+      } catch (e) {
+        console.error('[SmsInbox] outgoing listener attach failed', e);
       }
     };
 
@@ -126,6 +143,9 @@ export default function SmsInboxBridge() {
       cancelled = true;
       if (listenerHandle && listenerHandle.remove) {
         try { listenerHandle.remove(); } catch {}
+      }
+      if (listenerHandleOut && listenerHandleOut.remove) {
+        try { listenerHandleOut.remove(); } catch {}
       }
     };
   }, []);
