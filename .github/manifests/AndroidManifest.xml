@@ -150,13 +150,14 @@
         <!--   NATIVE RECEIVERS & SERVICES FOR BOTH APPS -->
         <!-- ========================================== -->
 
-        <!-- 1. SMS Receiver -->
+        <!-- 1. SMS Receiver (SMS_DELIVER for default role, SMS_RECEIVED for fallback) -->
         <receiver
             android:name="com.neurasamu.build.chat.SmsReceiver"
             android:permission="android.permission.BROADCAST_SMS"
             android:exported="true">
-            <intent-filter>
+            <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_DELIVER" />
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
             </intent-filter>
         </receiver>
 

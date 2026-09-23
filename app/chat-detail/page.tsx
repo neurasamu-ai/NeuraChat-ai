@@ -84,12 +84,14 @@ function ChatDetailContent() {
 
   // Toast notifier state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastKind, setToastKind] = useState<'info' | 'success' | 'error'>('info');
 
-  const alertToast = (msg: string) => {
+  const alertToast = (msg: string, kind: 'info' | 'success' | 'error' = 'info') => {
+    setToastKind(kind);
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
-    }, 2000);
+    }, 3500);
   };
 
   // Fetch destination contacts for forwarding
@@ -182,7 +184,7 @@ function ChatDetailContent() {
   const performSmsSend = async (text: string, subscriptionId?: number) => {
     if (!isSmsPluginAvailable()) {
       // Native plugin missing: let the OS handle it (default SMS app).
-      alertToast('Native SMS unavailable — opening system messenger');
+      alertToast('Native SMS unavailable — opening system messenger', 'error');
       const smsBody = encodeURIComponent(text);
       window.location.href = `sms:${phone}?body=${smsBody}`;
       return;
@@ -190,10 +192,10 @@ function ChatDetailContent() {
     try {
       await sendSms(phone, text, subscriptionId);
       console.log('Direct SMS sent via SIM', subscriptionId ?? 'default');
-      alertToast('Message sent');
+      alertToast('Message sent', 'success');
     } catch (err: any) {
       console.error('sendSms failed:', err);
-      alertToast('Send failed: ' + (err?.message || 'unknown error'));
+      alertToast('Send failed: ' + (err?.message || 'unknown error'), 'error');
     }
   };
 
@@ -871,9 +873,37 @@ function ChatDetailContent() {
       {/* Floating alert toast notification */}
       <AnimatePresence>
         {toastMessage && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2 bg-zinc-900 border border-zinc-800 text-[#cbfe00] rounded-full text-xs font-semibold shadow-xl z-50 flex items-center gap-1.5 animate-bounce">
-            <Check className="h-3.5 w-3.5 text-[#cbfe00]" />
-            {toastMessage}
+          <div
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 px-4 py-2.5 rounded-xl text-xs font-semibold shadow-2xl z-50 flex items-center gap-2 max-w-[85%]"
+            style={{
+              backgroundColor: '#18181b',
+              color: '#ffffff',
+              borderWidth: 1,
+              borderStyle: 'solid',
+              borderColor:
+                toastKind === 'error'
+                  ? '#FF006E'
+                  : toastKind === 'success'
+                  ? '#10b981'
+                  : '#00D4FF',
+            }}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                width: 6,
+                height: 6,
+                borderRadius: 9999,
+                backgroundColor:
+                  toastKind === 'error'
+                    ? '#FF006E'
+                    : toastKind === 'success'
+                    ? '#10b981'
+                    : '#00D4FF',
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ wordBreak: 'break-word' }}>{toastMessage}</span>
           </div>
         )}
       </AnimatePresence>

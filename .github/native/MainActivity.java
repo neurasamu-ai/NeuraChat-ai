@@ -28,12 +28,15 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-
+        // IMPORTANT: registerPlugin must be called BEFORE super.onCreate().
+        // Capacitor builds its plugin registry during BridgeActivity.onCreate,
+        // so plugins registered after it are never exposed to JS.
         registerPlugin(SmsPlugin.class);
         registerPlugin(TelecomPlugin.class);
         registerPlugin(SettingsPlugin.class);
         registerPlugin(NeuraContactsPlugin.class);
+
+        super.onCreate(savedInstanceState);
 
         requestAllPermissions();
     }
