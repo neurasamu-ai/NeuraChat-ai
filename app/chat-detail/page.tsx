@@ -271,28 +271,6 @@ function ChatDetailContent() {
     // 3. Dispatch SMS via selected/default SIM
     triggerVibration();
     await dispatchSms(bodyText);
-
-    // Interactive reply simulation after 1.5 seconds for engaging UX
-    setTimeout(async () => {
-      const responses = [
-        "Transmission verified. Reading the coordinates.",
-        "Acknowledged. NeuraLink channel speed is stable.",
-        "Incoming pulse received. Keep streaming.",
-        "Got it! Let me sync this into my local cyberdeck."
-      ];
-      const randomReply = responses[Math.floor(Math.random() * responses.length)];
-      const responseMsg: Message = {
-        id: generateId('msg-reply'),
-        chatId,
-        text: randomReply,
-        sender: 'contact',
-        timestamp: getCurrentTimestamp(),
-        status: 'read'
-      };
-      await saveMessage(responseMsg);
-      await loadMessages();
-      triggerVibration();
-    }, 1500);
   };
 
   // Long press triggering for messages
