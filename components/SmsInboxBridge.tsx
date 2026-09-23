@@ -81,15 +81,26 @@ async function persistIncoming(msg: IncomingSms) {
 export default function SmsInboxBridge() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isSmsPluginAvailable()) return;
 
     let listenerHandle: { remove: () => void } | null = null;
     let cancelled = false;
 
     const start = async () => {
+      // Give the Capacitor bridge a moment to be ready (same pattern as
+      // contacts sync). Without this, the very first drain call can fail
+      // silently on a cold start.
+      await new Promise((r) => setTimeout(r, 1200));
+      if (cancelled) return;
+
+      if (!isSmsPluginAvailable()) {
+        console.warn('[SmsInbox] plugin not available, skipping');
+        return;
+      }
+
       // Drain queued SMS (received while app was closed)
       try {
         const queued = await drainIncomingSms();
+        console.log('[SmsInbox] drained', queued.length, 'queued SMS');
         if (cancelled) return;
         for (const m of queued) {
           await persistIncoming(m);
@@ -99,9 +110,14 @@ export default function SmsInboxBridge() {
       }
 
       // Subscribe to live SMS
-      listenerHandle = await addSmsReceivedListener(async (msg) => {
-        await persistIncoming(msg);
-      });
+      try {
+        listenerHandle = await addSmsReceivedListener(async (msg) => {
+          await persistIncoming(msg);
+        });
+        console.log('[SmsInbox] live listener attached');
+      } catch (e) {
+        console.error('[SmsInbox] listener attach failed', e);
+      }
     };
 
     start();

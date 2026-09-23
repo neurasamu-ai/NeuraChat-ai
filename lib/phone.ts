@@ -66,6 +66,12 @@ export function isDuplicatePhone(
 // conversation opened from Contacts, Chats, or an incoming SMS lands in
 // the same thread.
 export function chatIdFromPhone(phone: string | undefined | null): string {
-  const norm = normalizePhone(phone) || (phone || '').replace(/\D/g, '');
+  const raw = (phone || '').trim();
+  // Numeric numbers -> normalized form. Alphanumeric senders (JAZZ, service
+  // short-codes) keep their letters so different senders do not collide.
+  const norm =
+    normalizePhone(raw) ||
+    raw.replace(/[^A-Za-z0-9]/g, '').toUpperCase() ||
+    'unknown';
   return `chat-${norm}`;
 }
