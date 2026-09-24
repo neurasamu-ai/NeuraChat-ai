@@ -17,7 +17,8 @@ import {
   Mail,
   Camera,
   Trash2,
-  Info
+  Info,
+  RefreshCw
 } from 'lucide-react';
 import {
   getContacts,
@@ -39,6 +40,7 @@ export default function ContactsPage() {
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Search press handling or timer state reference
@@ -138,6 +140,22 @@ export default function ContactsPage() {
       console.error(e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Manual "Load Contacts" button: forces a full sync from the device.
+  const handleReloadContacts = async () => {
+    triggerVibration();
+    setSyncing(true);
+    try {
+      if (isNativePlatform()) {
+        await syncDeviceContacts();
+      }
+      await loadContactsData();
+    } catch (e) {
+      console.error('reload failed', e);
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -420,7 +438,20 @@ export default function ContactsPage() {
 
   return (
     <>
-      <Header title="Contacts" />
+      <Header
+        title="Contacts"
+        rightAction={
+          <button
+            onClick={handleReloadContacts}
+            disabled={syncing}
+            className="p-2 -mr-2 rounded-full text-zinc-400 hover:text-[#00D4FF] disabled:opacity-50 transition-colors cursor-pointer"
+            title="Reload contacts"
+            id="contacts-reload-btn"
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin text-[#00D4FF]' : ''}`} />
+          </button>
+        }
+      />
 
       {/* Main Panel */}
       <main className="flex-1 p-3 overflow-y-auto" id="contacts-main-container">

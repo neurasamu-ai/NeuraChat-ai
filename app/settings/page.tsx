@@ -11,7 +11,10 @@ import {
   X,
   Sun,
   Moon,
-  Laptop,
+  Laptop,,
+  Phone,
+  MessageSquare,
+  ShieldCheck
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -21,6 +24,14 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
+import {
+  getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
+  isDefaultDialer, requestDefaultDialer, CallAccount,
+} from '@/lib/telecom-plugin';
+import {
+  getActiveSubscriptions, getPreferredSimId, setPreferredSimId,
+  isDefaultSmsApp, requestDefaultSmsRole, Subscription,
+} from '@/lib/sms-plugin';
 
 export default function SettingsPage() {
   // Profile
@@ -34,6 +45,13 @@ export default function SettingsPage() {
   // Modals
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isCommsOpen, setIsCommsOpen] = useState(false);
+  const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
+  const [callSimId, setCallSimId] = useState<string | null>(null);
+  const [smsSubs, setSmsSubs] = useState<Subscription[]>([]);
+  const [smsSimId, setSmsSimId] = useState<number | null>(null);
+  const [defaultSmsOk, setDefaultSmsOk] = useState<boolean>(true);
+  const [defaultDialerOk, setDefaultDialerOk] = useState<boolean>(true);
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -46,6 +64,27 @@ export default function SettingsPage() {
 
 
 
+
+  // Load communication settings when the modal opens.
+  useEffect(() => {
+    if (!isCommsOpen) return;
+    (async () => {
+      try {
+        const accounts = await getCallAccounts();
+        setCallAccounts(accounts);
+        setCallSimId(getPreferredCallSimId());
+
+        const subs = await getActiveSubscriptions();
+        setSmsSubs(subs);
+        setSmsSimId(getPreferredSimId());
+
+        setDefaultSmsOk(await isDefaultSmsApp());
+        setDefaultDialerOk(await isDefaultDialer());
+      } catch (e) {
+        console.error('comms load failed', e);
+      }
+    })();
+  }, [isCommsOpen]);
 
   useEffect(() => {
     async function loadProfile() {
@@ -103,6 +142,7 @@ export default function SettingsPage() {
 
   // ---- Back-button integration ----
   useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
+  useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
   return (
@@ -210,6 +250,21 @@ export default function SettingsPage() {
           </div>
 
 
+          {/* Calls & SMS */}
+          <div
+            onClick={() => {
+              triggerVibration();
+              setIsCommsOpen(true);
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <Phone className="h-4 w-4 text-[#10b981]" />
+              <span className="text-xs font-medium text-zinc-200">Calls & SMS</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
+
           {/* About */}
           <div
             onClick={() => {
@@ -313,6 +368,204 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
+
+        {/* ========== CALLS & SMS MODAL ========== */}
+        <AnimatePresence>
+          {isCommsOpen && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
+              >
+                <button
+                  onClick={() => setIsCommsOpen(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold font-display text-white mb-4">
+                  Calls & SMS
+                </h3>
+
+                {/* ---- Default apps ---- */}
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                  Default apps
+                </p>
+
+                <div className="space-y-2 mb-5">
+                  <button
+                    onClick={async () => {
+                      triggerVibration();
+                      if (defaultSmsOk) return;
+                      await requestDefaultSmsRole();
+                      setTimeout(async () => {
+                        setDefaultSmsOk(await isDefaultSmsApp());
+                      }, 800);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      defaultSmsOk
+                        ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400'
+                        : 'bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-850 cursor-pointer active:scale-[0.98]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="h-4 w-4" />
+                      <div className="text-left">
+                        <p className="text-xs font-semibold">Default SMS app</p>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">
+                          {defaultSmsOk ? 'Set' : 'Tap to set as default'}
+                        </p>
+                      </div>
+                    </div>
+                    {defaultSmsOk && (
+                      <span className="text-[9px] font-mono uppercase">Active</span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      triggerVibration();
+                      if (defaultDialerOk) return;
+                      await requestDefaultDialer();
+                      setTimeout(async () => {
+                        setDefaultDialerOk(await isDefaultDialer());
+                      }, 800);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
+                      defaultDialerOk
+                        ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400'
+                        : 'bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-850 cursor-pointer active:scale-[0.98]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Phone className="h-4 w-4" />
+                      <div className="text-left">
+                        <p className="text-xs font-semibold">Default Phone app</p>
+                        <p className="text-[10px] text-zinc-500 mt-0.5">
+                          {defaultDialerOk ? 'Set' : 'Tap to set as default'}
+                        </p>
+                      </div>
+                    </div>
+                    {defaultDialerOk && (
+                      <span className="text-[9px] font-mono uppercase">Active</span>
+                    )}
+                  </button>
+                </div>
+
+                {/* ---- Call SIM ---- */}
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                  Preferred SIM for calls
+                </p>
+
+                <div className="space-y-2 mb-5">
+                  {callAccounts.length === 0 ? (
+                    <p className="text-[11px] text-zinc-500 px-2">
+                      No call accounts detected.
+                    </p>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          triggerVibration();
+                          setPreferredCallSimId(null);
+                          setCallSimId(null);
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                          callSimId === null
+                            ? 'bg-[#10b981]/15 border-[#10b981]/40 text-[#10b981]'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
+                        }`}
+                      >
+                        <span>Always ask</span>
+                        {callSimId === null && <span className="text-[9px]">✓</span>}
+                      </button>
+                      {callAccounts.map((acc) => (
+                        <button
+                          key={acc.id}
+                          onClick={() => {
+                            triggerVibration();
+                            setPreferredCallSimId(acc.id);
+                            setCallSimId(acc.id);
+                          }}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                            callSimId === acc.id
+                              ? 'bg-[#10b981]/15 border-[#10b981]/40 text-[#10b981]'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
+                          }`}
+                        >
+                          <span className="truncate">{acc.label}</span>
+                          {callSimId === acc.id && <span className="text-[9px]">✓</span>}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+
+                {/* ---- SMS SIM ---- */}
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                  Preferred SIM for SMS
+                </p>
+
+                <div className="space-y-2">
+                  {smsSubs.length === 0 ? (
+                    <p className="text-[11px] text-zinc-500 px-2">
+                      No SIM subscriptions detected.
+                    </p>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          triggerVibration();
+                          setPreferredSimId(null);
+                          setSmsSimId(null);
+                        }}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                          smsSimId === null
+                            ? 'bg-[#00D4FF]/15 border-[#00D4FF]/40 text-[#00D4FF]'
+                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
+                        }`}
+                      >
+                        <span>Always ask</span>
+                        {smsSimId === null && <span className="text-[9px]">✓</span>}
+                      </button>
+                      {smsSubs.map((sub) => (
+                        <button
+                          key={sub.subscriptionId}
+                          onClick={() => {
+                            triggerVibration();
+                            setPreferredSimId(sub.subscriptionId);
+                            setSmsSimId(sub.subscriptionId);
+                          }}
+                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                            smsSimId === sub.subscriptionId
+                              ? 'bg-[#00D4FF]/15 border-[#00D4FF]/40 text-[#00D4FF]'
+                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
+                          }`}
+                        >
+                          <span className="truncate">
+                            {sub.label}
+                            {sub.carrierName ? ` · ${sub.carrierName}` : ''}
+                          </span>
+                          {smsSimId === sub.subscriptionId && <span className="text-[9px]">✓</span>}
+                        </button>
+                      ))}
+                    </>
+                  )}
+                </div>
+
+                <button
+                  onClick={() => setIsCommsOpen(false)}
+                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
+                >
+                  Done
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* ========== ABOUT MODAL ========== */}
         <AnimatePresence>

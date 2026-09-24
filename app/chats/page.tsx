@@ -27,7 +27,7 @@ import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
-import { chatIdFromPhone } from '@/lib/phone';
+import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -225,10 +225,25 @@ export default function ChatsPage() {
     (chat.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const filteredContacts = contacts.filter(c =>
-    c.name.toLowerCase().includes(contactSearch.toLowerCase()) ||
-    c.phone.includes(contactSearch)
-  );
+  const filteredContacts = contacts.filter(c => {
+    const q = contactSearch.trim();
+    if (!q) return true;
+    const qLower = q.toLowerCase();
+    // Name match
+    if (c.name.toLowerCase().includes(qLower)) return true;
+    // Email match
+    if ((c.email || '').toLowerCase().includes(qLower)) return true;
+    // Phone match: raw digits + normalized comparison
+    const qDigits = q.replace(/\D/g, '');
+    if (qDigits) {
+      const rawPhone = (c.phone || '').replace(/\D/g, '');
+      if (rawPhone.includes(qDigits)) return true;
+      const nPhone = normalizePhone(c.phone);
+      const nQuery = normalizePhone(q);
+      if (nPhone && nQuery && nPhone.includes(nQuery)) return true;
+    }
+    return false;
+  });
 
   return (
     <>
