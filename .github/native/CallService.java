@@ -24,6 +24,7 @@ public class CallService extends InCallService {
     public static boolean isIncoming = false;
     private boolean wasRinging = false;
     private boolean wasAnswered = false;
+    private boolean wasLogged = false;
     public static boolean isMuted = false;
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
@@ -69,6 +70,7 @@ public class CallService extends InCallService {
         } catch (Exception ignore) {}
         wasRinging = isIncoming;
         wasAnswered = false;
+        wasLogged = false;
 
         updateState(call, call.getState());
 
@@ -167,6 +169,7 @@ public class CallService extends InCallService {
         callStartedAt = 0L;
         wasRinging = false;
         wasAnswered = false;
+        wasLogged = false;
     }
 
     private void updateState(Call call, int state) {
@@ -178,6 +181,17 @@ public class CallService extends InCallService {
         if (state == Call.STATE_ACTIVE) {
             if (callStartedAt == 0L) callStartedAt = System.currentTimeMillis();
             wasAnswered = true;
+            // If this was an incoming call, log it as received once it goes
+            // active. Outgoing calls are already logged by the JS side when
+            // the user dials, so we skip those here.
+            if (isIncoming && !wasLogged) {
+                wasLogged = true;
+                try {
+                    TelecomPlugin.dispatchAnsweredCall(currentNumber, currentName, System.currentTimeMillis());
+                } catch (Exception e) {
+                    Log.w(TAG, "dispatchAnsweredCall failed", e);
+                }
+            }
         }
         if (state == Call.STATE_DISCONNECTED) {
             callStartedAt = 0L;

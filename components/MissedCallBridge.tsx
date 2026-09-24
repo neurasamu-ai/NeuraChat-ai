@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { addMissedCallListener, isTelecomPluginAvailable } from '@/lib/telecom-plugin';
+import { addMissedCallListener, addAnsweredCallListener, isTelecomPluginAvailable } from '@/lib/telecom-plugin';
 import { getCallLogs, saveCallLog, CallLog } from '@/lib/db';
 import { generateId } from '@/lib/utils';
 
@@ -13,6 +13,7 @@ export default function MissedCallBridge() {
     if (!isTelecomPluginAvailable()) return;
 
     let handle: { remove: () => void } | null = null;
+    let handleAnswered: { remove: () => void } | null = null;
     let cancelled = false;
 
     const start = async () => {
@@ -60,6 +61,41 @@ export default function MissedCallBridge() {
       });
 
       console.log('[MissedCall] listener attached');
+
+      // Also subscribe to answered incoming calls so "Received" tab has data.
+      handleAnswered = await addAnsweredCallListener(async (data) => {
+        try {
+          const phone = (data.number || '').replace(/\s+/g, '');
+          if (!phone) return;
+
+          const logs = await getCallLogs();
+          const dup = logs.some(
+            (l) =>
+              l.phone === phone &&
+              l.type === 'incoming' &&
+              Math.abs((l.timestamp || 0) - data.timestamp) < 10000
+          );
+          if (dup) return;
+
+          const entry: CallLog = {
+            id: generateId('call'),
+            name: data.name && data.name.length > 0 ? data.name : phone,
+            phone,
+            type: 'incoming',
+            timestamp: data.timestamp || Date.now(),
+            duration: 0,
+          };
+          await saveCallLog(entry);
+          console.log('[AnsweredCall] saved', phone);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('neura-call-updated'));
+          }
+        } catch (e) {
+          console.error('[AnsweredCall] save failed', e);
+        }
+      });
+
+      console.log('[AnsweredCall] listener attached');
     };
 
     start();
@@ -68,6 +104,9 @@ export default function MissedCallBridge() {
       cancelled = true;
       if (handle && handle.remove) {
         try { handle.remove(); } catch {}
+      }
+      if (handleAnswered && handleAnswered.remove) {
+        try { handleAnswered.remove(); } catch {}
       }
     };
   }, []);

@@ -319,7 +319,7 @@ export default function CallsPage() {
                   : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
-              {filter}
+              {filter === 'all' ? 'All' : filter === 'incoming' ? 'Received' : filter === 'outgoing' ? 'Dialed' : 'Missed'}
             </button>
           ))}
         </div>

@@ -54,6 +54,16 @@ public class TelecomPlugin extends Plugin {
         }
     }
 
+    public static void dispatchAnsweredCall(String number, String name, long timestamp) {
+        if (instance != null) {
+            JSObject data = new JSObject();
+            data.put("number", number == null ? "" : number);
+            data.put("name", name == null ? "" : name);
+            data.put("timestamp", timestamp);
+            instance.notifyListeners("answeredCall", data);
+        }
+    }
+
     public static void dispatchMissedCall(String number, String name, long timestamp) {
         if (instance != null) {
             JSObject data = new JSObject();
