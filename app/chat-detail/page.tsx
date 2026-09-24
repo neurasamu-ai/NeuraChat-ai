@@ -64,6 +64,9 @@ function ChatDetailContent() {
   const [selectedMsgIds, setSelectedMsgIds] = useState<string[]>([]);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
   const justLongPressedRef = useRef(false);
+  const msgTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const msgMovedRef = useRef(false);
+  const MSG_SWIPE_THRESHOLD = 8;
 
   // File Picker Input reference
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -411,21 +414,39 @@ function ChatDetailContent() {
     await dispatchSms(bodyText, newMsg.id);
   };
 
-  // Long press triggering for messages
-  const handleMessagePressStart = (msg: Message) => {
+  // Long press triggering for messages. Movement cancels the timer so that
+  // scrolling never selects a bubble.
+  const handleMessagePressStart = (msg: Message, x?: number, y?: number) => {
     justLongPressedRef.current = false;
+    msgMovedRef.current = false;
+    if (typeof x === 'number' && typeof y === 'number') {
+      msgTouchStartRef.current = { x, y };
+    }
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
     const timer = setTimeout(() => {
+      // Guard: if user moved during the hold, do not select.
+      if (msgMovedRef.current) return;
       triggerVibration();
       justLongPressedRef.current = true;
       setSelectedMsgIds(prev => {
-        if (prev.includes(msg.id)) {
-          return prev;
-        } else {
-          return [...prev, msg.id];
-        }
+        if (prev.includes(msg.id)) return prev;
+        return [...prev, msg.id];
       });
     }, 600);
     longPressTimerRef.current = timer;
+  };
+
+  const handleMessageMove = (x: number, y: number) => {
+    if (!msgTouchStartRef.current) return;
+    const dx = Math.abs(x - msgTouchStartRef.current.x);
+    const dy = Math.abs(y - msgTouchStartRef.current.y);
+    if (dx > MSG_SWIPE_THRESHOLD || dy > MSG_SWIPE_THRESHOLD) {
+      msgMovedRef.current = true;
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    }
   };
 
   const handleMessagePressEnd = () => {
@@ -433,13 +454,20 @@ function ChatDetailContent() {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    msgTouchStartRef.current = null;
   };
 
   const handleMessageClick = (msg: Message) => {
-    if (justLongPressedRef.current) {
-      justLongPressedRef.current = false;
-      return;
-    }
+    // Ignore any click that followed a scroll or a long press.
+    const wasMoved = msgMovedRef.current;
+    const wasLongPress = justLongPressedRef.current;
+    msgMovedRef.current = false;
+    justLongPressedRef.current = false;
+    msgTouchStartRef.current = null;
+    if (wasMoved || wasLongPress) return;
+
+    // Only allow tap-to-toggle when selection mode is already active
+    // (initiated by an earlier long press).
     if (selectedMsgIds.length > 0) {
       triggerVibration();
       if (selectedMsgIds.includes(msg.id)) {
@@ -695,10 +723,17 @@ function ChatDetailContent() {
             return (
               <motion.div
                 key={msg.id}
-                onPointerDown={() => handleMessagePressStart(msg)}
+                onPointerDown={(e) => handleMessagePressStart(msg, e.clientX, e.clientY)}
                 onPointerUp={handleMessagePressEnd}
                 onPointerCancel={handleMessagePressEnd}
-                onTouchStart={() => handleMessagePressStart(msg)}
+                onTouchStart={(e) => {
+                  const t = e.touches[0];
+                  handleMessagePressStart(msg, t?.clientX, t?.clientY);
+                }}
+                onTouchMove={(e) => {
+                  const t = e.touches[0];
+                  if (t) handleMessageMove(t.clientX, t.clientY);
+                }}
                 onTouchEnd={handleMessagePressEnd}
                 onClick={() => handleMessageClick(msg)}
                 initial={{ opacity: 0, x: isUser ? 25 : -25, scale: 0.95 }}
