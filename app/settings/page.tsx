@@ -11,10 +11,9 @@ import {
   X,
   Sun,
   Moon,
-  Laptop,,
+  Laptop,
   Phone,
-  MessageSquare,
-  ShieldCheck
+  MessageSquare
 } from 'lucide-react';
 import {
   getUserProfile,
