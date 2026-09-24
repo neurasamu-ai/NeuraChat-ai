@@ -376,8 +376,8 @@ function ChatDetailContent() {
     }
   };
 
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!inputText.trim() && !selectedImage) return;
 
     const bodyText = inputText.trim();
@@ -799,12 +799,23 @@ function ChatDetailContent() {
         />
 
         <div className="flex-1 relative">
-          <input
-            type="text"
+          <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter (without Shift) sends the message. Shift+Enter inserts
+              // a newline. This matches standard chat keyboard behavior.
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (inputText.trim() || selectedImage) {
+                  handleSendMessage();
+                }
+              }
+            }}
             placeholder="Encrypt and send pulse..."
-            className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2 px-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors"
+            rows={1}
+            className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2 px-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors resize-none max-h-24"
+            style={{ minHeight: '36px' }}
           />
         </div>
 
