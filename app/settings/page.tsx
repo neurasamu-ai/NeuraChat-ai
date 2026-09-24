@@ -617,8 +617,15 @@ export default function SettingsPage() {
                   A simple Android SMS and calling app with contacts integration.
                 </p>
 
-                <div className="text-[10px] text-zinc-700 font-mono border-t border-zinc-900 pt-4 mt-2">
-                  com.neurasamu.build.chat
+                <div className="text-[10px] border-t border-zinc-900 pt-4 mt-2">
+                  <a
+                    href="https://neurasamu.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#00D4FF] hover:underline font-mono"
+                  >
+                    neurasamu.com
+                  </a>
                 </div>
 
                 <button

@@ -396,7 +396,9 @@ public class SmsPlugin extends Plugin {
                 smsManager.sendTextMessage(phone, null, message, sentIntents.get(0), deliveredIntents.get(0));
             }
 
-            receiveOutgoingSms(getContext(), phone, message, System.currentTimeMillis());
+            // Note: the JS layer already saved this outgoing message when the
+            // user pressed send, so do NOT emit an smsSent event here — that
+            // would create a duplicate via SmsInboxBridge.
 
             JSObject ret = new JSObject();
             ret.put("status", "queued");

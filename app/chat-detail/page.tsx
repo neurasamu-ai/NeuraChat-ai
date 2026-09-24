@@ -41,7 +41,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
-import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, addSmsStatusListener, isDefaultSmsApp, requestDefaultSmsRole, Subscription } from '@/lib/sms-plugin';
+import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, addSmsStatusListener, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
   const router = useRouter();
@@ -312,24 +312,10 @@ function ChatDetailContent() {
       return;
     }
 
-    // If we are not the default SMS app, ask the user to grant that role
-    // before sending. Without it our sends are unreliable on some ROMs and
-    // other apps intercept SMS_RECEIVED.
-    try {
-      const isDefault = await isDefaultSmsApp();
-      if (!isDefault) {
-        alertToast('Set NeuraChat as default SMS app to send', 'error');
-        const ok = await requestDefaultSmsRole();
-        if (ok) {
-          // Wait for the user to return from the system dialog.
-          await new Promise((r) => setTimeout(r, 1200));
-        }
-        // Continue and attempt the send anyway — some carriers/ROMs still allow it.
-      }
-    } catch (e) {
-      console.warn('default SMS check failed', e);
-    }
-
+    // Non-default SMS apps can still send with SEND_SMS; the previous
+    // isDefaultSmsApp() gate was blocking sends on devices where the check
+    // ran before the role was fully applied. Just send and report the real
+    // result via the tracked status listener.
     try {
       await sendSmsTracked(phone, text, clientId, subscriptionId);
       console.log('SMS queued, clientId=', clientId);
