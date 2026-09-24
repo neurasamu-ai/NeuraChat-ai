@@ -37,6 +37,11 @@ export interface TelecomPluginType {
   toggleSpeaker(options: { enable: boolean }): Promise<{ speakerOn: boolean }>;
   toggleMute(options: { enable: boolean }): Promise<{ muted: boolean }>;
   toggleHold(options: { enable: boolean }): Promise<void>;
+  playDtmf(options: { tone: string }): Promise<{ ok: boolean }>;
+  stopDtmf(): Promise<void>;
+  startRecording(): Promise<{ ok: boolean; path?: string }>;
+  stopRecording(): Promise<{ ok: boolean; path?: string; note?: string }>;
+  isRecording(): Promise<{ recording: boolean; lastPath?: string }>;
 }
 
 const TelecomPlugin = registerPlugin<TelecomPluginType>('TelecomPlugin');
@@ -236,4 +241,44 @@ export async function toggleMute(enable: boolean): Promise<void> {
 export async function toggleHold(enable: boolean): Promise<void> {
   if (!isTelecomPluginAvailable()) return;
   try { await TelecomPlugin.toggleHold({ enable }); } catch (e) { console.error(e); }
+}
+
+
+export async function playDtmf(tone: string): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.playDtmf({ tone }); } catch (e) { console.error('[Telecom] playDtmf', e); }
+}
+
+export async function stopDtmf(): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.stopDtmf(); } catch (e) { console.error('[Telecom] stopDtmf', e); }
+}
+
+export async function startCallRecording(): Promise<{ ok: boolean; path?: string; error?: string }> {
+  if (!isTelecomPluginAvailable()) return { ok: false, error: 'not available' };
+  try {
+    const r = await TelecomPlugin.startRecording();
+    return { ok: !!r.ok, path: r.path };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+export async function stopCallRecording(): Promise<{ ok: boolean; path?: string }> {
+  if (!isTelecomPluginAvailable()) return { ok: false };
+  try {
+    return await TelecomPlugin.stopRecording();
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function isCallRecording(): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try {
+    const r = await TelecomPlugin.isRecording();
+    return !!r.recording;
+  } catch {
+    return false;
+  }
 }

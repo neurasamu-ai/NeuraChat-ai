@@ -2,6 +2,9 @@ package com.neurasamu.build.chat;
 
 import android.content.Context;
 import android.media.AudioManager;
+import android.media.MediaRecorder;
+import android.os.Environment;
+import java.io.File;
 import android.telecom.Call;
 import android.app.role.RoleManager;
 import android.content.Intent;
@@ -379,6 +382,125 @@ public class TelecomPlugin extends Plugin {
         ret.put("held", CallService.isHeld);
         ret.put("startedAt", CallService.callStartedAt);
         ret.put("hasCall", CallService.activeCall != null);
+        call.resolve(ret);
+    }
+
+    // ---- DTMF (keypad tones during a call) ----
+    @PluginMethod
+    public void playDtmf(PluginCall call) {
+        String tone = call.getString("tone");
+        if (tone == null || tone.isEmpty()) {
+            call.reject("tone is required");
+            return;
+        }
+        if (CallService.activeCall == null) {
+            call.reject("No active call");
+            return;
+        }
+        try {
+            char c = tone.charAt(0);
+            CallService.activeCall.playDtmfTone(c);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "playDtmf failed", e);
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopDtmf(PluginCall call) {
+        if (CallService.activeCall == null) {
+            call.resolve();
+            return;
+        }
+        try {
+            CallService.activeCall.stopDtmfTone();
+            call.resolve();
+        } catch (Exception e) {
+            Log.e(TAG, "stopDtmf failed", e);
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    // ---- Call recording (MIC source only; caller audio is not captured on
+    //      Android 10+ for non-system apps) ----
+    private static MediaRecorder recorder = null;
+    private static String lastRecordingPath = null;
+
+    @PluginMethod
+    public void startRecording(PluginCall call) {
+        if (recorder != null) {
+            call.reject("Already recording");
+            return;
+        }
+        try {
+            File dir = new File(getContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC), "recordings");
+            if (!dir.exists() && !dir.mkdirs()) {
+                call.reject("Cannot create recordings directory");
+                return;
+            }
+            String filename = "call_" + System.currentTimeMillis() + ".m4a";
+            File out = new File(dir, filename);
+
+            MediaRecorder r;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                r = new MediaRecorder(getContext());
+            } else {
+                r = new MediaRecorder();
+            }
+            r.setAudioSource(MediaRecorder.AudioSource.MIC);
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            r.setAudioEncodingBitRate(96000);
+            r.setAudioSamplingRate(44100);
+            r.setOutputFile(out.getAbsolutePath());
+            r.prepare();
+            r.start();
+
+            recorder = r;
+            lastRecordingPath = out.getAbsolutePath();
+
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("path", lastRecordingPath);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "startRecording failed", e);
+            recorder = null;
+            call.reject("Record failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void stopRecording(PluginCall call) {
+        if (recorder == null) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("note", "not recording");
+            call.resolve(ret);
+            return;
+        }
+        try {
+            recorder.stop();
+        } catch (Exception stopEx) {
+            Log.w(TAG, "recorder stop failed", stopEx);
+        }
+        try { recorder.release(); } catch (Exception ignore) {}
+        recorder = null;
+
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        if (lastRecordingPath != null) ret.put("path", lastRecordingPath);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void isRecording(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("recording", recorder != null);
+        if (lastRecordingPath != null) ret.put("lastPath", lastRecordingPath);
         call.resolve(ret);
     }
 }

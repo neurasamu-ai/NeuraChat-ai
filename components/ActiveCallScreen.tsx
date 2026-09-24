@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User, Grid3x3, UserPlus, Circle, Square, X } from 'lucide-react';
 import {
   getCurrentCall,
   addCallStateListener,
@@ -12,6 +12,11 @@ import {
   toggleSpeaker,
   toggleHold,
   isTelecomPluginAvailable,
+  playDtmf,
+  startCallRecording,
+  stopCallRecording,
+  isCallRecording,
+  placeCall,
   CallState,
 } from '@/lib/telecom-plugin';
 
@@ -29,6 +34,9 @@ function formatDuration(sec: number): string {
 export default function ActiveCallScreen() {
   const [call, setCall] = useState<CallState>(IDLE);
   const [elapsed, setElapsed] = useState(0);
+  const [numpadOpen, setNumpadOpen] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [recordingPath, setRecordingPath] = useState<string>('');
   const listenerRef = useRef<{ remove: () => void } | null>(null);
 
   // Subscribe to native call state
@@ -46,6 +54,10 @@ export default function ActiveCallScreen() {
       try {
         const s = await getCurrentCall();
         if (!cancelled) setCall(s);
+      } catch {}
+      try {
+        const rec = await isCallRecording();
+        if (!cancelled) setRecording(rec);
       } catch {}
 
       // Subscribe to changes
@@ -77,6 +89,41 @@ export default function ActiveCallScreen() {
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [call.state, call.startedAt]);
+
+  const handleDtmf = async (digit: string) => {
+    try { await playDtmf(digit); } catch (e) { console.error(e); }
+  };
+
+  const handleToggleRecord = async () => {
+    if (recording) {
+      const res = await stopCallRecording();
+      setRecording(false);
+      if (res.path) {
+        setRecordingPath(res.path);
+        console.log('Recording saved:', res.path);
+      }
+    } else {
+      const res = await startCallRecording();
+      if (res.ok) {
+        setRecording(true);
+      } else {
+        console.error('Record failed:', res.error);
+      }
+    }
+  };
+
+  const handleAddCall = async () => {
+    // Place a new call. Android automatically puts the current call on hold
+    // and shows the second call alongside; real conference merge is a
+    // system-level operation on newer Android.
+    const input = window.prompt('Enter number for second call');
+    if (!input || !input.trim()) return;
+    try {
+      await placeCall(input.trim());
+    } catch (e) {
+      console.error('add call failed', e);
+    }
+  };
 
   const visible = call.state !== 'IDLE' && call.state !== 'DISCONNECTED' && call.hasCall !== false;
   const displayName = call.name && call.name.length > 0 ? call.name : (call.number || 'Unknown');
@@ -137,42 +184,76 @@ export default function ActiveCallScreen() {
           {/* Controls */}
           <div className="relative px-6 pb-10">
             {/* Secondary controls row */}
-            <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="grid grid-cols-5 gap-2.5 mb-6">
               <button
                 onClick={() => { toggleMute(!call.muted); setCall({ ...call, muted: !call.muted }); }}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all active:scale-95 ${
+                className={`flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all active:scale-95 ${
                   call.muted
                     ? 'bg-[#00D4FF]/15 border-[#00D4FF]/50 text-[#00D4FF]'
                     : 'bg-zinc-900/70 border-zinc-800 text-zinc-300'
                 }`}
               >
                 {call.muted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-                <span className="text-[10px] font-medium">Mute</span>
+                <span className="text-[9px] font-medium">Mute</span>
               </button>
 
               <button
                 onClick={() => { toggleSpeaker(!call.speakerOn); setCall({ ...call, speakerOn: !call.speakerOn }); }}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all active:scale-95 ${
+                className={`flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all active:scale-95 ${
                   call.speakerOn
                     ? 'bg-[#00D4FF]/15 border-[#00D4FF]/50 text-[#00D4FF]'
                     : 'bg-zinc-900/70 border-zinc-800 text-zinc-300'
                 }`}
               >
                 {call.speakerOn ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
-                <span className="text-[10px] font-medium">Speaker</span>
+                <span className="text-[9px] font-medium">Speaker</span>
               </button>
 
               <button
                 onClick={() => { toggleHold(!call.held); setCall({ ...call, held: !call.held }); }}
                 disabled={call.state !== 'ACTIVE' && call.state !== 'HOLDING'}
-                className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border transition-all active:scale-95 disabled:opacity-40 ${
+                className={`flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all active:scale-95 disabled:opacity-40 ${
                   call.held
                     ? 'bg-[#FF006E]/15 border-[#FF006E]/50 text-[#FF006E]'
                     : 'bg-zinc-900/70 border-zinc-800 text-zinc-300'
                 }`}
               >
                 {call.held ? <Play className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
-                <span className="text-[10px] font-medium">{call.held ? 'Resume' : 'Hold'}</span>
+                <span className="text-[9px] font-medium">{call.held ? 'Resume' : 'Hold'}</span>
+              </button>
+
+              <button
+                onClick={() => setNumpadOpen(true)}
+                disabled={call.state !== 'ACTIVE'}
+                className="flex flex-col items-center gap-1 py-3 rounded-2xl border bg-zinc-900/70 border-zinc-800 text-zinc-300 transition-all active:scale-95 disabled:opacity-40"
+              >
+                <Grid3x3 className="h-5 w-5" />
+                <span className="text-[9px] font-medium">Keypad</span>
+              </button>
+
+              <button
+                onClick={handleToggleRecord}
+                disabled={call.state !== 'ACTIVE'}
+                className={`flex flex-col items-center gap-1 py-3 rounded-2xl border transition-all active:scale-95 disabled:opacity-40 ${
+                  recording
+                    ? 'bg-red-600/20 border-red-600/60 text-red-400 animate-pulse'
+                    : 'bg-zinc-900/70 border-zinc-800 text-zinc-300'
+                }`}
+              >
+                {recording ? <Square className="h-5 w-5" /> : <Circle className="h-5 w-5" />}
+                <span className="text-[9px] font-medium">{recording ? 'Stop' : 'Record'}</span>
+              </button>
+            </div>
+
+            {/* Add call row */}
+            <div className="mb-5">
+              <button
+                onClick={handleAddCall}
+                disabled={call.state !== 'ACTIVE'}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border bg-zinc-900/70 border-zinc-800 text-zinc-300 transition-all active:scale-95 disabled:opacity-40"
+              >
+                <UserPlus className="h-4 w-4" />
+                <span className="text-[11px] font-semibold">Add another call</span>
               </button>
             </div>
 
@@ -208,6 +289,76 @@ export default function ActiveCallScreen() {
               )}
             </div>
           </div>
+
+          {/* Numpad overlay */}
+          <AnimatePresence>
+            {numpadOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                className="absolute inset-0 bg-black/95 flex flex-col z-10"
+              >
+                <div className="flex items-center justify-between px-6 pt-8">
+                  <div className="text-white">
+                    <p className="text-xs text-zinc-500 font-mono">
+                      {displayName}
+                    </p>
+                    <p className="text-lg font-bold text-[#00D4FF] font-mono tracking-wider">
+                      {statusLabel}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setNumpadOpen(false)}
+                    className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white active:scale-95"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <div className="flex-1 grid grid-cols-3 gap-y-4 gap-x-8 px-8 py-8 place-items-center max-w-md mx-auto w-full">
+                  {[
+                    { c: '1', s: '' },
+                    { c: '2', s: 'ABC' },
+                    { c: '3', s: 'DEF' },
+                    { c: '4', s: 'GHI' },
+                    { c: '5', s: 'JKL' },
+                    { c: '6', s: 'MNO' },
+                    { c: '7', s: 'PQRS' },
+                    { c: '8', s: 'TUV' },
+                    { c: '9', s: 'WXYZ' },
+                    { c: '*', s: '' },
+                    { c: '0', s: '+' },
+                    { c: '#', s: '' },
+                  ].map((k) => (
+                    <button
+                      key={k.c}
+                      onPointerDown={() => handleDtmf(k.c)}
+                      className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 active:scale-90 transition-all flex flex-col items-center justify-center"
+                    >
+                      <span className="text-2xl font-black text-white font-mono leading-none">
+                        {k.c}
+                      </span>
+                      {k.s && (
+                        <span className="text-[9px] text-zinc-400 tracking-wide mt-0.5 leading-none">
+                          {k.s}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="px-6 pb-8">
+                  <button
+                    onClick={() => setNumpadOpen(false)}
+                    className="w-full py-3 rounded-2xl bg-zinc-900 text-zinc-300 font-semibold text-xs active:scale-95 transition-all"
+                  >
+                    Done
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       )}
     </AnimatePresence>
