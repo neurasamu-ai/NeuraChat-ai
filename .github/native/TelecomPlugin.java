@@ -33,11 +33,17 @@ public class TelecomPlugin extends Plugin {
         instance = this;
     }
 
-    public static void dispatchCallState(String state, String number) {
+    public static void dispatchCallState(String state, String number, String name, boolean incoming) {
         if (instance != null) {
             JSObject data = new JSObject();
             data.put("state", state);
-            data.put("number", number);
+            data.put("number", number == null ? "" : number);
+            data.put("name", name == null ? "" : name);
+            data.put("incoming", incoming);
+            data.put("muted", CallService.isMuted);
+            data.put("speakerOn", CallService.isSpeakerOn);
+            data.put("held", CallService.isHeld);
+            data.put("startedAt", CallService.callStartedAt);
             instance.notifyListeners("callStateChanged", data);
         }
     }
@@ -281,6 +287,7 @@ public class TelecomPlugin extends Plugin {
                 AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                 audioManager.setMode(AudioManager.MODE_IN_CALL);
                 audioManager.setSpeakerphoneOn(enable);
+                CallService.isSpeakerOn = enable;
                 JSObject ret = new JSObject();
                 ret.put("speakerOn", enable);
                 call.resolve(ret);
@@ -300,6 +307,7 @@ public class TelecomPlugin extends Plugin {
             try {
                 AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
                 audioManager.setMicrophoneMute(enable);
+                CallService.isMuted = enable;
                 JSObject ret = new JSObject();
                 ret.put("muted", enable);
                 call.resolve(ret);
@@ -321,6 +329,7 @@ public class TelecomPlugin extends Plugin {
                 } else {
                     CallService.activeCall.unhold();
                 }
+                CallService.isHeld = enable;
                 call.resolve();
             } catch (Exception e) {
                 call.reject("Failed to toggle hold: " + e.getMessage());
@@ -328,5 +337,21 @@ public class TelecomPlugin extends Plugin {
         } else {
             call.reject("No active call to toggle hold.");
         }
+    }
+
+    // Query the current call state without waiting for an event.
+    @PluginMethod
+    public void getCurrentCall(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("state", CallService.currentState);
+        ret.put("number", CallService.currentNumber == null ? "" : CallService.currentNumber);
+        ret.put("name", CallService.currentName == null ? "" : CallService.currentName);
+        ret.put("incoming", CallService.isIncoming);
+        ret.put("muted", CallService.isMuted);
+        ret.put("speakerOn", CallService.isSpeakerOn);
+        ret.put("held", CallService.isHeld);
+        ret.put("startedAt", CallService.callStartedAt);
+        ret.put("hasCall", CallService.activeCall != null);
+        call.resolve(ret);
     }
 }

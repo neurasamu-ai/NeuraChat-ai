@@ -7,6 +7,7 @@ import BackButtonHandler from '@/components/BackButtonHandler';
 import SmsInboxBridge from '@/components/SmsInboxBridge';
 import DefaultSmsBanner from '@/components/DefaultSmsBanner';
 import DefaultDialerBanner from '@/components/DefaultDialerBanner';
+import ActiveCallScreen from '@/components/ActiveCallScreen';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeManager />
         <BackButtonHandler />
         <SmsInboxBridge />
+        <ActiveCallScreen />
         <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 min-h-0">
           <DefaultSmsBanner />
           <DefaultDialerBanner />

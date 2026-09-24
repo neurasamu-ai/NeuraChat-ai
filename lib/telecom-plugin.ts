@@ -2,6 +2,18 @@
 
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
+export interface CallState {
+  state: string;
+  number: string;
+  name: string;
+  incoming: boolean;
+  muted: boolean;
+  speakerOn: boolean;
+  held: boolean;
+  startedAt: number;
+  hasCall?: boolean;
+}
+
 export interface CallAccount {
   id: string;
   accountId: string;
@@ -13,6 +25,11 @@ export interface CallAccount {
 export interface TelecomPluginType {
   call(options: { number: string; accountId?: string }): Promise<{ success: boolean; method?: string; note?: string }>;
   getCallAccounts(): Promise<{ accounts: CallAccount[] }>;
+  getCurrentCall(): Promise<CallState>;
+  addListener(
+    eventName: 'callStateChanged',
+    listener: (data: CallState) => void
+  ): Promise<{ remove: () => void }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
   acceptCall(): Promise<void>;
@@ -163,4 +180,60 @@ export async function dispatchCall(
   }
 
   return { action: 'pick', accounts };
+}
+
+
+export async function getCurrentCall(): Promise<CallState> {
+  if (!isTelecomPluginAvailable()) {
+    return {
+      state: 'IDLE', number: '', name: '', incoming: false,
+      muted: false, speakerOn: false, held: false, startedAt: 0, hasCall: false,
+    };
+  }
+  try {
+    return await TelecomPlugin.getCurrentCall();
+  } catch (e) {
+    console.error('[Telecom] getCurrentCall failed', e);
+    return {
+      state: 'IDLE', number: '', name: '', incoming: false,
+      muted: false, speakerOn: false, held: false, startedAt: 0, hasCall: false,
+    };
+  }
+}
+
+export async function addCallStateListener(
+  cb: (data: CallState) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isTelecomPluginAvailable()) return null;
+  try {
+    return await TelecomPlugin.addListener('callStateChanged', cb);
+  } catch (e) {
+    console.error('[Telecom] addListener failed', e);
+    return null;
+  }
+}
+
+export async function endCall(): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.endCall(); } catch (e) { console.error(e); }
+}
+
+export async function acceptCall(): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.acceptCall(); } catch (e) { console.error(e); }
+}
+
+export async function toggleSpeaker(enable: boolean): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.toggleSpeaker({ enable }); } catch (e) { console.error(e); }
+}
+
+export async function toggleMute(enable: boolean): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.toggleMute({ enable }); } catch (e) { console.error(e); }
+}
+
+export async function toggleHold(enable: boolean): Promise<void> {
+  if (!isTelecomPluginAvailable()) return;
+  try { await TelecomPlugin.toggleHold({ enable }); } catch (e) { console.error(e); }
 }
