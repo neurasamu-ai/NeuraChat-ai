@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MessageSquare, X } from 'lucide-react';
-import { isDefaultSmsApp, requestDefaultSmsRole, isSmsPluginAvailable } from '@/lib/sms-plugin';
+import { isDefaultSmsApp, requestDefaultSmsRole, isSmsPluginAvailable, openAppInfo } from '@/lib/sms-plugin';
 
 const DISMISS_KEY = 'default_sms_banner_dismissed_until';
 
@@ -14,7 +14,6 @@ export default function DefaultSmsBanner() {
     if (typeof window === 'undefined') return;
     if (!isSmsPluginAvailable()) return;
 
-    // Respect a temporary dismiss (1 day)
     try {
       const until = parseInt(localStorage.getItem(DISMISS_KEY) || '0', 10);
       if (until && Date.now() < until) return;
@@ -27,19 +26,44 @@ export default function DefaultSmsBanner() {
       setShow(!isDefault);
     };
     const t = setTimeout(check, 1200);
+    const onVis = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    document.addEventListener('visibilitychange', onVis);
+
     return () => {
       cancelled = true;
       clearTimeout(t);
+      document.removeEventListener('visibilitychange', onVis);
     };
   }, []);
 
+  // Try the role dialog first; regardless of what happens next, also open
+  // App Info so the user can set NeuraChat as SMS app manually (row exists
+  // there as "SMS app"). This makes the button work on every ROM.
   const handleSet = async () => {
-    await requestDefaultSmsRole();
-    // System dialog handles the rest; re-check after user returns
+    try {
+      await requestDefaultSmsRole();
+    } catch (e) {
+      console.warn('role request failed', e);
+    }
+    // Give the OS dialog a moment; if it never shows, App Info is the path.
     setTimeout(async () => {
       const isDefault = await isDefaultSmsApp();
+      if (!isDefault) {
+        // Open App Info — user taps "SMS app" row there.
+        try {
+          await openAppInfo();
+        } catch {}
+      }
       setShow(!isDefault);
-    }, 800);
+    }, 1200);
+  };
+
+  const handleAppInfo = async () => {
+    try {
+      await openAppInfo();
+    } catch {}
   };
 
   const handleDismiss = () => {
@@ -66,12 +90,20 @@ export default function DefaultSmsBanner() {
             <p className="text-[10px] text-zinc-400 mt-0.5 leading-relaxed">
               Required to send and receive SMS directly from NeuraChat.
             </p>
-            <button
-              onClick={handleSet}
-              className="mt-2 text-[10px] font-bold uppercase tracking-wider bg-[#00D4FF] text-black px-3 py-1.5 rounded-lg active:scale-95 transition-all"
-            >
-              Set as default
-            </button>
+            <div className="flex items-center flex-wrap gap-2 mt-2">
+              <button
+                onClick={handleSet}
+                className="text-[10px] font-bold uppercase tracking-wider bg-[#00D4FF] text-black px-3 py-1.5 rounded-lg active:scale-95 transition-all"
+              >
+                Set as default
+              </button>
+              <button
+                onClick={handleAppInfo}
+                className="text-[10px] font-semibold text-zinc-400 hover:text-white px-2 py-1.5 rounded-lg active:scale-95 transition-all underline-offset-2 hover:underline"
+              >
+                App Info
+              </button>
+            </div>
           </div>
           <button
             onClick={handleDismiss}

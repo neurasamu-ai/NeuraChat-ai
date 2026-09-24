@@ -40,6 +40,7 @@ export interface SmsPluginType {
   }): Promise<{ status: string; clientId: string }>;
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
   requestDefaultSmsRole(): Promise<{ launched: boolean }>;
+  openAppInfo(): Promise<void>;
   addListener(
     eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
@@ -199,5 +200,15 @@ export async function addSmsStatusListener(
   } catch (e) {
     console.error('[Sms] addSmsStatusListener failed', e);
     return null;
+  }
+}
+
+
+export async function openAppInfo(): Promise<void> {
+  if (!isSmsPluginAvailable()) return;
+  try {
+    await SmsPlugin.openAppInfo();
+  } catch (e) {
+    console.error('[Sms] openAppInfo failed', e);
   }
 }

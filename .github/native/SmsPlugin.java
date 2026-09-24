@@ -261,7 +261,6 @@ public class SmsPlugin extends Plugin {
     public void requestDefaultSmsRole(PluginCall call) {
         Context ctx = getContext();
         try {
-            // Already default? Just report.
             String pkg = ctx.getPackageName();
             String currentDefault = Telephony.Sms.getDefaultSmsPackage(ctx);
             Log.d(TAG, "current default SMS pkg=" + currentDefault + " our pkg=" + pkg);
@@ -273,40 +272,75 @@ public class SmsPlugin extends Plugin {
                 return;
             }
 
+            Intent intent = null;
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 RoleManager rm = (RoleManager) ctx.getSystemService(Context.ROLE_SERVICE);
-                if (rm == null) {
-                    call.reject("RoleManager unavailable");
-                    return;
+                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_SMS)) {
+                    intent = rm.createRequestRoleIntent(RoleManager.ROLE_SMS);
                 }
-                if (!rm.isRoleAvailable(RoleManager.ROLE_SMS)) {
-                    call.reject("SMS role not available on this device");
-                    return;
-                }
-                Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_SMS);
-                // Use context + NEW_TASK so it works even if getActivity() is null.
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                ctx.startActivity(intent);
-                JSObject ret = new JSObject();
-                ret.put("launched", true);
-                ret.put("method", "rolemanager");
-                call.resolve(ret);
-                return;
             }
 
-            // Pre-Android 10 fallback.
-            Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
-            intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, pkg);
+            if (intent == null) {
+                // Pre-Android 10 fallback.
+                intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
+                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, pkg);
+            }
+
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            ctx.startActivity(intent);
+
+            // Prefer Activity context (some OEMs require it for the role dialog).
+            boolean launched = false;
+            try {
+                if (getActivity() != null) {
+                    getActivity().startActivity(intent);
+                    launched = true;
+                    Log.d(TAG, "role intent launched from activity");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "activity launch failed, falling back to context", e);
+            }
+
+            if (!launched) {
+                ctx.startActivity(intent);
+                Log.d(TAG, "role intent launched from context");
+            }
+
             JSObject ret = new JSObject();
             ret.put("launched", true);
-            ret.put("method", "legacy");
             call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "requestDefaultSmsRole failed", e);
-            call.reject("Request failed: " + e.getMessage());
+            // Fallback: open app info page so user can set it manually.
+            try {
+                openAppInfoInternal(getContext());
+                JSObject ret = new JSObject();
+                ret.put("launched", false);
+                ret.put("method", "appinfo-fallback");
+                call.resolve(ret);
+            } catch (Exception e2) {
+                call.reject("Request failed: " + e.getMessage());
+            }
         }
+    }
+
+    // Open the system App Info page for NeuraChat — used as a fallback
+    // when the role dialog cannot be shown (some OEM ROMs).
+    @PluginMethod
+    public void openAppInfo(PluginCall call) {
+        try {
+            openAppInfoInternal(getContext());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    private static void openAppInfoInternal(Context ctx) {
+        Intent intent = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+        intent.setData(android.net.Uri.fromParts("package", ctx.getPackageName(), null));
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        ctx.startActivity(intent);
     }
 
     // ---- Sent / Delivered tracking ----
