@@ -30,6 +30,25 @@ public class CallService extends InCallService {
     public static boolean isHeld = false;
     public static long callStartedAt = 0L;
 
+    // Stable ids for all calls currently tracked by the InCallService.
+    private static final java.util.Map<Call, String> callIds =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private static int nextCallSeq = 1;
+    public static String idFor(Call c) {
+        if (c == null) return "";
+        String existing = callIds.get(c);
+        if (existing != null) return existing;
+        String id = "c" + (nextCallSeq++);
+        callIds.put(c, id);
+        return id;
+    }
+    public static Call byId(String id) {
+        for (java.util.Map.Entry<Call, String> e : callIds.entrySet()) {
+            if (e.getValue().equals(id)) return e.getKey();
+        }
+        return null;
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -79,6 +98,8 @@ public class CallService extends InCallService {
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         intent.putExtra("call_state", currentState);
         startActivity(intent);
+
+        dispatchCallsSnapshot();
     }
 
     // Choose the visible call: prefer one that is not HOLDING or DISCONNECTED.
@@ -171,6 +192,50 @@ public class CallService extends InCallService {
         wasAnswered = false;
         wasLogged = false;
         try { CallNotifier.cancelActive(getApplicationContext()); } catch (Exception ignore) {}
+        dispatchCallsSnapshot();
+    }
+
+    // Emit a snapshot of all current calls so the UI can render a call
+    // waiting card when more than one call is present.
+    public static void dispatchCallsSnapshot() {
+        if (instance == null) return;
+        try {
+            java.util.List<Call> list = instance.getCalls();
+            com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+            if (list != null) {
+                for (Call c : list) {
+                    if (c == null) continue;
+                    int st = c.getState();
+                    if (st == Call.STATE_DISCONNECTED) continue;
+                    com.getcapacitor.JSObject o = new com.getcapacitor.JSObject();
+                    o.put("id", idFor(c));
+                    String num = getNumberStatic(c);
+                    o.put("number", num == null ? "" : num);
+                    o.put("name", instance.lookupName(num));
+                    o.put("state", instance.getStateString(st));
+                    boolean in;
+                    try {
+                        in = c.getDetails().getCallDirection() == Call.Details.DIRECTION_INCOMING;
+                    } catch (Exception e) {
+                        in = false;
+                    }
+                    o.put("incoming", in);
+                    o.put("active", c == instance.activeCall);
+                    arr.put(o);
+                }
+            }
+            TelecomPlugin.dispatchCallsChanged(arr);
+        } catch (Exception e) {
+            Log.w(TAG, "dispatchCallsSnapshot failed", e);
+        }
+    }
+
+    private static String getNumberStatic(Call call) {
+        if (call != null && call.getDetails() != null && call.getDetails().getHandle() != null) {
+            String v = call.getDetails().getHandle().getSchemeSpecificPart();
+            return v != null ? v : "";
+        }
+        return "";
     }
 
     private void updateState(Call call, int state) {
@@ -200,6 +265,7 @@ public class CallService extends InCallService {
 
         Log.d(TAG, "state=" + stateStr + " number=" + currentNumber + " name=" + currentName);
         TelecomPlugin.dispatchCallState(stateStr, currentNumber, currentName, isIncoming);
+        dispatchCallsSnapshot();
 
         // Ongoing-call notification: shows while a call is live, tap to
         // reopen the in-call UI.

@@ -64,6 +64,91 @@ public class TelecomPlugin extends Plugin {
         }
     }
 
+    public static void dispatchCallsChanged(com.getcapacitor.JSArray calls) {
+        if (instance != null) {
+            JSObject data = new JSObject();
+            data.put("calls", calls);
+            instance.notifyListeners("callsChanged", data);
+        }
+    }
+
+    // ---- Per-call actions (used by the call waiting card) ----
+    @PluginMethod
+    public void answerCallById(PluginCall call) {
+        String id = call.getString("id");
+        android.telecom.Call c = CallService.byId(id);
+        if (c == null) { call.reject("Call not found"); return; }
+        try {
+            // Hold any currently active call first.
+            if (CallService.activeCall != null && CallService.activeCall != c) {
+                try { CallService.activeCall.hold(); } catch (Exception ignore) {}
+            }
+            c.answer(0);
+            CallService.activeCall = c;
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void endCallById(PluginCall call) {
+        String id = call.getString("id");
+        android.telecom.Call c = CallService.byId(id);
+        if (c == null) { call.reject("Call not found"); return; }
+        try {
+            c.disconnect();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void holdCallById(PluginCall call) {
+        String id = call.getString("id");
+        android.telecom.Call c = CallService.byId(id);
+        if (c == null) { call.reject("Call not found"); return; }
+        try {
+            c.hold();
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void unholdCallById(PluginCall call) {
+        String id = call.getString("id");
+        android.telecom.Call c = CallService.byId(id);
+        if (c == null) { call.reject("Call not found"); return; }
+        try {
+            c.unhold();
+            CallService.activeCall = c;
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
+    // Swap: hold the current active call and unhold the given one.
+    @PluginMethod
+    public void swapToCall(PluginCall call) {
+        String id = call.getString("id");
+        android.telecom.Call target = CallService.byId(id);
+        if (target == null) { call.reject("Call not found"); return; }
+        try {
+            if (CallService.activeCall != null && CallService.activeCall != target) {
+                try { CallService.activeCall.hold(); } catch (Exception ignore) {}
+            }
+            target.unhold();
+            CallService.activeCall = target;
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
+
     public static void dispatchMissedCall(String number, String name, long timestamp) {
         if (instance != null) {
             JSObject data = new JSObject();

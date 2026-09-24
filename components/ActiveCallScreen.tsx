@@ -35,9 +35,11 @@ export default function ActiveCallScreen() {
   const [elapsed, setElapsed] = useState(0);
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadInput, setNumpadInput] = useState('');
+  const [allCalls, setAllCalls] = useState<CallSnapshot[]>([]);
   const [recording, setRecording] = useState(false);
   const [recordingPath, setRecordingPath] = useState<string>('');
   const listenerRef = useRef<{ remove: () => void } | null>(null);
+  const listenerCallsRef = useRef<{ remove: () => void } | null>(null);
 
   // Subscribe to native call state
   useEffect(() => {
@@ -64,6 +66,15 @@ export default function ActiveCallScreen() {
       listenerRef.current = await addCallStateListener((data) => {
         setCall(data);
       });
+
+      // Subscribe to the multi-call snapshot for call waiting UI.
+      try {
+        listenerCallsRef.current = await addCallsChangedListener((calls) => {
+          setAllCalls(calls);
+        });
+      } catch (e) {
+        console.error('callsChanged sub failed', e);
+      }
     };
 
     start();
@@ -72,6 +83,9 @@ export default function ActiveCallScreen() {
       cancelled = true;
       if (listenerRef.current && listenerRef.current.remove) {
         try { listenerRef.current.remove(); } catch {}
+      }
+      if (listenerCallsRef.current && listenerCallsRef.current.remove) {
+        try { listenerCallsRef.current.remove(); } catch {}
       }
     };
   }, []);
@@ -177,6 +191,82 @@ export default function ActiveCallScreen() {
               {statusLabel}
             </p>
           </div>
+
+          {/* Call waiting card — appears when a second call is present */}
+          {allCalls.length > 1 && (
+            <div className="relative px-6 mt-2">
+              {allCalls
+                .filter((c) => c.state !== 'DISCONNECTED')
+                .map((c) => {
+                  const isRinging = c.state === 'RINGING';
+                  const isHeld = c.state === 'HOLDING';
+                  const isActive = c.state === 'ACTIVE';
+                  return (
+                    <div
+                      key={c.id}
+                      className="mb-2 rounded-2xl border border-zinc-800 bg-zinc-900/70 backdrop-blur-md p-3 flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono">
+                          {isRinging ? 'Incoming' : isHeld ? 'On hold' : isActive ? 'Active' : c.state}
+                        </p>
+                        <p className="text-sm font-bold text-white truncate">
+                          {c.name || c.number || 'Unknown'}
+                        </p>
+                        {c.name && c.number && c.name !== c.number && (
+                          <p className="text-[10px] text-zinc-500 font-mono truncate">{c.number}</p>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        {isRinging && (
+                          <>
+                            <button
+                              onClick={async () => {
+                                await endCallById(c.id);
+                              }}
+                              className="w-10 h-10 rounded-full bg-red-600/90 text-white flex items-center justify-center active:scale-95"
+                              aria-label="Decline"
+                            >
+                              <PhoneOff className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await answerCallById(c.id);
+                              }}
+                              className="w-10 h-10 rounded-full bg-emerald-500 text-black flex items-center justify-center active:scale-95"
+                              aria-label="Answer"
+                            >
+                              <Phone className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        {isHeld && (
+                          <button
+                            onClick={async () => {
+                              await swapToCall(c.id);
+                            }}
+                            className="px-3 h-9 rounded-full bg-[#00D4FF] text-black text-xs font-bold active:scale-95"
+                          >
+                            Swap
+                          </button>
+                        )}
+                        {isActive && !call.active && (
+                          <button
+                            onClick={async () => {
+                              await swapToCall(c.id);
+                            }}
+                            className="px-3 h-9 rounded-full bg-[#00D4FF] text-black text-xs font-bold active:scale-95"
+                          >
+                            Resume
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
 
           {/* Controls */}
           <div className="relative px-6 pb-10">

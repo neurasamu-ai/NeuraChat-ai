@@ -2,6 +2,15 @@
 
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
+export interface CallSnapshot {
+  id: string;
+  number: string;
+  name: string;
+  state: string;
+  incoming: boolean;
+  active: boolean;
+}
+
 export interface CallState {
   state: string;
   number: string;
@@ -50,6 +59,15 @@ export interface TelecomPluginType {
   startRecording(): Promise<{ ok: boolean; path?: string }>;
   stopRecording(): Promise<{ ok: boolean; path?: string; note?: string }>;
   isRecording(): Promise<{ recording: boolean; lastPath?: string }>;
+  answerCallById(options: { id: string }): Promise<void>;
+  endCallById(options: { id: string }): Promise<void>;
+  holdCallById(options: { id: string }): Promise<void>;
+  unholdCallById(options: { id: string }): Promise<void>;
+  swapToCall(options: { id: string }): Promise<void>;
+  addListener(
+    eventName: 'callsChanged',
+    listener: (data: { calls: CallSnapshot[] }) => void
+  ): Promise<{ remove: () => void }>;
 }
 
 const TelecomPlugin = registerPlugin<TelecomPluginType>('TelecomPlugin');
@@ -315,4 +333,49 @@ export async function addAnsweredCallListener(
     console.error('[Telecom] addAnsweredCallListener failed', e);
     return null;
   }
+}
+
+
+export async function addCallsChangedListener(
+  cb: (calls: CallSnapshot[]) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isTelecomPluginAvailable()) return null;
+  try {
+    return await TelecomPlugin.addListener('callsChanged', (data) => {
+      cb(data.calls || []);
+    });
+  } catch (e) {
+    console.error('[Telecom] addCallsChangedListener failed', e);
+    return null;
+  }
+}
+
+export async function answerCallById(id: string): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try { await TelecomPlugin.answerCallById({ id }); return true; }
+  catch (e) { console.error(e); return false; }
+}
+
+export async function endCallById(id: string): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try { await TelecomPlugin.endCallById({ id }); return true; }
+  catch (e) { console.error(e); return false; }
+}
+
+export async function holdCallById(id: string): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try { await TelecomPlugin.holdCallById({ id }); return true; }
+  catch (e) { console.error(e); return false; }
+}
+
+export async function unholdCallById(id: string): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try { await TelecomPlugin.unholdCallById({ id }); return true; }
+  catch (e) { console.error(e); return false; }
+}
+
+export async function swapToCall(id: string): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try { await TelecomPlugin.swapToCall({ id }); return true; }
+  catch (e) { console.error(e); return false; }
 }
