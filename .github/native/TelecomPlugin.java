@@ -7,10 +7,13 @@ import android.app.role.RoleManager;
 import android.content.Intent;
 import android.net.Uri;
 import android.telecom.TelecomManager;
+import android.telecom.PhoneAccountHandle;
+import java.util.List;
 import android.os.Build;
 import android.util.Log;
 import androidx.activity.result.ActivityResult;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -126,6 +129,50 @@ public class TelecomPlugin extends Plugin {
         }
     }
 
+    // List call-capable SIM accounts (requires default dialer or
+    // READ_PHONE_STATE + carrier privileges on newer Android).
+    @PluginMethod
+    public void getCallAccounts(PluginCall call) {
+        JSArray result = new JSArray();
+        try {
+            TelecomManager tm = (TelecomManager) getContext().getSystemService(Context.TELECOM_SERVICE);
+            if (tm == null) {
+                JSObject ret = new JSObject();
+                ret.put("accounts", result);
+                call.resolve(ret);
+                return;
+            }
+            List<PhoneAccountHandle> handles = tm.getCallCapablePhoneAccounts();
+            int index = 0;
+            for (PhoneAccountHandle h : handles) {
+                JSObject item = new JSObject();
+                // Stable id for JS: componentName + id
+                String id = h.getComponentName().flattenToString() + "|" + h.getId();
+                item.put("id", id);
+                item.put("accountId", h.getId());
+                item.put("componentName", h.getComponentName().flattenToString());
+                item.put("label", "SIM " + (index + 1));
+                try {
+                    android.telecom.PhoneAccount pa = tm.getPhoneAccount(h);
+                    if (pa != null) {
+                        CharSequence label = pa.getLabel();
+                        if (label != null && label.length() > 0) item.put("label", label.toString());
+                        item.put("isEnabled", pa.isEnabled());
+                    }
+                } catch (Exception ignore) {}
+                index++;
+                result.put(item);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "getCallAccounts failed", e);
+            call.reject("Failed: " + e.getMessage());
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("accounts", result);
+        call.resolve(ret);
+    }
+
     // Robust call dispatcher: tries TelecomManager first (works when we
     // hold the default-dialer role), falls back to ACTION_CALL (works with
     // CALL_PHONE permission regardless of role).
@@ -137,19 +184,37 @@ public class TelecomPlugin extends Plugin {
             return;
         }
         String cleaned = number.replaceAll("[^+0-9*#]", "");
+        String accountId = call.getString("accountId"); // optional
         Context ctx = getContext();
 
-        // Attempt 1: TelecomManager.placeCall
+        // Attempt 1: TelecomManager.placeCall (with optional PhoneAccountHandle
+        // for SIM selection; only honored when we hold the default dialer role).
         try {
             TelecomManager tm = (TelecomManager) ctx.getSystemService(Context.TELECOM_SERVICE);
             if (tm != null) {
                 android.net.Uri uri = android.net.Uri.fromParts("tel", cleaned, null);
                 android.os.Bundle extras = new android.os.Bundle();
                 extras.putBoolean(TelecomManager.EXTRA_START_CALL_WITH_SPEAKERPHONE, false);
+
+                if (accountId != null && !accountId.isEmpty()) {
+                    // accountId format from getCallAccounts(): "componentFlatten|id"
+                    int sep = accountId.indexOf('|');
+                    if (sep > 0) {
+                        String compFlat = accountId.substring(0, sep);
+                        String handleId = accountId.substring(sep + 1);
+                        android.content.ComponentName cn = android.content.ComponentName.unflattenFromString(compFlat);
+                        if (cn != null) {
+                            PhoneAccountHandle handle = new PhoneAccountHandle(cn, handleId);
+                            extras.putParcelable(TelecomManager.EXTRA_PHONE_ACCOUNT_HANDLE, handle);
+                        }
+                    }
+                }
+
                 tm.placeCall(uri, extras);
                 JSObject ret = new JSObject();
                 ret.put("success", true);
                 ret.put("method", "telecom");
+                if (accountId != null) ret.put("accountId", accountId);
                 call.resolve(ret);
                 return;
             }
@@ -159,7 +224,7 @@ public class TelecomPlugin extends Plugin {
             Log.w(TAG, "TelecomManager.placeCall failed, falling back", e);
         }
 
-        // Attempt 2: ACTION_CALL intent
+        // Attempt 2: ACTION_CALL intent (system picks the SIM)
         try {
             Intent intent = new Intent(Intent.ACTION_CALL);
             intent.setData(android.net.Uri.parse("tel:" + cleaned));
@@ -168,6 +233,7 @@ public class TelecomPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("success", true);
             ret.put("method", "intent");
+            ret.put("note", accountId != null ? "SIM selection ignored (not default dialer)" : null);
             call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "ACTION_CALL failed", e);

@@ -2,8 +2,17 @@
 
 import { registerPlugin, Capacitor } from '@capacitor/core';
 
+export interface CallAccount {
+  id: string;
+  accountId: string;
+  componentName: string;
+  label: string;
+  isEnabled?: boolean;
+}
+
 export interface TelecomPluginType {
-  call(options: { number: string }): Promise<{ success: boolean; method?: string }>;
+  call(options: { number: string; accountId?: string }): Promise<{ success: boolean; method?: string; note?: string }>;
+  getCallAccounts(): Promise<{ accounts: CallAccount[] }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
   acceptCall(): Promise<void>;
@@ -41,13 +50,15 @@ export function isTelecomPluginAvailable(): boolean {
   }
 }
 
-export async function placeCall(number: string): Promise<{ success: boolean; error?: string }> {
+export async function placeCall(
+  number: string,
+  accountId?: string
+): Promise<{ success: boolean; error?: string }> {
   if (!number || !number.trim()) {
     return { success: false, error: 'Number is required' };
   }
 
   if (!isTelecomPluginAvailable()) {
-    // Fallback: system intent
     try {
       window.location.href = `tel:${number}`;
       return { success: true };
@@ -57,11 +68,10 @@ export async function placeCall(number: string): Promise<{ success: boolean; err
   }
 
   try {
-    await TelecomPlugin.call({ number });
+    await TelecomPlugin.call({ number, accountId });
     return { success: true };
   } catch (e: any) {
     console.error('[Telecom] call failed', e);
-    // Last resort: system intent
     try {
       window.location.href = `tel:${number}`;
       return { success: true };
@@ -69,6 +79,37 @@ export async function placeCall(number: string): Promise<{ success: boolean; err
       return { success: false, error: e?.message || String(e) };
     }
   }
+}
+
+export async function getCallAccounts(): Promise<CallAccount[]> {
+  if (!isTelecomPluginAvailable()) return [];
+  try {
+    const r = await TelecomPlugin.getCallAccounts();
+    return r.accounts || [];
+  } catch (e) {
+    console.error('[Telecom] getCallAccounts failed', e);
+    return [];
+  }
+}
+
+// Remembered SIM preference for calls (separate from SMS preference).
+const PREFERRED_CALL_SIM_KEY = 'preferred_call_sim_id';
+
+export function getPreferredCallSimId(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    return localStorage.getItem(PREFERRED_CALL_SIM_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setPreferredCallSimId(id: string | null) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (id === null) localStorage.removeItem(PREFERRED_CALL_SIM_KEY);
+    else localStorage.setItem(PREFERRED_CALL_SIM_KEY, id);
+  } catch {}
 }
 
 export async function requestDefaultDialer(): Promise<boolean> {
@@ -90,4 +131,36 @@ export async function isDefaultDialer(): Promise<boolean> {
   } catch {
     return true;
   }
+}
+
+
+// Smart call dispatcher: handles the SIM picker logic in one place.
+// Returns "dialed" if the call was placed directly, or "pick" if the caller
+// should show the SIM picker with `accounts` and call `placeCall` itself.
+export async function dispatchCall(
+  number: string
+): Promise<
+  | { action: 'dialed'; success: boolean; error?: string }
+  | { action: 'pick'; accounts: CallAccount[] }
+> {
+  if (!number || !number.trim()) {
+    return { action: 'dialed', success: false, error: 'Number is required' };
+  }
+
+  const accounts = await getCallAccounts();
+
+  // 0 or 1 SIM: dial directly
+  if (accounts.length <= 1) {
+    const res = await placeCall(number, accounts[0]?.id);
+    return { action: 'dialed', success: res.success, error: res.error };
+  }
+
+  // 2+ SIMs: check preference
+  const remembered = getPreferredCallSimId();
+  if (remembered && accounts.some((a) => a.id === remembered)) {
+    const res = await placeCall(number, remembered);
+    return { action: 'dialed', success: res.success, error: res.error };
+  }
+
+  return { action: 'pick', accounts };
 }
