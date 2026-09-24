@@ -23,9 +23,6 @@ public class CallService extends InCallService {
     public static String currentNumber = "";
     public static String currentName = "";
     public static boolean isIncoming = false;
-    private boolean wasRinging = false;
-    private boolean wasAnswered = false;
-    private boolean wasLogged = false;
     public static boolean isMuted = false;
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
@@ -34,6 +31,19 @@ public class CallService extends InCallService {
     // Proximity wake lock: turns the screen off while the phone is at the ear
     // during a call, and back on when moved away. It never locks the phone.
     private static PowerManager.WakeLock proximityLock = null;
+
+    // Per-call bookkeeping so a call waiting scenario does not corrupt the
+    // missed/answered detection of another call.
+    private static class PerCall {
+        boolean isIncoming;
+        boolean wasRinging;
+        boolean wasAnswered;
+        boolean wasLogged;
+        String number = "";
+        String name = "";
+    }
+    private static final java.util.Map<Call, PerCall> perCallState =
+        new java.util.concurrent.ConcurrentHashMap<>();
 
     // Stable ids for all calls currently tracked by the InCallService.
     private static final java.util.Map<Call, String> callIds =
@@ -88,13 +98,19 @@ public class CallService extends InCallService {
         activeCall = call;
         call.registerCallback(callCallback);
 
-        // Determine incoming vs outgoing
+        // Build per-call state so we never mix flags between calls.
+        PerCall pc = new PerCall();
         try {
-            isIncoming = call.getDetails().getCallDirection() == Call.Details.DIRECTION_INCOMING;
+            pc.isIncoming = call.getDetails().getCallDirection() == Call.Details.DIRECTION_INCOMING;
         } catch (Exception ignore) {}
-        wasRinging = isIncoming;
-        wasAnswered = false;
-        wasLogged = false;
+        pc.wasRinging = pc.isIncoming;
+        pc.wasAnswered = false;
+        pc.wasLogged = false;
+        perCallState.put(call, pc);
+
+        // Mirror the newly-added call to the shared "current" fields used
+        // by the UI / getCurrentCall (best effort).
+        isIncoming = pc.isIncoming;
 
         updateState(call, call.getState());
 
@@ -175,41 +191,49 @@ public class CallService extends InCallService {
         super.onCallRemoved(call);
         try { call.unregisterCallback(callCallback); } catch (Exception ignore) {}
 
-        // Detect missed call: was ringing, never answered, was incoming.
-        if (wasRinging && !wasAnswered && isIncoming) {
+        // Use this call's own bookkeeping so a call waiting scenario never
+        // marks the wrong number as missed.
+        PerCall pc = perCallState.get(call);
+        boolean missed = pc != null
+            && pc.wasRinging
+            && !pc.wasAnswered
+            && pc.isIncoming
+            && call.getState() == Call.STATE_DISCONNECTED;
+
+        if (missed) {
+            String num = pc.number != null ? pc.number : "";
+            String nm = pc.name != null ? pc.name : "";
             try {
-                // Write to CallLog as missed
                 android.content.ContentValues cv = new android.content.ContentValues();
-                cv.put(android.provider.CallLog.Calls.NUMBER, currentNumber);
+                cv.put(android.provider.CallLog.Calls.NUMBER, num);
                 cv.put(android.provider.CallLog.Calls.TYPE,
                     android.provider.CallLog.Calls.MISSED_TYPE);
                 cv.put(android.provider.CallLog.Calls.DATE, System.currentTimeMillis());
                 cv.put(android.provider.CallLog.Calls.DURATION, 0);
                 cv.put(android.provider.CallLog.Calls.NEW, 1);
-                if (currentName != null && !currentName.isEmpty()) {
-                    cv.put(android.provider.CallLog.Calls.CACHED_NAME, currentName);
+                if (!nm.isEmpty()) {
+                    cv.put(android.provider.CallLog.Calls.CACHED_NAME, nm);
                 }
                 getContentResolver().insert(
                     android.provider.CallLog.Calls.CONTENT_URI, cv);
-                Log.d(TAG, "missed call logged: " + currentNumber);
+                Log.d(TAG, "missed call logged: " + num);
             } catch (Exception e) {
                 Log.w(TAG, "CallLog insert failed", e);
             }
-
-            // Show missed call notification
             try {
-                CallNotifier.showMissed(getApplicationContext(), currentNumber, currentName);
+                CallNotifier.showMissed(getApplicationContext(), num, nm);
             } catch (Exception e) {
                 Log.w(TAG, "missed notification failed", e);
             }
-
-            // Emit event so the JS layer can persist it into the app DB.
             try {
-                TelecomPlugin.dispatchMissedCall(currentNumber, currentName, System.currentTimeMillis());
+                TelecomPlugin.dispatchMissedCall(num, nm, System.currentTimeMillis());
             } catch (Exception e) {
                 Log.w(TAG, "dispatchMissedCall failed", e);
             }
         }
+
+        // Remove the per-call bookkeeping for the disconnected call.
+        perCallState.remove(call);
 
         // If other calls remain (e.g. a held call), switch the UI to them
         // instead of tearing everything down.
@@ -217,8 +241,6 @@ public class CallService extends InCallService {
         if (next != null) {
             activeCall = next;
             updateState(next, next.getState());
-            wasRinging = false;
-            wasAnswered = true;
             return;
         }
 
@@ -228,14 +250,10 @@ public class CallService extends InCallService {
         }
         currentState = "DISCONNECTED";
         TelecomPlugin.dispatchCallState("DISCONNECTED", currentNumber, currentName, isIncoming);
-        // Reset flags shortly after so the UI hides.
         isMuted = false;
         isSpeakerOn = false;
         isHeld = false;
         callStartedAt = 0L;
-        wasRinging = false;
-        wasAnswered = false;
-        wasLogged = false;
         try { CallNotifier.cancelActive(getApplicationContext()); } catch (Exception ignore) {}
         releaseProximityLock();
         try {
@@ -291,20 +309,32 @@ public class CallService extends InCallService {
 
     private void updateState(Call call, int state) {
         String stateStr = getStateString(state);
-        currentState = stateStr;
-        currentNumber = getNumber(call);
-        currentName = lookupName(currentNumber);
+        String number = getNumber(call);
+        String name = lookupName(number);
 
-        if (state == Call.STATE_ACTIVE) {
-            if (callStartedAt == 0L) callStartedAt = System.currentTimeMillis();
-            wasAnswered = true;
-            // If this was an incoming call, log it as received once it goes
-            // active. Outgoing calls are already logged by the JS side when
-            // the user dials, so we skip those here.
-            if (isIncoming && !wasLogged) {
-                wasLogged = true;
+        PerCall pc = perCallState.get(call);
+        if (pc != null) {
+            pc.number = number;
+            pc.name = name;
+        }
+
+        // Update the shared "current" fields only when this is the visible
+        // call, so other calls' events don't clobber the UI title.
+        if (call == activeCall) {
+            currentState = stateStr;
+            currentNumber = number;
+            currentName = name;
+            if (state == Call.STATE_ACTIVE) {
+                if (callStartedAt == 0L) callStartedAt = System.currentTimeMillis();
+            }
+        }
+
+        if (state == Call.STATE_ACTIVE && pc != null) {
+            pc.wasAnswered = true;
+            if (pc.isIncoming && !pc.wasLogged) {
+                pc.wasLogged = true;
                 try {
-                    TelecomPlugin.dispatchAnsweredCall(currentNumber, currentName, System.currentTimeMillis());
+                    TelecomPlugin.dispatchAnsweredCall(pc.number, pc.name, System.currentTimeMillis());
                 } catch (Exception e) {
                     Log.w(TAG, "dispatchAnsweredCall failed", e);
                 }
