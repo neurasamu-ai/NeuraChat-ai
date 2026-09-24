@@ -370,7 +370,6 @@ export default function ChatsPage() {
                       <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-800 to-zinc-900 border border-zinc-800 flex items-center justify-center text-[#00D4FF] font-semibold text-lg font-display uppercase tracking-wider relative shadow-inner">
                         {chat.name.slice(0, 2)}
                       </div>
-                      <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-zinc-950" />
                     </div>
 
                     {/* Chat Description Blocks */}

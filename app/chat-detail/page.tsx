@@ -590,7 +590,6 @@ function ChatDetailContent() {
       {/* Pink Glowing pulsing header component */}
       <Header
         title={name}
-        subtitle="Active now"
         isChatDetail={true}
         backHref="/chats"
         rightAction={

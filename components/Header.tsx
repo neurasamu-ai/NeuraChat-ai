@@ -53,9 +53,11 @@ export default function Header({
             <h1 className="font-bold text-sm tracking-tight font-display text-zinc-900">
               {title}
             </h1>
-            <span className="text-[10px] text-zinc-700 font-semibold font-sans animate-pulse">
-              {subtitle || 'Active now'}
-            </span>
+            {subtitle ? (
+              <span className="text-[10px] text-zinc-700 font-semibold font-sans">
+                {subtitle}
+              </span>
+            ) : null}
           </div>
         </div>
 
