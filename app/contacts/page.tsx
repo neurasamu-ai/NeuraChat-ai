@@ -32,6 +32,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
+import { dispatchCall } from '@/lib/telecom-plugin';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -172,6 +173,24 @@ export default function ContactsPage() {
     })();
   }, [isAddOpen]);
 
+  // Reload whenever the app comes back to foreground (covers the case where
+  // the user granted contacts permission in system settings or the first
+  // sync finished while the app was backgrounded).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        loadContactsData();
+        // If native and empty, try a sync too (idempotent).
+        if (isNativePlatform()) {
+          syncDeviceContacts().then(() => loadContactsData()).catch(() => {});
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -182,7 +201,7 @@ export default function ContactsPage() {
       if (!isNativePlatform()) return;
 
       // Give the Capacitor bridge a moment to be ready, then sync.
-      await new Promise((r) => setTimeout(r, 800));
+      await new Promise((r) => setTimeout(r, 300));
       if (cancelled) return;
 
       try {
@@ -568,10 +587,10 @@ export default function ContactsPage() {
                               <MessageSquare className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={(e) => {
+                              onClick={async (e) => {
                                 e.stopPropagation();
                                 triggerVibration();
-                                window.location.href = `tel:${contact.phone}`;
+                                await dispatchCall(contact.phone);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
                               className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
@@ -661,9 +680,9 @@ export default function ContactsPage() {
                   </button>
 
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       triggerVibration();
-                      window.location.href = `tel:${activeContact.phone}`;
+                      await dispatchCall(activeContact.phone);
                     }}
                     className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 p-3 rounded-2xl transition-colors cursor-pointer group active:scale-95"
                   >

@@ -111,6 +111,17 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Default Dialer role eligibility -->
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
             <!-- Support for Default SMS sending intents -->
             <intent-filter>
                 <action android:name="android.intent.action.SENDTO" />
@@ -132,9 +143,25 @@
 
         </activity>
 
-        <!-- CallIntentProcessor kept for future default-dialer flow.
-             Intent filters removed so that tel: URLs go to the system dialer
-             until the app is explicitly set as the default dialer. -->
+        <!-- CallIntentProcessor: intercepts ACTION_CALL when we are the
+             default dialer. When we are not, the system dialer handles it. -->
+        <activity
+            android:theme="@android:style/Theme.NoDisplay"
+            android:name="com.neurasamu.build.chat.CallIntentProcessor"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="tel" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.CALL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
 
         <provider
             android:name="androidx.core.content.FileProvider"
