@@ -18,7 +18,7 @@ export interface Message {
   image?: string;
   sender: 'user' | 'contact';
   timestamp: number;
-  status: 'sent' | 'received' | 'read';
+  status: 'sent' | 'received' | 'read' | 'failed';
 }
 
 export interface Contact {

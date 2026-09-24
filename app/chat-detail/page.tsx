@@ -414,6 +414,31 @@ function ChatDetailContent() {
     await dispatchSms(bodyText, newMsg.id);
   };
 
+  // Retry a failed SMS: reuse the same body + client id so the tracked
+  // status listener updates the existing bubble instead of creating a new one.
+  const handleRetryMessage = async (msg: Message) => {
+    triggerVibration();
+    try {
+      msg.status = 'sent';
+      await saveMessage(msg);
+      await loadMessages();
+      // Determine which SIM to use (same rules as a fresh send).
+      const subs = await getActiveSubscriptions();
+      let subId: number | undefined;
+      if (subs.length === 1) subId = subs[0].subscriptionId;
+      else {
+        const pref = getPreferredSimId();
+        if (pref !== null && subs.some((x) => x.subscriptionId === pref)) {
+          subId = pref;
+        }
+      }
+      await performSmsSend(msg.text || '', subId, msg.id);
+    } catch (e) {
+      console.error('retry failed', e);
+      alertToast('Retry failed', 'error');
+    }
+  };
+
   // Long press triggering for messages. Movement cancels the timer so that
   // scrolling never selects a bubble.
   const handleMessagePressStart = (msg: Message, x?: number, y?: number) => {
@@ -572,9 +597,9 @@ function ChatDetailContent() {
             m.status = 'read';
             await saveMessage(m);
           } else if (ev.status === 'failed') {
-            m.status = 'sent'; // keep in DB but flag visually
+            m.status = 'failed';
             await saveMessage(m);
-            alertToast('SMS failed to send', 'error');
+            alertToast('SMS failed — tap Retry to resend', 'error');
           }
           await loadMessages();
         } catch (e) {
@@ -773,13 +798,23 @@ function ChatDetailContent() {
                     </p>
                   )}
 
-                  {/* Tick icon for status rendering in user bubble bottomright */}
+                  {/* Status / retry row */}
                   {isUser && (
-                    <div className="flex justify-end mt-0.5 opacity-80">
-                      {msg.status === 'read' ? (
-                        <CheckCheck className="h-3 w-3 text-emerald-700 font-bold" />
+                    <div className="flex justify-end mt-0.5">
+                      {msg.status === 'failed' ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRetryMessage(msg);
+                          }}
+                          className="text-[10px] font-bold text-red-600 underline-offset-2 hover:underline"
+                        >
+                          Retry
+                        </button>
+                      ) : msg.status === 'read' ? (
+                        <CheckCheck className="h-3 w-3 text-emerald-700 font-bold opacity-80" />
                       ) : (
-                        <Check className="h-3 w-3 text-zinc-650" />
+                        <Check className="h-3 w-3 text-zinc-650 opacity-80" />
                       )}
                     </div>
                   )}
