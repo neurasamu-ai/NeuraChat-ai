@@ -256,7 +256,7 @@ export default function ActiveCallScreen() {
                             Swap
                           </button>
                         )}
-                        {isActive && !call.active && (
+                        {isActive && !c.active && (
                           <button
                             onClick={async () => {
                               await swapToCall(c.id);
