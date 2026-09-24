@@ -297,9 +297,9 @@ export default function ActiveCallScreen() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
-                className="absolute inset-0 bg-black/95 flex flex-col z-10"
+                className="absolute inset-0 bg-black/10 backdrop-blur-[2px] flex flex-col z-10"
               >
-                <div className="flex items-center justify-between px-6 pt-8">
+                <div className="flex items-center justify-between px-6 pt-8 pb-2 bg-black/40 backdrop-blur-md rounded-b-2xl">
                   <div className="text-white">
                     <p className="text-xs text-zinc-500 font-mono">
                       {displayName}
@@ -316,7 +316,7 @@ export default function ActiveCallScreen() {
                   </button>
                 </div>
 
-                <div className="flex-1 grid grid-cols-3 gap-y-4 gap-x-8 px-8 py-8 place-items-center max-w-md mx-auto w-full">
+                <div className="flex-1 grid grid-cols-3 gap-y-3 gap-x-5 px-6 py-4 place-items-center max-w-sm mx-auto w-full">
                   {[
                     { c: '1', s: '' },
                     { c: '2', s: 'ABC' },
@@ -334,13 +334,13 @@ export default function ActiveCallScreen() {
                     <button
                       key={k.c}
                       onPointerDown={() => handleDtmf(k.c)}
-                      className="w-16 h-16 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 active:scale-90 transition-all flex flex-col items-center justify-center"
+                      className="w-14 h-14 rounded-full bg-zinc-900/85 border border-zinc-700/60 hover:bg-zinc-800/90 active:scale-90 transition-all flex flex-col items-center justify-center backdrop-blur-sm"
                     >
-                      <span className="text-2xl font-black text-white font-mono leading-none">
+                      <span className="text-xl font-black text-white font-mono leading-none">
                         {k.c}
                       </span>
                       {k.s && (
-                        <span className="text-[9px] text-zinc-400 tracking-wide mt-0.5 leading-none">
+                        <span className="text-[8px] text-zinc-400 tracking-wide mt-0.5 leading-none">
                           {k.s}
                         </span>
                       )}

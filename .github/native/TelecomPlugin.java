@@ -8,6 +8,9 @@ import java.io.File;
 import android.telecom.Call;
 import android.app.role.RoleManager;
 import android.content.Intent;
+import android.content.ContentValues;
+import android.provider.MediaStore;
+import android.net.Uri;
 import android.net.Uri;
 import android.telecom.TelecomManager;
 import android.telecom.PhoneAccountHandle;
@@ -428,39 +431,81 @@ public class TelecomPlugin extends Plugin {
     //      Android 10+ for non-system apps) ----
     private static MediaRecorder recorder = null;
     private static String lastRecordingPath = null;
+    private static Uri recorderUri = null;
 
     @PluginMethod
     public void startRecording(PluginCall call) {
+        Log.d(TAG, "startRecording called");
         if (recorder != null) {
             call.reject("Already recording");
             return;
         }
+        // Check RECORD_AUDIO permission before trying
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                getContext(), android.Manifest.permission.RECORD_AUDIO)
+                != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            call.reject("RECORD_AUDIO permission not granted");
+            return;
+        }
         try {
-            File dir = new File(getContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC), "recordings");
-            if (!dir.exists() && !dir.mkdirs()) {
-                call.reject("Cannot create recordings directory");
+            String filename = "call_" + System.currentTimeMillis() + ".m4a";
+
+            // Android 10+ : MediaStore with RELATIVE_PATH (no storage permission).
+            // Older: fall back to app-private external dir.
+            Uri uri = null;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                try {
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Audio.Media.DISPLAY_NAME, filename);
+                    values.put(MediaStore.Audio.Media.MIME_TYPE, "audio/mp4");
+                    values.put(MediaStore.Audio.Media.RELATIVE_PATH,
+                        Environment.DIRECTORY_MUSIC + "/Recordings/NeuraChat");
+                    values.put(MediaStore.Audio.Media.IS_PENDING, 1);
+
+                    Uri collection = MediaStore.Audio.Media.getContentUri(
+                        MediaStore.VOLUME_EXTERNAL_PRIMARY);
+                    uri = getContext().getContentResolver().insert(collection, values);
+                } catch (Exception e) {
+                    Log.w(TAG, "MediaStore insert failed, using app-private dir", e);
+                }
+            }
+
+            if (uri == null) {
+                // Fallback to app-private external dir
+                File dir = new File(getContext().getExternalFilesDir(Environment.DIRECTORY_MUSIC), "Recordings");
+                if (!dir.exists() && !dir.mkdirs()) {
+                    call.reject("Cannot create recordings dir");
+                    return;
+                }
+                File out = new File(dir, filename);
+                MediaRecorder r = createRecorder();
+                r.setOutputFile(out.getAbsolutePath());
+                r.prepare();
+                r.start();
+                recorder = r;
+                lastRecordingPath = out.getAbsolutePath();
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                ret.put("path", lastRecordingPath);
+                call.resolve(ret);
                 return;
             }
-            String filename = "call_" + System.currentTimeMillis() + ".m4a";
-            File out = new File(dir, filename);
 
-            MediaRecorder r;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                r = new MediaRecorder(getContext());
-            } else {
-                r = new MediaRecorder();
+            android.os.ParcelFileDescriptor pfd = getContext()
+                .getContentResolver().openFileDescriptor(uri, "w");
+            if (pfd == null) {
+                call.reject("Cannot open output file");
+                return;
             }
-            r.setAudioSource(MediaRecorder.AudioSource.MIC);
-            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
-            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
-            r.setAudioEncodingBitRate(96000);
-            r.setAudioSamplingRate(44100);
-            r.setOutputFile(out.getAbsolutePath());
+
+            MediaRecorder r = createRecorder();
+            r.setOutputFile(pfd.getFileDescriptor());
             r.prepare();
             r.start();
 
             recorder = r;
-            lastRecordingPath = out.getAbsolutePath();
+            recorderUri = uri;
+            lastRecordingPath = "Music/Recordings/NeuraChat/" + filename;
 
             JSObject ret = new JSObject();
             ret.put("ok", true);
@@ -469,8 +514,24 @@ public class TelecomPlugin extends Plugin {
         } catch (Exception e) {
             Log.e(TAG, "startRecording failed", e);
             recorder = null;
+            recorderUri = null;
             call.reject("Record failed: " + e.getMessage());
         }
+    }
+
+    private MediaRecorder createRecorder() {
+        MediaRecorder r;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            r = new MediaRecorder(getContext());
+        } else {
+            r = new MediaRecorder();
+        }
+        r.setAudioSource(MediaRecorder.AudioSource.MIC);
+        r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+        r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+        r.setAudioEncodingBitRate(96000);
+        r.setAudioSamplingRate(44100);
+        return r;
     }
 
     @PluginMethod
@@ -489,6 +550,19 @@ public class TelecomPlugin extends Plugin {
         }
         try { recorder.release(); } catch (Exception ignore) {}
         recorder = null;
+
+        // Finalize MediaStore entry so the file becomes visible.
+        if (recorderUri != null) {
+            try {
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Audio.Media.IS_PENDING, 0);
+                getContext().getContentResolver().update(recorderUri, values, null, null);
+                Log.d(TAG, "recording finalized: " + recorderUri);
+            } catch (Exception e) {
+                Log.w(TAG, "finalize failed", e);
+            }
+            recorderUri = null;
+        }
 
         JSObject ret = new JSObject();
         ret.put("ok", true);

@@ -18,6 +18,8 @@ public class CallService extends InCallService {
     public static String currentNumber = "";
     public static String currentName = "";
     public static boolean isIncoming = false;
+    private boolean wasRinging = false;
+    private boolean wasAnswered = false;
     public static boolean isMuted = false;
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
@@ -47,6 +49,8 @@ public class CallService extends InCallService {
         try {
             isIncoming = call.getDetails().getCallDirection() == Call.Details.DIRECTION_INCOMING;
         } catch (Exception ignore) {}
+        wasRinging = isIncoming;
+        wasAnswered = false;
 
         updateState(call, call.getState());
 
@@ -61,6 +65,36 @@ public class CallService extends InCallService {
     public void onCallRemoved(Call call) {
         super.onCallRemoved(call);
         try { call.unregisterCallback(callCallback); } catch (Exception ignore) {}
+
+        // Detect missed call: was ringing, never answered, was incoming.
+        if (wasRinging && !wasAnswered && isIncoming) {
+            try {
+                // Write to CallLog as missed
+                android.content.ContentValues cv = new android.content.ContentValues();
+                cv.put(android.provider.CallLog.Calls.NUMBER, currentNumber);
+                cv.put(android.provider.CallLog.Calls.TYPE,
+                    android.provider.CallLog.Calls.MISSED_TYPE);
+                cv.put(android.provider.CallLog.Calls.DATE, System.currentTimeMillis());
+                cv.put(android.provider.CallLog.Calls.DURATION, 0);
+                cv.put(android.provider.CallLog.Calls.NEW, 1);
+                if (currentName != null && !currentName.isEmpty()) {
+                    cv.put(android.provider.CallLog.Calls.CACHED_NAME, currentName);
+                }
+                getContentResolver().insert(
+                    android.provider.CallLog.Calls.CONTENT_URI, cv);
+                Log.d(TAG, "missed call logged: " + currentNumber);
+            } catch (Exception e) {
+                Log.w(TAG, "CallLog insert failed", e);
+            }
+
+            // Show missed call notification
+            try {
+                CallNotifier.showMissed(getApplicationContext(), currentNumber, currentName);
+            } catch (Exception e) {
+                Log.w(TAG, "missed notification failed", e);
+            }
+        }
+
         if (activeCall == call) {
             activeCall = null;
         }
@@ -71,6 +105,8 @@ public class CallService extends InCallService {
         isSpeakerOn = false;
         isHeld = false;
         callStartedAt = 0L;
+        wasRinging = false;
+        wasAnswered = false;
     }
 
     private void updateState(Call call, int state) {
@@ -79,8 +115,9 @@ public class CallService extends InCallService {
         currentNumber = getNumber(call);
         currentName = lookupName(currentNumber);
 
-        if (state == Call.STATE_ACTIVE && callStartedAt == 0L) {
-            callStartedAt = System.currentTimeMillis();
+        if (state == Call.STATE_ACTIVE) {
+            if (callStartedAt == 0L) callStartedAt = System.currentTimeMillis();
+            wasAnswered = true;
         }
         if (state == Call.STATE_DISCONNECTED) {
             callStartedAt = 0L;

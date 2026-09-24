@@ -65,6 +65,7 @@ jobs:
         cp .github/native/NeuraContactsPlugin.java $TARGET/
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/
+        cp .github/native/CallNotifier.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
 

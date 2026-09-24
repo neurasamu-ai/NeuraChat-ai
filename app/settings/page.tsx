@@ -13,7 +13,8 @@ import {
   Moon,
   Laptop,
   Phone,
-  MessageSquare
+  MessageSquare,
+  Shield as ShieldIcon
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -248,6 +249,26 @@ export default function SettingsPage() {
             </div>
           </div>
 
+
+          {/* App Permissions */}
+          <div
+            onClick={async () => {
+              triggerVibration();
+              try {
+                const mod = await import('@/lib/settings-plugin');
+                await mod.openAppSettings();
+              } catch (e) {
+                console.error('open settings failed', e);
+              }
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <ShieldIcon className="h-4 w-4 text-purple-400" />
+              <span className="text-xs font-medium text-zinc-200">Permissions</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
 
           {/* Calls & SMS */}
           <div
