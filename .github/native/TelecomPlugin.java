@@ -304,16 +304,17 @@ public class TelecomPlugin extends Plugin {
         }
         try {
             // Primary path: when we own the InCallService, the platform expects
-            // audio routing to go through the Call object, not AudioManager.
+            // audio routing to go through InCallService.setAudioRoute() using
+            // CallAudioState constants (Call has no AUDIO_ROUTE_* members).
             boolean applied = false;
-            if (CallService.activeCall != null) {
+            if (CallService.instance != null) {
                 try {
                     int route = enable
-                        ? Call.AUDIO_ROUTE_SPEAKER
-                        : Call.AUDIO_ROUTE_EARPIECE;
-                    CallService.activeCall.setAudioRoute(route);
+                        ? android.telecom.CallAudioState.ROUTE_SPEAKER
+                        : android.telecom.CallAudioState.ROUTE_EARPIECE;
+                    CallService.instance.applyAudioRoute(route);
                     applied = true;
-                    Log.d(TAG, "setAudioRoute -> " + route);
+                    Log.d(TAG, "InCallService.setAudioRoute -> " + route);
                 } catch (Exception e) {
                     Log.w(TAG, "setAudioRoute failed, will fall back", e);
                 }

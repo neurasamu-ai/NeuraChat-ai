@@ -12,6 +12,10 @@ public class CallService extends InCallService {
 
     private static final String TAG = "NeuraCallService";
 
+    // Static reference so TelecomPlugin can call InCallService methods
+    // (setAudioRoute, etc). Assigned in onCreate, cleared in onDestroy.
+    public static CallService instance = null;
+
     // Static state readable by TelecomPlugin at any time.
     public static Call activeCall = null;
     public static String currentState = "IDLE";
@@ -24,6 +28,20 @@ public class CallService extends InCallService {
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
     public static long callStartedAt = 0L;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instance = this;
+        Log.d(TAG, "CallService created");
+    }
+
+    @Override
+    public void onDestroy() {
+        if (instance == this) instance = null;
+        Log.d(TAG, "CallService destroyed");
+        super.onDestroy();
+    }
 
     private final Call.Callback callCallback = new Call.Callback() {
         @Override
@@ -214,5 +232,15 @@ public class CallService extends InCallService {
             if (c != null) c.close();
         }
         return "";
+    }
+
+    // Public wrapper so TelecomPlugin can call the protected platform method.
+    public void applyAudioRoute(int route) {
+        try {
+            setAudioRoute(route);
+            Log.d(TAG, "applyAudioRoute -> " + route);
+        } catch (Exception e) {
+            Log.w(TAG, "applyAudioRoute failed", e);
+        }
     }
 }
