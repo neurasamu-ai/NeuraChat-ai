@@ -218,8 +218,8 @@ export default function ContactsPage() {
       if (typeof window === 'undefined') return;
       if (!isNativePlatform()) return;
 
-      // Give the Capacitor bridge a moment to be ready, then sync.
-      await new Promise((r) => setTimeout(r, 300));
+      // Shorter warm-up; sync runs after the cached list is already shown.
+      await new Promise((r) => setTimeout(r, 150));
       if (cancelled) return;
 
       try {
@@ -604,7 +604,7 @@ export default function ContactsPage() {
                           )}
                         </div>
                         {contact.phone && (
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-2 shrink-0">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -612,10 +612,10 @@ export default function ContactsPage() {
                                 router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] hover:bg-[#00D4FF]/20 active:scale-90 transition-all"
+                              className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#00D4FF]/10 text-[#00D4FF] hover:bg-[#00D4FF]/20 active:scale-90 transition-all"
                               title="SMS"
                             >
-                              <MessageSquare className="h-3.5 w-3.5" />
+                              <MessageSquare className="h-4 w-4" />
                             </button>
                             <button
                               onClick={async (e) => {
@@ -624,10 +624,10 @@ export default function ContactsPage() {
                                 await dispatchCall(contact.phone);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
+                              className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
                               title="Call"
                             >
-                              <Phone className="h-3.5 w-3.5" />
+                              <Phone className="h-4 w-4" />
                             </button>
                             <button
                               onClick={(e) => {
@@ -636,10 +636,10 @@ export default function ContactsPage() {
                                 setActiveContact(contact);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
-                              className="p-1.5 rounded-lg bg-zinc-800/60 text-zinc-300 hover:bg-zinc-800 active:scale-90 transition-all"
+                              className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-800/60 text-zinc-300 hover:bg-zinc-800 active:scale-90 transition-all"
                               title="Details"
                             >
-                              <Info className="h-3.5 w-3.5" />
+                              <Info className="h-4 w-4" />
                             </button>
                           </div>
                         )}

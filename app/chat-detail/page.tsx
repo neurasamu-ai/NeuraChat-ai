@@ -41,7 +41,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
-import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, addSmsStatusListener, Subscription } from '@/lib/sms-plugin';
+import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
   const router = useRouter();
@@ -561,43 +561,17 @@ function ChatDetailContent() {
   useBackHandler(headerSimPickerOpen, () => setHeaderSimPickerOpen(false));
   useBackHandler(callSimPickerOpen, () => setCallSimPickerOpen(false));
 
-  // Track SMS sent/delivered/failed status
+  // Reload on any SMS status change that belongs to this chat. The actual
+  // DB update is done by the global SmsStatusBridge.
   useEffect(() => {
-    let handle: { remove: () => void } | null = null;
-    let cancelled = false;
-
-    (async () => {
-      if (!isSmsPluginAvailable()) return;
-      await new Promise((r) => setTimeout(r, 1000));
-      if (cancelled) return;
-      handle = await addSmsStatusListener(async (ev) => {
-        console.log('[SMS status]', ev);
-        try {
-          const msgs = await getMessages(chatId);
-          const m = msgs.find((x) => x.id === ev.clientId);
-          if (!m) return;
-          if (ev.status === 'sent') {
-            m.status = 'sent';
-            await saveMessage(m);
-          } else if (ev.status === 'delivered') {
-            m.status = 'read';
-            await saveMessage(m);
-          } else if (ev.status === 'failed') {
-            m.status = 'failed';
-            await saveMessage(m);
-            alertToast('SMS failed — tap Retry to resend', 'error');
-          }
-          await loadMessages();
-        } catch (e) {
-          console.error('status update failed', e);
-        }
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-      if (handle && handle.remove) { try { handle.remove(); } catch {} }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { chatId?: string } | undefined;
+      if (!detail || detail.chatId === chatId) {
+        loadMessages();
+      }
     };
+    window.addEventListener('neura-sms-status', handler);
+    return () => window.removeEventListener('neura-sms-status', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
   useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
