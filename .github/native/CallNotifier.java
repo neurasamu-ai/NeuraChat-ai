@@ -184,4 +184,51 @@ public class CallNotifier {
         channel.setDescription("Ongoing call");
         nm.createNotificationChannel(channel);
     }
+
+    // ---- Download notifications ----
+    private static final String DL_CHANNEL_ID = "neura_downloads";
+    private static final String DL_CHANNEL_NAME = "Downloads";
+    private static final int DL_NOTIFICATION_ID = 9003;
+
+    public static void showDownloadStarted(Context context, String fileName) {
+        if (context == null) return;
+        try {
+            ensureDownloadChannel(context);
+
+            Intent openIntent = new Intent(DownloadManager.ACTION_VIEW_DOWNLOADS);
+            openIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            PendingIntent openPending = PendingIntent.getActivity(
+                context, 4001, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, DL_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_sms)
+                .setContentTitle("Downloading")
+                .setContentText(fileName == null ? "File" : fileName)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+                .setOngoing(true)
+                .setProgress(0, 0, true)
+                .setContentIntent(openPending);
+
+            try {
+                NotificationManagerCompat.from(context).notify(DL_NOTIFICATION_ID, builder.build());
+            } catch (SecurityException se) {
+                Log.w(TAG, "download notify denied", se);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "showDownloadStarted failed", e);
+        }
+    }
+
+    private static void ensureDownloadChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(DL_CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(
+            DL_CHANNEL_ID, DL_CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("NeuraChat downloads");
+        nm.createNotificationChannel(channel);
+    }
 }

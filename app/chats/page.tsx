@@ -12,7 +12,8 @@ import {
   CheckSquare,
   X,
   UserPlus,
-  CheckCheck,
+  CheckCheck,,
+  Sparkles
 } from 'lucide-react';
 import {
   getChats,
@@ -28,6 +29,7 @@ import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
+import { AI_CHAT_ID, AI_CHAT_NAME } from '@/lib/ai-webview';
 
 export default function ChatsPage() {
   const router = useRouter();
@@ -304,6 +306,30 @@ export default function ChatsPage() {
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2 px-9 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#00D4FF] focus:ring-1 focus:ring-[#00D4FF]/30 transition-all"
             />
+          </div>
+        </div>
+
+        {/* Pinned AI hub entry — cannot be deleted or archived */}
+        <div
+          onClick={() => router.push('/ai-chat')}
+          className="mb-3 rounded-2xl border border-[#00D4FF]/40 bg-gradient-to-r from-[#00D4FF]/10 to-[#FF006E]/10 p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-black/60 flex items-center justify-center text-2xl">
+            ✨
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <Sparkles className="h-3.5 w-3.5 text-[#00D4FF]" />
+              <p className="font-bold text-sm text-white truncate">
+                Chat With AI&apos;s
+              </p>
+            </div>
+            <p className="text-[11px] text-zinc-400 truncate mt-0.5">
+              ChatGPT · Gemini · Claude · Grok · DeepSeek · more
+            </p>
+          </div>
+          <div className="text-[10px] uppercase tracking-widest font-mono text-[#00D4FF]">
+            Open
           </div>
         </div>
 

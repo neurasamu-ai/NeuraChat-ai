@@ -62,6 +62,7 @@ jobs:
         cp .github/native/HeadlessSmsSendService.java $TARGET/
         cp .github/native/BootReceiver.java $TARGET/
         cp .github/native/SettingsPlugin.java $TARGET/
+        cp .github/native/AiWebViewPlugin.java $TARGET/
         cp .github/native/NeuraContactsPlugin.java $TARGET/
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/
