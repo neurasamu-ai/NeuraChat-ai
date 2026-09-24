@@ -282,20 +282,47 @@ public class TelecomPlugin extends Plugin {
     public void toggleSpeaker(PluginCall call) {
         boolean enable = call.getBoolean("enable", false);
         Context context = getContext();
-        if (context != null) {
-            try {
-                AudioManager audioManager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                audioManager.setMode(AudioManager.MODE_IN_CALL);
-                audioManager.setSpeakerphoneOn(enable);
-                CallService.isSpeakerOn = enable;
-                JSObject ret = new JSObject();
-                ret.put("speakerOn", enable);
-                call.resolve(ret);
-            } catch (Exception e) {
-                call.reject("Failed to toggle speaker: " + e.getMessage());
-            }
-        } else {
+        if (context == null) {
             call.reject("Context is null.");
+            return;
+        }
+        try {
+            AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+            if (am == null) {
+                call.reject("AudioManager unavailable");
+                return;
+            }
+            am.setMode(AudioManager.MODE_IN_CALL);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                // Android 12+: setSpeakerphoneOn is a no-op; use setCommunicationDevice.
+                java.util.List<android.media.AudioDeviceInfo> devices = am.getAvailableCommunicationDevices();
+                int targetType = enable
+                    ? android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                    : android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
+                boolean applied = false;
+                for (android.media.AudioDeviceInfo dev : devices) {
+                    if (dev.getType() == targetType) {
+                        applied = am.setCommunicationDevice(dev);
+                        Log.d(TAG, "setCommunicationDevice " + targetType + " -> " + applied);
+                        break;
+                    }
+                }
+                if (!applied) {
+                    // Fallback to legacy API
+                    am.setSpeakerphoneOn(enable);
+                }
+            } else {
+                am.setSpeakerphoneOn(enable);
+            }
+
+            CallService.isSpeakerOn = enable;
+            JSObject ret = new JSObject();
+            ret.put("speakerOn", enable);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "toggleSpeaker failed", e);
+            call.reject("Failed to toggle speaker: " + e.getMessage());
         }
     }
 

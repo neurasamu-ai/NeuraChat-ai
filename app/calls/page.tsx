@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useDeferredValue } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -86,17 +86,20 @@ export default function CallsPage() {
   }, [dialNumber, contacts]);
 
   // Real-time matched contacts list based on dialed digits subsequence/sequence
+  // Defer the query so typing stays smooth even with hundreds of contacts.
+  const deferredQuery = useDeferredValue(dialNumber);
   const matchedContacts = React.useMemo(() => {
-    if (!dialNumber) return [];
-    const query = normalizePhone(dialNumber);
+    if (!deferredQuery) return [];
+    const query = normalizePhone(deferredQuery);
     if (!query) return [];
-    const rawDigits = dialNumber.replace(/\D/g, '');
+    const rawDigits = deferredQuery.replace(/\D/g, '');
+    if (!rawDigits) return [];
     return contacts.filter(c => {
       const normalized = normalizePhone(c.phone);
       if (!normalized) return false;
       return normalized.includes(query) || normalized.includes(rawDigits);
     });
-  }, [dialNumber, contacts]);
+  }, [deferredQuery, contacts]);
 
   const loadCallsAndContacts = async () => {
     try {
@@ -130,19 +133,27 @@ export default function CallsPage() {
   const handleNumPress = (char: string) => {
     triggerVibration();
     const input = numberInputRef.current;
-    if (input) {
-      const start = input.selectionStart ?? dialNumber.length;
-      const end = input.selectionEnd ?? dialNumber.length;
-      const next = dialNumber.slice(0, start) + char + dialNumber.slice(end);
-      setDialNumber(next);
-      // Move cursor to just after the inserted char
-      requestAnimationFrame(() => {
-        const pos = start + char.length;
-        try { input.setSelectionRange(pos, pos); } catch {}
-      });
-    } else {
-      setDialNumber(prev => prev + char);
+    if (!input) {
+      setDialNumber((prev) => prev + char);
+      return;
     }
+    const start = input.selectionStart ?? dialNumber.length;
+    const end = input.selectionEnd ?? dialNumber.length;
+
+    // Fast path: cursor at end (the common case). Just append.
+    if (start === dialNumber.length && end === dialNumber.length) {
+      setDialNumber(dialNumber + char);
+      return;
+    }
+
+    // Insert at cursor.
+    const next = dialNumber.slice(0, start) + char + dialNumber.slice(end);
+    setDialNumber(next);
+    const pos = start + char.length;
+    // Defer cursor restore to the next tick without rAF spam.
+    setTimeout(() => {
+      try { input.setSelectionRange(pos, pos); } catch {}
+    }, 0);
   };
 
   const handleBackspace = () => {
@@ -478,7 +489,7 @@ export default function CallsPage() {
                       placeholder=" "
                       autoComplete="off"
                       spellCheck={false}
-                      className="w-full bg-transparent text-2xl font-bold font-mono text-white tracking-widest text-center outline-none caret-[#00D4FF] px-10"
+                      className="w-full bg-transparent text-3xl font-black font-mono text-white tracking-widest text-center outline-none caret-[#00D4FF] px-10"
                     />
 
                     {dialNumber && (
@@ -543,9 +554,9 @@ export default function CallsPage() {
                       }}
                       className="flex flex-col items-center justify-center w-16 h-16 rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-all cursor-pointer relative select-none touch-none"
                     >
-                      <span className="text-lg font-bold font-mono text-white leading-none">{keyItem.char}</span>
+                      <span className="text-2xl font-black font-mono text-white leading-none">{keyItem.char}</span>
                       {keyItem.sub.trim() && (
-                        <span className="text-[8px] text-zinc-500 font-sans tracking-wide mt-0.5 uppercase leading-none">{keyItem.sub}</span>
+                        <span className="text-[9px] text-zinc-400 font-sans tracking-wide mt-0.5 uppercase leading-none">{keyItem.sub}</span>
                       )}
                     </button>
                   ))}
