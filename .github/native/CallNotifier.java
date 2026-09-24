@@ -40,8 +40,11 @@ public class CallNotifier {
                 context, 2001, openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
-            // Call back action
-            Intent callIntent = new Intent(Intent.ACTION_CALL);
+            // Call back action. Uses ACTION_DIAL so the system dialer
+            // handles the call (or NeuraChat itself when it is the default
+            // dialer). ACTION_CALL used to loop back into our own
+            // CallIntentProcessor and did nothing.
+            Intent callIntent = new Intent(Intent.ACTION_DIAL);
             if (number != null && !number.isEmpty()) {
                 callIntent.setData(Uri.parse("tel:" + number));
             }

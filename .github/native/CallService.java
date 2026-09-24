@@ -7,6 +7,7 @@ import android.provider.ContactsContract;
 import android.telecom.Call;
 import android.telecom.InCallService;
 import android.util.Log;
+import android.os.PowerManager;
 
 public class CallService extends InCallService {
 
@@ -29,6 +30,10 @@ public class CallService extends InCallService {
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
     public static long callStartedAt = 0L;
+
+    // Proximity wake lock: turns the screen off while the phone is at the ear
+    // during a call, and back on when moved away. It never locks the phone.
+    private static PowerManager.WakeLock proximityLock = null;
 
     // Stable ids for all calls currently tracked by the InCallService.
     private static final java.util.Map<Call, String> callIds =
@@ -99,7 +104,47 @@ public class CallService extends InCallService {
         intent.putExtra("call_state", currentState);
         startActivity(intent);
 
+        // Ask MainActivity to show over the lock screen for this call.
+        try {
+            if (MainActivity.instance != null) {
+                MainActivity.instance.enableCallOverLockScreen();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "enableCallOverLockScreen failed", e);
+        }
+
+        // Acquire proximity wake lock for the duration of the call.
+        acquireProximityLock();
+
         dispatchCallsSnapshot();
+    }
+
+    private void acquireProximityLock() {
+        try {
+            if (proximityLock != null && proximityLock.isHeld()) return;
+            PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+            if (pm == null) return;
+            proximityLock = pm.newWakeLock(
+                PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "NeuraChat:proximity");
+            proximityLock.setReferenceCounted(false);
+            proximityLock.acquire();
+            Log.d(TAG, "proximity lock acquired");
+        } catch (Exception e) {
+            Log.w(TAG, "acquireProximityLock failed", e);
+        }
+    }
+
+    private void releaseProximityLock() {
+        try {
+            if (proximityLock != null && proximityLock.isHeld()) {
+                proximityLock.release();
+                Log.d(TAG, "proximity lock released");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "releaseProximityLock failed", e);
+        } finally {
+            proximityLock = null;
+        }
     }
 
     // Choose the visible call: prefer one that is not HOLDING or DISCONNECTED.
@@ -192,6 +237,12 @@ public class CallService extends InCallService {
         wasAnswered = false;
         wasLogged = false;
         try { CallNotifier.cancelActive(getApplicationContext()); } catch (Exception ignore) {}
+        releaseProximityLock();
+        try {
+            if (MainActivity.instance != null) {
+                MainActivity.instance.disableCallOverLockScreen();
+            }
+        } catch (Exception ignore) {}
         dispatchCallsSnapshot();
     }
 

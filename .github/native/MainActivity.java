@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.WindowManager;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -19,6 +20,10 @@ import java.util.List;
 public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "NeuraMain";
+
+    // Static reference so CallService can ask this activity to show over the
+    // lock screen when a call arrives.
+    public static MainActivity instance = null;
     private boolean permissionsRequested = false;
 
     // Pending navigation requested by a notification or system intent.
@@ -44,9 +49,78 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NeuraContactsPlugin.class);
 
         super.onCreate(savedInstanceState);
+        instance = this;
 
         extractNavigationExtras(getIntent());
+        applyCallWindowFlags(getIntent());
         requestAllPermissions();
+    }
+
+    // When launched by an incoming call, allow the window to show over the
+    // lock screen and turn the screen on, so the in-call UI is visible
+    // without the user unlocking first.
+    private void applyCallWindowFlags(Intent intent) {
+        if (intent == null) return;
+        try {
+            boolean isCallIntent = intent.hasExtra("call_state")
+                || intent.getBooleanExtra("open_active_call", false);
+            if (isCallIntent) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    setShowWhenLocked(true);
+                    setTurnScreenOn(true);
+                } else {
+                    getWindow().addFlags(
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                            | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                            | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                    );
+                }
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                Log.d(TAG, "applied call window flags (lock screen)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "applyCallWindowFlags failed", e);
+        }
+    }
+
+    // Called by CallService when a call arrives so we can present on lock screen
+    // even if the activity was already running in the background.
+    public void enableCallOverLockScreen() {
+        runOnUiThread(() -> {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    setShowWhenLocked(true);
+                    setTurnScreenOn(true);
+                } else {
+                    getWindow().addFlags(
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                            | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                    );
+                }
+                getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } catch (Exception e) {
+                Log.w(TAG, "enableCallOverLockScreen failed", e);
+            }
+        });
+    }
+
+    public void disableCallOverLockScreen() {
+        runOnUiThread(() -> {
+            try {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    setShowWhenLocked(false);
+                    setTurnScreenOn(false);
+                } else {
+                    getWindow().clearFlags(
+                        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                            | WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                    );
+                }
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            } catch (Exception e) {
+                Log.w(TAG, "disableCallOverLockScreen failed", e);
+            }
+        });
     }
 
     @Override
@@ -54,6 +128,7 @@ public class MainActivity extends BridgeActivity {
         super.onNewIntent(intent);
         setIntent(intent);
         extractNavigationExtras(intent);
+        applyCallWindowFlags(intent);
     }
 
     private void extractNavigationExtras(Intent intent) {
@@ -116,5 +191,11 @@ public class MainActivity extends BridgeActivity {
                 Log.e(TAG, "launch failed", e);
             }
         }, 300);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (instance == this) instance = null;
+        super.onDestroy();
     }
 }
