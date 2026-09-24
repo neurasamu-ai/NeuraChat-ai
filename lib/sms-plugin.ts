@@ -10,6 +10,12 @@ export interface Subscription {
   displayName?: string;
 }
 
+export interface SmsStatusEvent {
+  clientId: string;
+  status: 'sent' | 'failed' | 'delivered' | 'queued';
+  resultCode?: number;
+}
+
 export interface IncomingSms {
   sender: string;
   address?: string;
@@ -26,11 +32,21 @@ export interface SmsPluginType {
     subscriptionId?: number;
   }): Promise<{ status: string; subscriptionId?: number }>;
   drainIncoming(): Promise<{ messages: IncomingSms[] }>;
+  sendDirectSMSTracked(options: {
+    phone: string;
+    message: string;
+    subscriptionId?: number;
+    clientId: string;
+  }): Promise<{ status: string; clientId: string }>;
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
   requestDefaultSmsRole(): Promise<{ launched: boolean }>;
   addListener(
     eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
+  ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'smsStatusChanged',
+    listener: (data: SmsStatusEvent) => void
   ): Promise<{ remove: () => void }>;
 }
 
@@ -159,6 +175,29 @@ export async function addSmsSentListener(
     return await SmsPlugin.addListener('smsSent', cb);
   } catch (e) {
     console.error('[Sms] addListener(smsSent) failed', e);
+    return null;
+  }
+}
+
+
+export async function sendSmsTracked(
+  phone: string,
+  message: string,
+  clientId: string,
+  subscriptionId?: number
+): Promise<{ status: string; clientId: string }> {
+  if (!isSmsPluginAvailable()) throw new Error('SMS plugin not available');
+  return SmsPlugin.sendDirectSMSTracked({ phone, message, clientId, subscriptionId });
+}
+
+export async function addSmsStatusListener(
+  cb: (e: SmsStatusEvent) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isSmsPluginAvailable()) return null;
+  try {
+    return await SmsPlugin.addListener('smsStatusChanged', cb);
+  } catch (e) {
+    console.error('[Sms] addSmsStatusListener failed', e);
     return null;
   }
 }

@@ -41,7 +41,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
-import { getActiveSubscriptions, sendSms, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
+import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, addSmsStatusListener, Subscription } from '@/lib/sms-plugin';
 
 function ChatDetailContent() {
   const router = useRouter();
@@ -74,6 +74,7 @@ function ChatDetailContent() {
   const [simPickerOpen, setSimPickerOpen] = useState(false);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [pendingSmsText, setPendingSmsText] = useState<string>('');
+  const [pendingSmsClientId, setPendingSmsClientId] = useState<string>('');
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [pendingCallNumber, setPendingCallNumber] = useState<string>('');
@@ -227,50 +228,45 @@ function ChatDetailContent() {
     reader.readAsDataURL(file);
   };
 
-  // Actually send the SMS with a chosen subscription (or default SIM if none).
-  const performSmsSend = async (text: string, subscriptionId?: number) => {
+  // Actually send the SMS with tracked status. clientId == message id in DB.
+  const performSmsSend = async (text: string, subscriptionId: number | undefined, clientId: string) => {
     if (!isSmsPluginAvailable()) {
-      // Native plugin missing: let the OS handle it (default SMS app).
       alertToast('Native SMS unavailable — opening system messenger', 'error');
       const smsBody = encodeURIComponent(text);
       window.location.href = `sms:${phone}?body=${smsBody}`;
       return;
     }
     try {
-      await sendSms(phone, text, subscriptionId);
-      console.log('Direct SMS sent via SIM', subscriptionId ?? 'default');
-      alertToast('Message sent', 'success');
+      await sendSmsTracked(phone, text, clientId, subscriptionId);
+      console.log('SMS queued, clientId=', clientId);
     } catch (err: any) {
-      console.error('sendSms failed:', err);
+      console.error('sendSmsTracked failed:', err);
       alertToast('Send failed: ' + (err?.message || 'unknown error'), 'error');
     }
   };
 
   // Decide whether we can send silently (1 SIM or remembered) or need a picker.
-  const dispatchSms = async (text: string) => {
+  const dispatchSms = async (text: string, clientId: string) => {
     if (!isSmsPluginAvailable()) {
-      // Non-native: just fall through to intent
-      await performSmsSend(text);
+      await performSmsSend(text, undefined, clientId);
       return;
     }
 
     const subs = await getActiveSubscriptions();
     if (subs.length <= 1) {
-      // 0 or 1 SIM: no need to ask
-      await performSmsSend(text, subs[0]?.subscriptionId);
+      await performSmsSend(text, subs[0]?.subscriptionId, clientId);
       return;
     }
 
-    // 2+ SIMs: check remembered preference
     const remembered = getPreferredSimId();
     if (remembered !== null && subs.some((x) => x.subscriptionId === remembered)) {
-      await performSmsSend(text, remembered);
+      await performSmsSend(text, remembered, clientId);
       return;
     }
 
-    // Ask the user
     setSubscriptions(subs);
     setPendingSmsText(text);
+    setPendingSmsClientId(clientId);
     setSimPickerOpen(true);
   };
 
@@ -280,10 +276,12 @@ function ChatDetailContent() {
       setPreferredSimId(subscriptionId);
     }
     const text = pendingSmsText;
+    const clientId = pendingSmsClientId;
     setSimPickerOpen(false);
     setPendingSmsText('');
+    setPendingSmsClientId('');
     if (text) {
-      await performSmsSend(text, subscriptionId);
+      await performSmsSend(text, subscriptionId, clientId);
     }
   };
 
@@ -317,9 +315,9 @@ function ChatDetailContent() {
     // Refresh display
     await loadMessages();
 
-    // 3. Dispatch SMS via selected/default SIM
+    // 3. Dispatch SMS via selected/default SIM (track with newMsg.id)
     triggerVibration();
-    await dispatchSms(bodyText);
+    await dispatchSms(bodyText, newMsg.id);
   };
 
   // Long press triggering for messages
@@ -431,6 +429,46 @@ function ChatDetailContent() {
   // Register in reverse priority: topmost UI consumes back first.
   useBackHandler(simPickerOpen, () => setSimPickerOpen(false));
   useBackHandler(callSimPickerOpen, () => setCallSimPickerOpen(false));
+
+  // Track SMS sent/delivered/failed status
+  useEffect(() => {
+    let handle: { remove: () => void } | null = null;
+    let cancelled = false;
+
+    (async () => {
+      if (!isSmsPluginAvailable()) return;
+      await new Promise((r) => setTimeout(r, 1000));
+      if (cancelled) return;
+      handle = await addSmsStatusListener(async (ev) => {
+        console.log('[SMS status]', ev);
+        try {
+          const msgs = await getMessages(chatId);
+          const m = msgs.find((x) => x.id === ev.clientId);
+          if (!m) return;
+          if (ev.status === 'sent') {
+            m.status = 'sent';
+            await saveMessage(m);
+          } else if (ev.status === 'delivered') {
+            m.status = 'read';
+            await saveMessage(m);
+          } else if (ev.status === 'failed') {
+            m.status = 'sent'; // keep in DB but flag visually
+            await saveMessage(m);
+            alertToast('SMS failed to send', 'error');
+          }
+          await loadMessages();
+        } catch (e) {
+          console.error('status update failed', e);
+        }
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+      if (handle && handle.remove) { try { handle.remove(); } catch {} }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
   useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
   useBackHandler(isShareOpen, () => setIsShareOpen(false));
   useBackHandler(isForwarding, () => {

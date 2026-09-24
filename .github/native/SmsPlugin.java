@@ -5,6 +5,10 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.app.role.RoleManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.os.Build;
 import android.content.Intent;
 import android.os.Build;
 import android.net.Uri;
@@ -52,11 +56,15 @@ public class SmsPlugin extends Plugin {
     private static final String QUEUE_KEY = "pending_sms";
 
     private static SmsPlugin instance;
+    private static final String SENT_ACTION = "com.neurasamu.build.chat.SMS_SENT";
+    private static final String DELIVERED_ACTION = "com.neurasamu.build.chat.SMS_DELIVERED";
+    private static final java.util.Map<Integer, String> pendingSmsIds = new java.util.concurrent.ConcurrentHashMap<>();
 
     @Override
     public void load() {
         super.load();
         instance = this;
+        registerSmsReceivers();
     }
 
     // ---- Called from SmsReceiver (may run when app is dead) ----
@@ -251,34 +259,168 @@ public class SmsPlugin extends Plugin {
 
     @PluginMethod
     public void requestDefaultSmsRole(PluginCall call) {
+        Context ctx = getContext();
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                RoleManager rm = (RoleManager) getContext().getSystemService(Context.ROLE_SERVICE);
-                if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_SMS) && !rm.isRoleHeld(RoleManager.ROLE_SMS)) {
-                    Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_SMS);
-                    getActivity().startActivity(intent);
-                    JSObject ret = new JSObject();
-                    ret.put("launched", true);
-                    call.resolve(ret);
-                    return;
-                }
-            } else {
-                // Pre-Android 10 fallback
-                Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
-                intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, getContext().getPackageName());
-                getActivity().startActivity(intent);
+            // Already default? Just report.
+            String pkg = ctx.getPackageName();
+            String currentDefault = Telephony.Sms.getDefaultSmsPackage(ctx);
+            Log.d(TAG, "current default SMS pkg=" + currentDefault + " our pkg=" + pkg);
+            if (pkg.equals(currentDefault)) {
                 JSObject ret = new JSObject();
-                ret.put("launched", true);
+                ret.put("launched", false);
+                ret.put("alreadyDefault", true);
                 call.resolve(ret);
                 return;
             }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                RoleManager rm = (RoleManager) ctx.getSystemService(Context.ROLE_SERVICE);
+                if (rm == null) {
+                    call.reject("RoleManager unavailable");
+                    return;
+                }
+                if (!rm.isRoleAvailable(RoleManager.ROLE_SMS)) {
+                    call.reject("SMS role not available on this device");
+                    return;
+                }
+                Intent intent = rm.createRequestRoleIntent(RoleManager.ROLE_SMS);
+                // Use context + NEW_TASK so it works even if getActivity() is null.
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(intent);
+                JSObject ret = new JSObject();
+                ret.put("launched", true);
+                ret.put("method", "rolemanager");
+                call.resolve(ret);
+                return;
+            }
+
+            // Pre-Android 10 fallback.
+            Intent intent = new Intent(Telephony.Sms.Intents.ACTION_CHANGE_DEFAULT);
+            intent.putExtra(Telephony.Sms.Intents.EXTRA_PACKAGE_NAME, pkg);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("launched", true);
+            ret.put("method", "legacy");
+            call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "requestDefaultSmsRole failed", e);
             call.reject("Request failed: " + e.getMessage());
+        }
+    }
+
+    // ---- Sent / Delivered tracking ----
+    @PluginMethod
+    public void sendDirectSMSTracked(PluginCall call) {
+        String phone = call.getString("phone");
+        String message = call.getString("message");
+        Integer subscriptionId = call.getInt("subscriptionId");
+        String clientId = call.getString("clientId");
+
+        if (phone == null || message == null) {
+            call.reject("Phone and message parameters are required.");
             return;
         }
-        JSObject ret = new JSObject();
-        ret.put("launched", false);
-        call.resolve(ret);
+        if (clientId == null || clientId.isEmpty()) {
+            clientId = "m-" + System.currentTimeMillis();
+        }
+
+        try {
+            SmsManager smsManager;
+            if (subscriptionId != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                smsManager = SmsManager.getSmsManagerForSubscriptionId(subscriptionId);
+            } else {
+                smsManager = SmsManager.getDefault();
+            }
+
+            ArrayList<String> parts = smsManager.divideMessage(message);
+            ArrayList<PendingIntent> sentIntents = new ArrayList<>();
+            ArrayList<PendingIntent> deliveredIntents = new ArrayList<>();
+
+            int baseId = clientId.hashCode();
+            for (int i = 0; i < parts.size(); i++) {
+                int reqCode = baseId + i;
+                pendingSmsIds.put(reqCode, clientId);
+                pendingSmsIds.put(reqCode + 100000, clientId);
+
+                Intent sentI = new Intent(SENT_ACTION);
+                sentI.putExtra("reqCode", reqCode);
+                sentIntents.add(PendingIntent.getBroadcast(
+                    getContext(), reqCode, sentI,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+
+                Intent delI = new Intent(DELIVERED_ACTION);
+                delI.putExtra("reqCode", reqCode + 100000);
+                deliveredIntents.add(PendingIntent.getBroadcast(
+                    getContext(), reqCode + 100000, delI,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
+            }
+
+            if (parts.size() > 1) {
+                smsManager.sendMultipartTextMessage(phone, null, parts, sentIntents, deliveredIntents);
+            } else {
+                smsManager.sendTextMessage(phone, null, message, sentIntents.get(0), deliveredIntents.get(0));
+            }
+
+            receiveOutgoingSms(getContext(), phone, message, System.currentTimeMillis());
+
+            JSObject ret = new JSObject();
+            ret.put("status", "queued");
+            ret.put("clientId", clientId);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "sendDirectSMSTracked failed", e);
+            call.reject("SMS failed: " + e.getMessage());
+        }
+    }
+
+    private static void emitStatus(String clientId, String status, int resultCode) {
+        if (instance == null || clientId == null) return;
+        JSObject data = new JSObject();
+        data.put("clientId", clientId);
+        data.put("status", status); // "sent" | "failed" | "delivered"
+        data.put("resultCode", resultCode);
+        instance.notifyListeners("smsStatusChanged", data);
+    }
+
+    // Register receivers once when the plugin loads.
+    private void registerSmsReceivers() {
+        try {
+            BroadcastReceiver sentRcv = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context ctx, Intent intent) {
+                    int req = intent.getIntExtra("reqCode", 0);
+                    String clientId = pendingSmsIds.remove(req);
+                    int rc = getResultCode();
+                    if (rc == android.app.Activity.RESULT_OK) {
+                        emitStatus(clientId, "sent", rc);
+                    } else {
+                        emitStatus(clientId, "failed", rc);
+                    }
+                }
+            };
+            BroadcastReceiver deliveredRcv = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context ctx, Intent intent) {
+                    int req = intent.getIntExtra("reqCode", 0);
+                    String clientId = pendingSmsIds.remove(req);
+                    if (getResultCode() == android.app.Activity.RESULT_OK) {
+                        emitStatus(clientId, "delivered", 0);
+                    }
+                }
+            };
+
+            IntentFilter f1 = new IntentFilter(SENT_ACTION);
+            IntentFilter f2 = new IntentFilter(DELIVERED_ACTION);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                getContext().registerReceiver(sentRcv, f1, Context.RECEIVER_NOT_EXPORTED);
+                getContext().registerReceiver(deliveredRcv, f2, Context.RECEIVER_NOT_EXPORTED);
+            } else {
+                getContext().registerReceiver(sentRcv, f1);
+                getContext().registerReceiver(deliveredRcv, f2);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "registerSmsReceivers failed", e);
+        }
     }
 }
