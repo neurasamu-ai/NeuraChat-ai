@@ -42,8 +42,17 @@ export default function CallsPage() {
 
   // Dynamic caller name lookup from contacts database
   const resolveCallerName = (phone: string, fallbackName: string) => {
-    const found = contacts.find(c => phonesMatch(c.phone, phone));
-    if (found) return found.name;
+    // Only match if the raw digits length is close enough. Prevents 3-digit
+    // service numbers (111, 5555) from matching real contacts by suffix.
+    const phoneDigits = (phone || '').replace(/\D/g, '');
+    if (phoneDigits.length >= 7) {
+      const found = contacts.find((c) => {
+        const cDigits = (c.phone || '').replace(/\D/g, '');
+        if (cDigits.length < 7) return false;
+        return phonesMatch(c.phone, phone);
+      });
+      if (found) return found.name;
+    }
     return fallbackName !== 'Unknown' ? fallbackName : phone;
   };
 
@@ -53,7 +62,7 @@ export default function CallsPage() {
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [pendingCallNumber, setPendingCallNumber] = useState<string>('');
-  const [rememberCallSim, setRememberCallSim] = useState(true);
+  const [rememberCallSim, setRememberCallSim] = useState(false);
 
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
   const isLongPressActiveRef = React.useRef(false);

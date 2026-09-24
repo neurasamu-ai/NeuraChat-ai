@@ -78,8 +78,12 @@ function ChatDetailContent() {
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [pendingCallNumber, setPendingCallNumber] = useState<string>('');
-  const [rememberCallSim, setRememberCallSim] = useState(true);
+  const [rememberCallSim, setRememberCallSim] = useState(false);
   const [rememberSim, setRememberSim] = useState(true);
+  // Header SIM badge: which SIM is currently selected for this chat
+  const [headerSimLabel, setHeaderSimLabel] = useState<string>('');
+  const [headerSims, setHeaderSims] = useState<Subscription[]>([]);
+  const [headerSimPickerOpen, setHeaderSimPickerOpen] = useState(false);
 
   // Profile sharing states
   const [isShareOpen, setIsShareOpen] = useState(false);
@@ -145,6 +149,74 @@ function ChatDetailContent() {
     } catch (e) {
       console.error('ensureChatExists failed', e);
     }
+  };
+
+  // If the chat title is just a raw number, try to resolve the contact name
+  // so it shows the person's name instead of digits.
+  useEffect(() => {
+    const resolveName = async () => {
+      try {
+        const looksNumeric = /^[+\d\s-]+$/.test((name || '').trim());
+        if (!looksNumeric) return;
+        const list = await getContacts();
+        const digits = (phone || '').replace(/\D/g, '');
+        if (digits.length < 7) return;
+        const found = list.find((c) => {
+          const cd = (c.phone || '').replace(/\D/g, '');
+          if (cd.length < 7) return false;
+          return cd.endsWith(digits) || digits.endsWith(cd);
+        });
+        if (found && found.name) {
+          // Update the chat record so the Chats list also shows the name.
+          const chats = await getChats();
+          const c = chats.find((x) => x.id === chatId);
+          if (c && c.name !== found.name) {
+            c.name = found.name;
+            await saveChat(c);
+          }
+        }
+      } catch (e) {
+        console.error('resolveName failed', e);
+      }
+    };
+    const t = setTimeout(resolveName, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // Load SIM list + selected SIM for the header badge.
+  useEffect(() => {
+    const load = async () => {
+      try {
+        if (!isSmsPluginAvailable()) return;
+        const subs = await getActiveSubscriptions();
+        setHeaderSims(subs);
+        const pref = getPreferredSimId();
+        if (pref !== null) {
+          const found = subs.find((x) => x.subscriptionId === pref);
+          if (found) setHeaderSimLabel(found.label);
+        } else if (subs.length > 0) {
+          setHeaderSimLabel('Default');
+        }
+      } catch (e) {
+        console.error('header sim load failed', e);
+      }
+    };
+    load();
+  }, []);
+
+  const pickHeaderSim = (sub: Subscription) => {
+    setPreferredSimId(sub.subscriptionId);
+    setHeaderSimLabel(sub.label);
+    setHeaderSimPickerOpen(false);
+    alertToast(`SMS will be sent via ${sub.label}`, 'success');
+  };
+
+  const clearHeaderSim = () => {
+    setPreferredSimId(null);
+    setHeaderSimLabel('Default');
+    setHeaderSimPickerOpen(false);
+    alertToast('Using default SIM', 'info');
   };
 
   // Mark this chat as read whenever it is opened.
@@ -447,6 +519,7 @@ function ChatDetailContent() {
   // ---- Back-button integration ----
   // Register in reverse priority: topmost UI consumes back first.
   useBackHandler(simPickerOpen, () => setSimPickerOpen(false));
+  useBackHandler(headerSimPickerOpen, () => setHeaderSimPickerOpen(false));
   useBackHandler(callSimPickerOpen, () => setCallSimPickerOpen(false));
 
   // Track SMS sent/delivered/failed status
@@ -509,6 +582,25 @@ function ChatDetailContent() {
         backHref="/chats"
         rightAction={
           <div className="flex items-center gap-1.5 select-none">
+            {/* SIM badge — tap to change SMS SIM for this chat */}
+            {headerSims.length > 0 && (
+              <button
+                onClick={() => {
+                  triggerVibration();
+                  setHeaderSimPickerOpen(true);
+                }}
+                className="px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-wider"
+                style={{
+                  backgroundColor: '#18181b',
+                  color: '#00D4FF',
+                  border: '1px solid rgba(0,212,255,0.35)',
+                }}
+                title="Change SMS SIM"
+              >
+                {headerSimLabel || 'SIM'}
+              </button>
+            )}
+
             {/* Voice call icon */}
             <button
               onClick={() => triggerCallSimulation(false)}
@@ -1052,6 +1144,68 @@ function ChatDetailContent() {
                 />
                 Remember my choice
               </label>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* HEADER SIM PICKER MODAL */}
+      <AnimatePresence>
+        {headerSimPickerOpen && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
+            >
+              <button
+                onClick={() => setHeaderSimPickerOpen(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <h3 className="text-base font-bold font-display text-white mb-1">
+                SMS SIM
+              </h3>
+              <p className="text-xs text-zinc-500 mb-4">
+                Choose which SIM sends messages from this chat.
+              </p>
+
+              <div className="space-y-2">
+                <button
+                  onClick={clearHeaderSim}
+                  className={`w-full bg-zinc-900 border rounded-xl p-3 text-left transition-all cursor-pointer active:scale-[0.98] ${
+                    !headerSimLabel || headerSimLabel === 'Default'
+                      ? 'border-[#00D4FF]/50'
+                      : 'border-zinc-800 hover:bg-zinc-850'
+                  }`}
+                >
+                  <p className="text-xs font-semibold text-white">Always ask / Default</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">
+                    Prompt each time when multiple SIMs are active
+                  </p>
+                </button>
+                {headerSims.map((sub) => (
+                  <button
+                    key={sub.subscriptionId}
+                    onClick={() => pickHeaderSim(sub)}
+                    className={`w-full bg-zinc-900 border rounded-xl p-3 text-left transition-all cursor-pointer active:scale-[0.98] ${
+                      headerSimLabel === sub.label
+                        ? 'border-[#00D4FF]/50'
+                        : 'border-zinc-800 hover:bg-zinc-850'
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-white">{sub.label}</p>
+                    {sub.carrierName && (
+                      <p className="text-[10px] text-zinc-500 mt-0.5 font-mono">
+                        {sub.carrierName}
+                      </p>
+                    )}
+                  </button>
+                ))}
+              </div>
             </motion.div>
           </div>
         )}

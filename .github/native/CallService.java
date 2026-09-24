@@ -61,6 +61,29 @@ public class CallService extends InCallService {
         startActivity(intent);
     }
 
+    // Choose the visible call: prefer one that is not HOLDING or DISCONNECTED.
+    private Call pickVisibleCall() {
+        try {
+            java.util.List<Call> calls = getCalls();
+            if (calls == null || calls.isEmpty()) return null;
+            Call fallback = null;
+            for (Call c : calls) {
+                if (c == null) continue;
+                int st = c.getState();
+                if (st == Call.STATE_DISCONNECTED) continue;
+                if (st == Call.STATE_HOLDING) {
+                    if (fallback == null) fallback = c;
+                    continue;
+                }
+                return c;
+            }
+            return fallback;
+        } catch (Exception e) {
+            Log.w(TAG, "pickVisibleCall failed", e);
+            return null;
+        }
+    }
+
     @Override
     public void onCallRemoved(Call call) {
         super.onCallRemoved(call);
@@ -102,6 +125,18 @@ public class CallService extends InCallService {
             }
         }
 
+        // If other calls remain (e.g. a held call), switch the UI to them
+        // instead of tearing everything down.
+        Call next = pickVisibleCall();
+        if (next != null) {
+            activeCall = next;
+            updateState(next, next.getState());
+            wasRinging = false;
+            wasAnswered = true;
+            return;
+        }
+
+        // No calls remain — full teardown.
         if (activeCall == call) {
             activeCall = null;
         }

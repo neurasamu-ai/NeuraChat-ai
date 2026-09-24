@@ -303,33 +303,45 @@ public class TelecomPlugin extends Plugin {
             return;
         }
         try {
-            AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-            if (am == null) {
-                call.reject("AudioManager unavailable");
-                return;
-            }
-            am.setMode(AudioManager.MODE_IN_CALL);
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                // Android 12+: setSpeakerphoneOn is a no-op; use setCommunicationDevice.
-                java.util.List<android.media.AudioDeviceInfo> devices = am.getAvailableCommunicationDevices();
-                int targetType = enable
-                    ? android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-                    : android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
-                boolean applied = false;
-                for (android.media.AudioDeviceInfo dev : devices) {
-                    if (dev.getType() == targetType) {
-                        applied = am.setCommunicationDevice(dev);
-                        Log.d(TAG, "setCommunicationDevice " + targetType + " -> " + applied);
-                        break;
-                    }
+            // Primary path: when we own the InCallService, the platform expects
+            // audio routing to go through the Call object, not AudioManager.
+            boolean applied = false;
+            if (CallService.activeCall != null) {
+                try {
+                    int route = enable
+                        ? Call.AUDIO_ROUTE_SPEAKER
+                        : Call.AUDIO_ROUTE_EARPIECE;
+                    CallService.activeCall.setAudioRoute(route);
+                    applied = true;
+                    Log.d(TAG, "setAudioRoute -> " + route);
+                } catch (Exception e) {
+                    Log.w(TAG, "setAudioRoute failed, will fall back", e);
                 }
-                if (!applied) {
-                    // Fallback to legacy API
+            }
+
+            // Backup / non-InCallService case: AudioManager.
+            if (!applied) {
+                AudioManager am = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
+                if (am == null) {
+                    call.reject("AudioManager unavailable");
+                    return;
+                }
+                am.setMode(AudioManager.MODE_IN_CALL);
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    java.util.List<android.media.AudioDeviceInfo> devices = am.getAvailableCommunicationDevices();
+                    int targetType = enable
+                        ? android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                        : android.media.AudioDeviceInfo.TYPE_BUILTIN_EARPIECE;
+                    for (android.media.AudioDeviceInfo dev : devices) {
+                        if (dev.getType() == targetType) {
+                            am.setCommunicationDevice(dev);
+                            break;
+                        }
+                    }
+                } else {
                     am.setSpeakerphoneOn(enable);
                 }
-            } else {
-                am.setSpeakerphoneOn(enable);
             }
 
             CallService.isSpeakerOn = enable;
@@ -399,6 +411,8 @@ public class TelecomPlugin extends Plugin {
     }
 
     // ---- DTMF (keypad tones during a call) ----
+    private static android.os.Handler dtmfHandler = null;
+
     @PluginMethod
     public void playDtmf(PluginCall call) {
         String tone = call.getString("tone");
@@ -411,8 +425,23 @@ public class TelecomPlugin extends Plugin {
             return;
         }
         try {
-            char c = tone.charAt(0);
-            CallService.activeCall.playDtmfTone(c);
+            final Call c = CallService.activeCall;
+            char ch = tone.charAt(0);
+            c.playDtmfTone(ch);
+
+            // Auto-stop after 180ms so the tone does not play forever if the
+            // caller forgets to stop it. This matches a natural key press.
+            if (dtmfHandler == null) {
+                dtmfHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            }
+            dtmfHandler.removeCallbacksAndMessages(null);
+            dtmfHandler.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    try { c.stopDtmfTone(); } catch (Exception ignore) {}
+                }
+            }, 180);
+
             JSObject ret = new JSObject();
             ret.put("ok", true);
             call.resolve(ret);
