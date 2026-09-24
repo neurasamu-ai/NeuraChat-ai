@@ -34,6 +34,7 @@ export default function ActiveCallScreen() {
   const [call, setCall] = useState<CallState>(IDLE);
   const [elapsed, setElapsed] = useState(0);
   const [numpadOpen, setNumpadOpen] = useState(false);
+  const [numpadInput, setNumpadInput] = useState('');
   const [recording, setRecording] = useState(false);
   const [recordingPath, setRecordingPath] = useState<string>('');
   const listenerRef = useRef<{ remove: () => void } | null>(null);
@@ -89,8 +90,18 @@ export default function ActiveCallScreen() {
     return () => clearInterval(id);
   }, [call.state, call.startedAt]);
 
+  // clear input when the pad closes
   const handleDtmf = async (digit: string) => {
-    try { await playDtmf(digit); } catch (e) { console.error(e); }
+    try {
+      setNumpadInput((prev) => prev + digit);
+      await playDtmf(digit);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleEraseDigit = async () => {
+    setNumpadInput((prev) => prev.slice(0, -1));
   };
 
   const handleToggleRecord = async () => {
@@ -285,10 +296,36 @@ export default function ActiveCallScreen() {
                     </p>
                   </div>
                   <button
-                    onClick={() => setNumpadOpen(false)}
+                    onClick={() => {
+                      setNumpadOpen(false);
+                      setNumpadInput('');
+                    }}
                     className="p-2 rounded-full bg-zinc-900 text-zinc-400 hover:text-white active:scale-95"
                   >
                     <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                {/* Numpad display: shows digits the user has typed on this
+                    keypad (DTMF). Erase removes the last one. */}
+                <div className="mt-6 px-6 flex items-center justify-center gap-3">
+                  <div className="flex-1 max-w-[240px] h-12 rounded-xl bg-zinc-900/80 border border-zinc-700/60 flex items-center justify-center backdrop-blur-sm">
+                    <span className="text-2xl font-black font-mono text-white tracking-tight">
+                      {numpadInput || ' '}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleEraseDigit}
+                    disabled={!numpadInput}
+                    className="w-12 h-12 rounded-xl bg-zinc-900/80 border border-zinc-700/60 flex items-center justify-center text-zinc-200 active:scale-95 disabled:opacity-40 backdrop-blur-sm"
+                    aria-label="Erase"
+                  >
+                    {/* Erase-backspace glyph */}
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z" />
+                      <line x1="18" y1="9" x2="12" y2="15" />
+                      <line x1="12" y1="9" x2="18" y2="15" />
+                    </svg>
                   </button>
                 </div>
 
@@ -326,7 +363,10 @@ export default function ActiveCallScreen() {
 
                 <div className="px-6 pt-2 pb-4">
                   <button
-                    onClick={() => setNumpadOpen(false)}
+                    onClick={() => {
+                      setNumpadOpen(false);
+                      setNumpadInput('');
+                    }}
                     className="w-full py-3 rounded-2xl bg-zinc-900/90 text-zinc-200 font-semibold text-xs active:scale-95 transition-all backdrop-blur-sm"
                   >
                     Done
