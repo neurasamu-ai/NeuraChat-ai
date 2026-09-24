@@ -17,6 +17,11 @@ import {
   stopCallRecording,
   isCallRecording,
   CallState,
+  CallSnapshot,
+  addCallsChangedListener,
+  answerCallById,
+  endCallById,
+  swapToCall,
 } from '@/lib/telecom-plugin';
 
 const IDLE: CallState = {
