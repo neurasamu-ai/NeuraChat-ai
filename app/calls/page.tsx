@@ -121,6 +121,14 @@ export default function CallsPage() {
     return () => clearTimeout(handle);
   }, []);
 
+  // Refresh when a missed call event is persisted by MissedCallBridge.
+  useEffect(() => {
+    const onUpdate = () => loadCallsAndContacts();
+    window.addEventListener('neura-call-updated', onUpdate);
+    return () => window.removeEventListener('neura-call-updated', onUpdate);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
 
   const triggerVibration = () => {

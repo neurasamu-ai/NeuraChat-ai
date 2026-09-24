@@ -93,6 +93,13 @@ public class CallService extends InCallService {
             } catch (Exception e) {
                 Log.w(TAG, "missed notification failed", e);
             }
+
+            // Emit event so the JS layer can persist it into the app DB.
+            try {
+                TelecomPlugin.dispatchMissedCall(currentNumber, currentName, System.currentTimeMillis());
+            } catch (Exception e) {
+                Log.w(TAG, "dispatchMissedCall failed", e);
+            }
         }
 
         if (activeCall == call) {

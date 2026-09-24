@@ -27,6 +27,9 @@ public class SmsNotifier {
         try {
             ensureChannel(context);
 
+            // Look up the display name for the sender, if any.
+            String displayName = lookupName(context, sender);
+
             // 1. Tap notification → open app chat for this sender
             Intent openIntent = new Intent(context, MainActivity.class);
             openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -82,7 +85,7 @@ public class SmsNotifier {
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_sms)
-                .setContentTitle(sender)
+                .setContentTitle(displayName != null && !displayName.isEmpty() ? displayName : sender)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -117,5 +120,28 @@ public class SmsNotifier {
         );
         channel.setDescription("Incoming SMS notifications");
         nm.createNotificationChannel(channel);
+    }
+
+    private static String lookupName(Context context, String number) {
+        if (number == null || number.isEmpty()) return "";
+        android.database.Cursor c = null;
+        try {
+            android.net.Uri uri = android.net.Uri.withAppendedPath(
+                android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                android.net.Uri.encode(number));
+            c = context.getContentResolver().query(
+                uri,
+                new String[] { android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME },
+                null, null, null);
+            if (c != null && c.moveToFirst()) {
+                String n = c.getString(0);
+                if (n != null) return n;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "lookupName failed", e);
+        } finally {
+            if (c != null) c.close();
+        }
+        return "";
     }
 }

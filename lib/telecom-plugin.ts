@@ -30,6 +30,10 @@ export interface TelecomPluginType {
     eventName: 'callStateChanged',
     listener: (data: CallState) => void
   ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'missedCall',
+    listener: (data: { number: string; name: string; timestamp: number }) => void
+  ): Promise<{ remove: () => void }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
   acceptCall(): Promise<void>;
@@ -280,5 +284,18 @@ export async function isCallRecording(): Promise<boolean> {
     return !!r.recording;
   } catch {
     return false;
+  }
+}
+
+
+export async function addMissedCallListener(
+  cb: (data: { number: string; name: string; timestamp: number }) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isTelecomPluginAvailable()) return null;
+  try {
+    return await TelecomPlugin.addListener('missedCall', cb);
+  } catch (e) {
+    console.error('[Telecom] addMissedCallListener failed', e);
+    return null;
   }
 }
