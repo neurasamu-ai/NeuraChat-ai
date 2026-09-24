@@ -457,4 +457,24 @@ public class SmsPlugin extends Plugin {
             Log.e(TAG, "registerSmsReceivers failed", e);
         }
     }
+
+    @PluginMethod
+    public void getPendingNavigation(PluginCall call) {
+        JSObject ret = new JSObject();
+        try {
+            if (MainActivity.pendingOpenChatWith != null) {
+                ret.put("type", "open_chat");
+                ret.put("phone", MainActivity.pendingOpenChatWith);
+                ret.put("name", MainActivity.pendingOpenChatName == null ? "" : MainActivity.pendingOpenChatName);
+                MainActivity.pendingOpenChatWith = null;
+                MainActivity.pendingOpenChatName = null;
+            } else if (MainActivity.pendingOpenCallLog) {
+                ret.put("type", "open_call_log");
+                MainActivity.pendingOpenCallLog = false;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getPendingNavigation failed", e);
+        }
+        call.resolve(ret);
+    }
 }

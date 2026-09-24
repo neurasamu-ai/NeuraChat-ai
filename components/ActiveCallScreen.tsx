@@ -316,7 +316,7 @@ export default function ActiveCallScreen() {
                   </button>
                 </div>
 
-                <div className="flex-1 grid grid-cols-3 gap-y-3 gap-x-5 px-6 py-4 place-items-center max-w-sm mx-auto w-full">
+                <div className="grid grid-cols-3 gap-y-1 gap-x-1 px-4 py-2 place-items-center max-w-xs mx-auto w-full mt-6">
                   {[
                     { c: '1', s: '' },
                     { c: '2', s: 'ABC' },
@@ -334,7 +334,7 @@ export default function ActiveCallScreen() {
                     <button
                       key={k.c}
                       onPointerDown={() => handleDtmf(k.c)}
-                      className="w-14 h-14 rounded-full bg-zinc-900/85 border border-zinc-700/60 hover:bg-zinc-800/90 active:scale-90 transition-all flex flex-col items-center justify-center backdrop-blur-sm"
+                      className="w-16 h-16 rounded-full bg-zinc-900/85 border border-zinc-700/60 hover:bg-zinc-800/90 active:scale-90 transition-all flex flex-col items-center justify-center backdrop-blur-sm"
                     >
                       <span className="text-xl font-black text-white font-mono leading-none">
                         {k.c}

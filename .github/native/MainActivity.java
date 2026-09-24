@@ -2,6 +2,7 @@ package com.neurasamu.build.chat;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -19,6 +20,12 @@ public class MainActivity extends BridgeActivity {
 
     private static final String TAG = "NeuraMain";
     private boolean permissionsRequested = false;
+
+    // Pending navigation requested by a notification or system intent.
+    // Read + cleared by SmsPlugin.getPendingNavigation().
+    public static String pendingOpenChatWith = null;
+    public static String pendingOpenChatName = null;
+    public static boolean pendingOpenCallLog = false;
 
     private final ActivityResultLauncher<String[]> permissionLauncher =
         registerForActivityResult(
@@ -38,7 +45,31 @@ public class MainActivity extends BridgeActivity {
 
         super.onCreate(savedInstanceState);
 
+        extractNavigationExtras(getIntent());
         requestAllPermissions();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        extractNavigationExtras(intent);
+    }
+
+    private void extractNavigationExtras(Intent intent) {
+        if (intent == null) return;
+        try {
+            String chatWith = intent.getStringExtra("open_chat_with");
+            if (chatWith != null && !chatWith.isEmpty()) {
+                pendingOpenChatWith = chatWith;
+                pendingOpenChatName = intent.getStringExtra("open_chat_name");
+            }
+            if (intent.getBooleanExtra("open_call_log", false)) {
+                pendingOpenCallLog = true;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "extractNavigationExtras failed", e);
+        }
     }
 
     private void requestAllPermissions() {

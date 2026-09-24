@@ -41,6 +41,7 @@ export interface SmsPluginType {
   isDefaultSmsApp(): Promise<{ isDefault: boolean }>;
   requestDefaultSmsRole(): Promise<{ launched: boolean }>;
   openAppInfo(): Promise<void>;
+  getPendingNavigation(): Promise<{ type?: string; phone?: string; name?: string }>;
   addListener(
     eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
@@ -210,5 +211,20 @@ export async function openAppInfo(): Promise<void> {
     await SmsPlugin.openAppInfo();
   } catch (e) {
     console.error('[Sms] openAppInfo failed', e);
+  }
+}
+
+
+export async function getPendingNavigation(): Promise<{
+  type?: string;
+  phone?: string;
+  name?: string;
+}> {
+  if (!isSmsPluginAvailable()) return {};
+  try {
+    return await SmsPlugin.getPendingNavigation();
+  } catch (e) {
+    console.error('[Sms] getPendingNavigation failed', e);
+    return {};
   }
 }

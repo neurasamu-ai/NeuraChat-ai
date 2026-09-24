@@ -68,6 +68,7 @@ jobs:
         cp .github/native/CallNotifier.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/ic_stat_call.xml android/app/src/main/res/drawable/
 
     - name: Sync Android
       run: npx cap sync android

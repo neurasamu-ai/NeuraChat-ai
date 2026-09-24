@@ -489,7 +489,7 @@ export default function CallsPage() {
                       placeholder=" "
                       autoComplete="off"
                       spellCheck={false}
-                      className="w-full bg-transparent text-3xl font-black font-mono text-white tracking-widest text-center outline-none caret-[#00D4FF] px-10"
+                      className="w-full bg-transparent text-2xl font-black font-mono text-white tracking-tight text-center outline-none caret-[#00D4FF] px-6"
                     />
 
                     {dialNumber && (

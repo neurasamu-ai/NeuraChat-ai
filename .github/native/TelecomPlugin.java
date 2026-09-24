@@ -448,6 +448,13 @@ public class TelecomPlugin extends Plugin {
             return;
         }
         try {
+            // Ensure the audio system is in communication mode so mic capture
+            // is routed correctly during the call.
+            try {
+                AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+                if (am != null) am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            } catch (Exception ignore) {}
+
             String filename = "call_" + System.currentTimeMillis() + ".m4a";
 
             // Android 10+ : MediaStore with RELATIVE_PATH (no storage permission).
@@ -526,7 +533,9 @@ public class TelecomPlugin extends Plugin {
         } else {
             r = new MediaRecorder();
         }
-        r.setAudioSource(MediaRecorder.AudioSource.MIC);
+        // VOICE_RECOGNITION captures the mic even during a call on many devices.
+        // MIC alone often yields silence while the call is active.
+        r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
         r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         r.setAudioEncodingBitRate(96000);

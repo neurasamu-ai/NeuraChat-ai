@@ -24,6 +24,12 @@ public class CallNotifier {
         try {
             ensureChannel(context);
 
+            // If name is missing, try a fresh lookup — CallService may have
+            // fired before the contact provider was ready.
+            if ((name == null || name.isEmpty()) && number != null && !number.isEmpty()) {
+                name = lookupName(context, number);
+            }
+
             String title = (name != null && !name.isEmpty()) ? name : (number == null ? "Unknown" : number);
 
             // Tap → open app
@@ -54,7 +60,7 @@ public class CallNotifier {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
-                .setSmallIcon(R.drawable.ic_stat_sms)
+                .setSmallIcon(R.drawable.ic_stat_call)
                 .setContentTitle("Missed call")
                 .setContentText(title)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(title))
@@ -62,8 +68,8 @@ public class CallNotifier {
                 .setCategory(NotificationCompat.CATEGORY_MISSED_CALL)
                 .setAutoCancel(true)
                 .setContentIntent(openPending)
-                .addAction(R.drawable.ic_stat_sms, "Call back", callPending)
-                .addAction(R.drawable.ic_stat_sms, "Message", msgPending);
+                .addAction(R.drawable.ic_stat_call, "Call back", callPending)
+                .addAction(R.drawable.ic_stat_call, "Message", msgPending);
 
             try {
                 NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build());
@@ -84,5 +90,27 @@ public class CallNotifier {
             CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
         channel.setDescription("Missed call notifications");
         nm.createNotificationChannel(channel);
+    }
+
+    private static String lookupName(Context context, String number) {
+        android.database.Cursor c = null;
+        try {
+            android.net.Uri uri = android.net.Uri.withAppendedPath(
+                android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                android.net.Uri.encode(number));
+            c = context.getContentResolver().query(
+                uri,
+                new String[] { android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME },
+                null, null, null);
+            if (c != null && c.moveToFirst()) {
+                String n = c.getString(0);
+                if (n != null) return n;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "lookupName failed", e);
+        } finally {
+            if (c != null) c.close();
+        }
+        return "";
     }
 }
