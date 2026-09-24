@@ -239,6 +239,14 @@
             </intent-filter>
         </receiver>
 
+        <!-- 4c. AI Web View (in-app browser for ChatGPT/Gemini/etc.) -->
+        <activity
+            android:name="com.neurasamu.build.chat.AiWebViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:hardwareAccelerated="true"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
         <!-- 5. Boot Receiver for alarm initialization -->
         <receiver
             android:name="com.neurasamu.build.chat.BootReceiver"
