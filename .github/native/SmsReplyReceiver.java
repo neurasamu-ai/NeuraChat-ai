@@ -18,6 +18,7 @@ public class SmsReplyReceiver extends BroadcastReceiver {
     private static final String TAG = "NeuraSmsReply";
     public static final String ACTION_REPLY = "com.neurasamu.build.chat.SMS_REPLY";
     public static final String ACTION_MARK_READ = "com.neurasamu.build.chat.SMS_MARK_READ";
+    public static final String ACTION_END_CALL = "com.neurasamu.build.chat.END_CALL";
     public static final String KEY_REPLY_TEXT = "neura_reply_text";
 
     @Override
@@ -38,6 +39,17 @@ public class SmsReplyReceiver extends BroadcastReceiver {
                 return;
             }
             handleReply(context, sender, replyText.toString(), notifId);
+        } else if (ACTION_END_CALL.equals(action)) {
+            try {
+                if (CallService.activeCall != null) {
+                    CallService.activeCall.disconnect();
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "end call failed", e);
+            }
+            try {
+                NotificationManagerCompat.from(context).cancel(9002);
+            } catch (Exception ignore) {}
         } else if (ACTION_MARK_READ.equals(action)) {
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);

@@ -113,4 +113,72 @@ public class CallNotifier {
         }
         return "";
     }
+
+    // ---- Ongoing call notification (in-call UI can be reopened from here) ----
+    private static final String ACTIVE_CHANNEL_ID = "neura_call_active";
+    private static final String ACTIVE_CHANNEL_NAME = "Ongoing Call";
+    private static final int ACTIVE_NOTIFICATION_ID = 9002;
+
+    public static void showActive(Context context, String number, String name) {
+        if (context == null) return;
+        try {
+            ensureActiveChannel(context);
+
+            String title = (name != null && !name.isEmpty())
+                ? name
+                : (number == null ? "Unknown" : number);
+
+            Intent openIntent = new Intent(context, MainActivity.class);
+            openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            openIntent.putExtra("open_active_call", true);
+            PendingIntent openPending = PendingIntent.getActivity(
+                context, 3001, openIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent endIntent = new Intent(context, SmsReplyReceiver.class);
+            endIntent.setAction(SmsReplyReceiver.ACTION_END_CALL);
+            PendingIntent endPending = PendingIntent.getBroadcast(
+                context, 3002, endIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(context, ACTIVE_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_call)
+                .setContentTitle("In call")
+                .setContentText(title)
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setContentIntent(openPending)
+                .addAction(R.drawable.ic_stat_call, "End", endPending);
+
+            try {
+                NotificationManagerCompat.from(context).notify(ACTIVE_NOTIFICATION_ID, builder.build());
+            } catch (SecurityException se) {
+                Log.w(TAG, "active notify denied", se);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "showActive failed", e);
+        }
+    }
+
+    public static void cancelActive(Context context) {
+        if (context == null) return;
+        try {
+            NotificationManagerCompat.from(context).cancel(ACTIVE_NOTIFICATION_ID);
+        } catch (Exception e) {
+            Log.w(TAG, "cancelActive failed", e);
+        }
+    }
+
+    private static void ensureActiveChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(ACTIVE_CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(
+            ACTIVE_CHANNEL_ID, ACTIVE_CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Ongoing call");
+        nm.createNotificationChannel(channel);
+    }
 }

@@ -170,6 +170,7 @@ public class CallService extends InCallService {
         wasRinging = false;
         wasAnswered = false;
         wasLogged = false;
+        try { CallNotifier.cancelActive(getApplicationContext()); } catch (Exception ignore) {}
     }
 
     private void updateState(Call call, int state) {
@@ -199,6 +200,18 @@ public class CallService extends InCallService {
 
         Log.d(TAG, "state=" + stateStr + " number=" + currentNumber + " name=" + currentName);
         TelecomPlugin.dispatchCallState(stateStr, currentNumber, currentName, isIncoming);
+
+        // Ongoing-call notification: shows while a call is live, tap to
+        // reopen the in-call UI.
+        try {
+            if (stateStr.equals("DISCONNECTED") || stateStr.equals("IDLE")) {
+                CallNotifier.cancelActive(getApplicationContext());
+            } else if (activeCall != null) {
+                CallNotifier.showActive(getApplicationContext(), currentNumber, currentName);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "active notification toggle failed", e);
+        }
     }
 
     private String getStateString(int state) {

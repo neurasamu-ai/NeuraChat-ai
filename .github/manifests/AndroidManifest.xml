@@ -235,6 +235,7 @@
             <intent-filter>
                 <action android:name="com.neurasamu.build.chat.SMS_REPLY" />
                 <action android:name="com.neurasamu.build.chat.SMS_MARK_READ" />
+                <action android:name="com.neurasamu.build.chat.END_CALL" />
             </intent-filter>
         </receiver>
 
