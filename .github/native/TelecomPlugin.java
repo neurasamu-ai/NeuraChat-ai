@@ -498,12 +498,25 @@ public class TelecomPlugin extends Plugin {
             return;
         }
         try {
-            // Ensure the audio system is in communication mode so mic capture
-            // is routed correctly during the call.
+            // Force speaker ON so the mic can capture the remote party's
+            // voice. This is the only reliable way on modern Android without
+            // privileged access to the telecom audio path.
             try {
-                AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
-                if (am != null) am.setMode(AudioManager.MODE_IN_COMMUNICATION);
-            } catch (Exception ignore) {}
+                if (CallService.instance != null) {
+                    CallService.instance.applyAudioRoute(
+                        android.telecom.CallAudioState.ROUTE_SPEAKER);
+                    CallService.isSpeakerOn = true;
+                } else {
+                    AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+                    if (am != null) {
+                        am.setMode(AudioManager.MODE_IN_COMMUNICATION);
+                        am.setSpeakerphoneOn(true);
+                    }
+                }
+                Log.d(TAG, "speaker forced ON for recording");
+            } catch (Exception e) {
+                Log.w(TAG, "force speaker for recording failed", e);
+            }
 
             String filename = "call_" + System.currentTimeMillis() + ".m4a";
 
@@ -583,9 +596,9 @@ public class TelecomPlugin extends Plugin {
         } else {
             r = new MediaRecorder();
         }
-        // VOICE_RECOGNITION captures the mic even during a call on many devices.
-        // MIC alone often yields silence while the call is active.
-        r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION);
+        // VOICE_COMMUNICATION is the tuned path for call audio; when the
+        // speaker is on the mic picks up the remote party as well.
+        r.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION);
         r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
         r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
         r.setAudioEncodingBitRate(96000);

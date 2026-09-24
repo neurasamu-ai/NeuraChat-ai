@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User, Grid3x3, UserPlus, Circle, Square, X } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User, Grid3x3, Circle, Square, X } from 'lucide-react';
 import {
   getCurrentCall,
   addCallStateListener,
@@ -16,7 +16,6 @@ import {
   startCallRecording,
   stopCallRecording,
   isCallRecording,
-  placeCall,
   CallState,
 } from '@/lib/telecom-plugin';
 
@@ -109,19 +108,6 @@ export default function ActiveCallScreen() {
       } else {
         console.error('Record failed:', res.error);
       }
-    }
-  };
-
-  const handleAddCall = async () => {
-    // Place a new call. Android automatically puts the current call on hold
-    // and shows the second call alongside; real conference merge is a
-    // system-level operation on newer Android.
-    const input = window.prompt('Enter number for second call');
-    if (!input || !input.trim()) return;
-    try {
-      await placeCall(input.trim());
-    } catch (e) {
-      console.error('add call failed', e);
     }
   };
 
@@ -245,17 +231,7 @@ export default function ActiveCallScreen() {
               </button>
             </div>
 
-            {/* Add call row */}
-            <div className="mb-5">
-              <button
-                onClick={handleAddCall}
-                disabled={call.state !== 'ACTIVE'}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border bg-zinc-900/70 border-zinc-800 text-zinc-300 transition-all active:scale-95 disabled:opacity-40"
-              >
-                <UserPlus className="h-4 w-4" />
-                <span className="text-[11px] font-semibold">Add another call</span>
-              </button>
-            </div>
+
 
             {/* Primary action row */}
             <div className="flex items-center justify-center gap-8">
