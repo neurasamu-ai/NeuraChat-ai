@@ -12,7 +12,7 @@ import {
   CheckSquare,
   X,
   UserPlus,
-  CheckCheck,,
+  CheckCheck,
   Sparkles
 } from 'lucide-react';
 import {
