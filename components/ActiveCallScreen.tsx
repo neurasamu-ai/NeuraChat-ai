@@ -316,7 +316,7 @@ export default function ActiveCallScreen() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-y-1 gap-x-1 px-4 py-2 place-items-center max-w-xs mx-auto w-full mt-6">
+                <div className="grid grid-cols-3 gap-y-1 gap-x-1 px-4 py-2 place-items-center max-w-xs mx-auto w-full mt-auto">
                   {[
                     { c: '1', s: '' },
                     { c: '2', s: 'ABC' },
@@ -348,10 +348,10 @@ export default function ActiveCallScreen() {
                   ))}
                 </div>
 
-                <div className="px-6 pb-8">
+                <div className="px-6 pt-2 pb-4">
                   <button
                     onClick={() => setNumpadOpen(false)}
-                    className="w-full py-3 rounded-2xl bg-zinc-900 text-zinc-300 font-semibold text-xs active:scale-95 transition-all"
+                    className="w-full py-3 rounded-2xl bg-zinc-900/90 text-zinc-200 font-semibold text-xs active:scale-95 transition-all backdrop-blur-sm"
                   >
                     Done
                   </button>
