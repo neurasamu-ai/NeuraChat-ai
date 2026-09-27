@@ -50,6 +50,7 @@ function ProfileContent() {
   const [editEmail, setEditEmail] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Load contact
   useEffect(() => {
@@ -229,6 +230,7 @@ function ProfileContent() {
   };
 
   // Back exits edit mode first
+  useBackHandler(confirmDelete, () => setConfirmDelete(false));
   useBackHandler(isEditMode, () => {
     setIsEditMode(false);
     if (contact) {
@@ -436,7 +438,10 @@ function ProfileContent() {
             </div>
           ) : (
             <button
-              onClick={handleDelete}
+              onClick={() => {
+                triggerVibration();
+                setConfirmDelete(true);
+              }}
               className="w-full py-3 bg-red-950/10 border border-red-900/20 text-red-400 font-semibold text-xs rounded-xl active:scale-97 flex items-center justify-center gap-2"
             >
               <Trash2 className="h-3.5 w-3.5" />
@@ -444,6 +449,49 @@ function ProfileContent() {
             </button>
           )}
         </div>
+        {/* Delete confirmation modal */}
+        <AnimatePresence>
+          {confirmDelete && contact && (
+            <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6">
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6"
+              >
+                <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-red-950/30 border border-red-900/40 flex items-center justify-center">
+                  <Trash2 className="h-6 w-6 text-red-400" />
+                </div>
+                <h3 className="text-base font-bold text-white text-center mb-1">
+                  Delete Contact?
+                </h3>
+                <p className="text-xs text-zinc-400 text-center mb-5">
+                  &ldquo;{contact.name}&rdquo; will be removed.
+                  {contact.rawContactId
+                    ? ' This contact lives in your device / Google / SIM account and will be removed from there too.'
+                    : ''}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 py-3 bg-zinc-900 text-zinc-300 font-semibold text-xs rounded-xl active:scale-97"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setConfirmDelete(false);
+                      await handleDelete();
+                    }}
+                    className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-semibold text-xs rounded-xl active:scale-97"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

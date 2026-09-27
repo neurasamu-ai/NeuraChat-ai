@@ -36,15 +36,25 @@ public class SmsReceiver extends BroadcastReceiver {
                 timestamp = m.getTimestampMillis();
             }
 
-            // 1. Persist + queue for app inbox
-            // Drop messages from blocked numbers before anything else runs.
+            // BLOCK CHECK FIRST — before anything else runs.
             if (sender != null && BlockedStore.isBlocked(context, sender)) {
-                Log.d(TAG, "dropped blocked SMS from " + sender);
+                Log.d(TAG, "blocked SMS from " + sender + " — aborting broadcast");
+
+                // Abort so the SMS does not go to other apps (SMS_RECEIVED
+                // is the ordered broadcast other apps receive). SMS_DELIVER
+                // is only sent to the default SMS app, so abort is a no-op
+                // there — but we also skip writing to the system inbox
+                // below, so a blocked SMS never lands anywhere.
+                try {
+                    abortBroadcast();
+                } catch (Exception e) {
+                    Log.w(TAG, "abortBroadcast failed", e);
+                }
                 return;
             }
 
+            // Persist + queue for the app inbox and notify.
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
-            // 2. Show notification with Reply + Mark as read
             SmsNotifier.show(context, sender, body.toString(), timestamp);
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);
