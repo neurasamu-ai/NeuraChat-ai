@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User, Grid3x3, Circle, Square, X } from 'lucide-react';
+import { sendSms, isSmsPluginAvailable } from '@/lib/sms-plugin';
 import {
   getCurrentCall,
   addCallStateListener,
@@ -41,6 +42,7 @@ export default function ActiveCallScreen() {
   const [numpadOpen, setNumpadOpen] = useState(false);
   const [numpadInput, setNumpadInput] = useState('');
   const [allCalls, setAllCalls] = useState<CallSnapshot[]>([]);
+  const [snoozeOpen, setSnoozeOpen] = useState(false);
   const [recording, setRecording] = useState(false);
   const [recordingPath, setRecordingPath] = useState<string>('');
   const listenerRef = useRef<{ remove: () => void } | null>(null);
@@ -110,6 +112,29 @@ export default function ActiveCallScreen() {
   }, [call.state, call.startedAt]);
 
   // clear input when the pad closes
+  const SNOOZE_OPTIONS = [5, 10, 15, 20, 25, 30];
+
+  const handleSnooze = async (minutes: number) => {
+    setSnoozeOpen(false);
+    try {
+      // Reject the current incoming call.
+      await endCall();
+    } catch (e) {
+      console.error('snooze endCall failed', e);
+    }
+    // Send an SMS to the caller.
+    try {
+      const target = call.number || '';
+      if (target && isSmsPluginAvailable()) {
+        const message = `I'm busy right now. Please call back in ${minutes} minutes.`;
+        await sendSms(target, message);
+        console.log('snooze SMS sent to', target);
+      }
+    } catch (e) {
+      console.error('snooze SMS failed', e);
+    }
+  };
+
   const handleDtmf = async (digit: string) => {
     try {
       setNumpadInput((prev) => prev + digit);
@@ -353,6 +378,15 @@ export default function ActiveCallScreen() {
                   </button>
 
                   <button
+                    onClick={() => setSnoozeOpen(true)}
+                    className="w-16 h-16 rounded-full bg-zinc-700 hover:bg-zinc-600 text-white flex items-center justify-center shadow-[0_0_15px_rgba(255,255,255,0.15)] active:scale-95 transition-all flex-col"
+                    aria-label="Snooze"
+                  >
+                    <Pause className="h-5 w-5" />
+                    <span className="text-[8px] font-bold mt-0.5">SNOOZE</span>
+                  </button>
+
+                  <button
                     onClick={async () => { await acceptCall(); }}
                     className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.5)] active:scale-95 transition-all"
                     aria-label="Accept"
@@ -371,6 +405,53 @@ export default function ActiveCallScreen() {
               )}
             </div>
           </div>
+
+          {/* SNOOZE PICKER MODAL */}
+          <AnimatePresence>
+            {snoozeOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-black/85 backdrop-blur-md flex items-end z-20"
+              >
+                <motion.div
+                  initial={{ y: '100%' }}
+                  animate={{ y: 0 }}
+                  exit={{ y: '100%' }}
+                  transition={{ type: 'spring', damping: 26, stiffness: 240 }}
+                  className="w-full max-w-md mx-auto bg-zinc-950 border-t border-zinc-900 rounded-t-3xl p-5 pb-8"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-white">Snooze call</h3>
+                      <p className="text-[11px] text-zinc-500">
+                        Reject and send a "call back in X min" SMS
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSnoozeOpen(false)}
+                      className="p-1.5 rounded-full bg-zinc-900 text-zinc-400 hover:text-white"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {SNOOZE_OPTIONS.map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => handleSnooze(m)}
+                        className="py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-[#00D4FF]/50 text-white font-bold text-sm active:scale-95 transition-all"
+                      >
+                        {m} min
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Numpad overlay */}
           <AnimatePresence>
