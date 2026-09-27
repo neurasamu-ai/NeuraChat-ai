@@ -43,6 +43,7 @@ export interface SmsPluginType {
   openAppInfo(): Promise<void>;
   getPendingNavigation(): Promise<{ type?: string; phone?: string; name?: string }>;
   syncBlockedList(options: { numbers: string[] }): Promise<{ ok: boolean; count?: number }>;
+  getBlockedCount(): Promise<{ count: number; numbers: string[] }>;
   addListener(
     eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
@@ -239,5 +240,16 @@ export async function syncBlockedListToNative(numbers: string[]): Promise<boolea
   } catch (e) {
     console.error('[Sms] syncBlockedList failed', e);
     return false;
+  }
+}
+
+
+export async function getNativeBlockedCount(): Promise<{ count: number; numbers: string[] }> {
+  if (!isSmsPluginAvailable()) return { count: 0, numbers: [] };
+  try {
+    return await SmsPlugin.getBlockedCount();
+  } catch (e) {
+    console.error('[Sms] getBlockedCount failed', e);
+    return { count: 0, numbers: [] };
   }
 }

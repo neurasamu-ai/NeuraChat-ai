@@ -78,4 +78,10 @@ public class BlockedStore {
         }
         return false;
     }
+
+    // Return the current blocked numbers as a plain array.
+    public static String[] list(Context ctx) {
+        ensureLoaded(ctx);
+        return cache.toArray(new String[0]);
+    }
 }

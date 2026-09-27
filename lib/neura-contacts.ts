@@ -32,6 +32,7 @@ export interface NeuraContactsPluginType {
     accountName: string | null;
   }): Promise<{ success: boolean; uri?: string; rawContactId?: string; contactId?: string }>;
   deleteContactRaw(options: { rawContactId: string }): Promise<{ deleted: number }>;
+  updateContact(options: { rawContactId: string; name?: string; phone?: string; email?: string }): Promise<{ success: boolean; updated?: number }>;
 }
 
 const NeuraContacts = registerPlugin<NeuraContactsPluginType>('NeuraContactsPlugin');
@@ -189,5 +190,25 @@ export async function getContactsWithSources(): Promise<NativeContactRow[]> {
   } catch (e) {
     console.error('[NeuraContacts] getContactsWithSources failed', e);
     return [];
+  }
+}
+
+
+export async function updateContactNative(opts: {
+  rawContactId: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  if (!isContactsPluginAvailable()) {
+    return { success: false, error: 'Native contacts plugin not available' };
+  }
+  try {
+    const r = await NeuraContacts.updateContact(opts);
+    if (!r || !r.success) return { success: false, error: 'Update returned false' };
+    return { success: true };
+  } catch (e: any) {
+    console.error('[NeuraContacts] updateContact failed', e);
+    return { success: false, error: e?.message || String(e) };
   }
 }

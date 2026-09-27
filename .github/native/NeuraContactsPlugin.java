@@ -361,4 +361,79 @@ public class NeuraContactsPlugin extends Plugin {
     private boolean hasWriteContacts() {
         return ContextCompat.checkSelfPermission(getContext(), Manifest.permission.WRITE_CONTACTS) == PackageManager.PERMISSION_GRANTED;
     }
+
+    // Update a raw contact at its source (Device / Google / SIM). Uses
+    // ContactsContract.Data rows so the change reflects in the system
+    // contacts database, not just in the app.
+    @PluginMethod
+    public void updateContact(PluginCall call) {
+        if (!hasWriteContacts()) {
+            call.reject("WRITE_CONTACTS permission not granted");
+            return;
+        }
+        String rawContactId = call.getString("rawContactId");
+        String name = call.getString("name", "");
+        String phone = call.getString("phone", "");
+        String email = call.getString("email", "");
+
+        if (rawContactId == null || rawContactId.isEmpty()) {
+            call.reject("rawContactId is required");
+            return;
+        }
+
+        try {
+            ContentResolver cr = getContext().getContentResolver();
+            ArrayList<ContentProviderOperation> ops = new ArrayList<>();
+
+            // Name (StructuredName)
+            if (name != null && !name.isEmpty()) {
+                ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withSelection(
+                        ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                        ContactsContract.Data.MIMETYPE + "=?",
+                        new String[] { rawContactId, StructuredName.CONTENT_ITEM_TYPE })
+                    .withValue(StructuredName.DISPLAY_NAME, name)
+                    .withValue(StructuredName.GIVEN_NAME, name)
+                    .build());
+            }
+
+            // Phone (first one) — replace it
+            if (phone != null && !phone.isEmpty()) {
+                ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withSelection(
+                        ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                        ContactsContract.Data.MIMETYPE + "=?",
+                        new String[] { rawContactId, Phone.CONTENT_ITEM_TYPE })
+                    .withValue(Phone.NUMBER, phone)
+                    .build());
+            }
+
+            // Email (first one) — replace it
+            if (email != null && !email.isEmpty()) {
+                ops.add(ContentProviderOperation.newUpdate(ContactsContract.Data.CONTENT_URI)
+                    .withSelection(
+                        ContactsContract.Data.RAW_CONTACT_ID + "=? AND " +
+                        ContactsContract.Data.MIMETYPE + "=?",
+                        new String[] { rawContactId, Email.CONTENT_ITEM_TYPE })
+                    .withValue(Email.ADDRESS, email)
+                    .build());
+            }
+
+            if (ops.isEmpty()) {
+                call.reject("Nothing to update");
+                return;
+            }
+
+            android.content.ContentProviderResult[] results =
+                cr.applyBatch(ContactsContract.AUTHORITY, ops);
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            ret.put("updated", results != null ? results.length : 0);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "updateContact failed", e);
+            call.reject("Update failed: " + e.getMessage());
+        }
+    }
 }

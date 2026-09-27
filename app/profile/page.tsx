@@ -26,6 +26,7 @@ import {
   Contact,
 } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
+import { updateContactNative, deleteRawContact } from '@/lib/neura-contacts';
 import { dispatchCall } from '@/lib/telecom-plugin';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
@@ -111,11 +112,35 @@ function ProfileContent() {
   const handleSave = async () => {
     if (!contact || !editName.trim() || !editPhone.trim()) return;
     triggerVibration();
+
+    const newName = editName.trim();
+    const newPhone = editPhone.replace(/\s+/g, '');
+    const newEmail = editEmail.trim();
+
+    // If this contact came from the device / Google / SIM, update it at the
+    // source first. Only update the local record after the native write
+    // succeeds (or there is no native source to write to).
+    if (contact.rawContactId && (contact.accountType || contact.accountName)) {
+      try {
+        const res = await updateContactNative({
+          rawContactId: contact.rawContactId,
+          name: newName,
+          phone: newPhone,
+          email: newEmail || undefined,
+        });
+        if (!res.success) {
+          console.warn('System-level update failed:', res.error);
+        }
+      } catch (e) {
+        console.error('updateContactNative threw', e);
+      }
+    }
+
     const updated: Contact = {
       ...contact,
-      name: editName.trim(),
-      phone: editPhone.replace(/\s+/g, ''),
-      email: editEmail.trim() || undefined,
+      name: newName,
+      phone: newPhone,
+      email: newEmail || undefined,
       avatar: editAvatar || undefined,
       favorite: isFavorite,
     };
@@ -156,6 +181,17 @@ function ProfileContent() {
     if (!contact) return;
     triggerVibration();
     try {
+      // If this contact lives in the system provider, remove it there too.
+      if (contact.rawContactId) {
+        try {
+          const ok = await deleteRawContact(contact.rawContactId);
+          if (!ok) {
+            console.warn('System-level delete returned false');
+          }
+        } catch (e) {
+          console.error('deleteRawContact failed', e);
+        }
+      }
       await deleteContact(contact.id);
       router.back();
     } catch (e) {

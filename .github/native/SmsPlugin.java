@@ -502,4 +502,20 @@ public class SmsPlugin extends Plugin {
             call.reject("Failed: " + e.getMessage());
         }
     }
+
+    // Debug helper: return the native blocked count so JS can verify sync.
+    @PluginMethod
+    public void getBlockedCount(PluginCall call) {
+        try {
+            com.getcapacitor.JSObject ret = new com.getcapacitor.JSObject();
+            String[] list = BlockedStore.list(getContext());
+            ret.put("count", list.length);
+            com.getcapacitor.JSArray arr = new com.getcapacitor.JSArray();
+            for (String n : list) arr.put(n);
+            ret.put("numbers", arr);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
 }
