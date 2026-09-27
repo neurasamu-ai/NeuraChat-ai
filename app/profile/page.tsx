@@ -4,23 +4,29 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  User,
   Phone,
   MessageSquare,
   Mail,
   Camera,
   Check,
-  Edit2,
+  Pencil,
   X,
   Star,
-  Globe,
-  ArrowLeft
+  Share2,
+  Ban,
+  Trash2,
 } from 'lucide-react';
 import {
   getContacts,
   saveContact,
-  Contact
+  deleteContact,
+  getBlockedContacts,
+  blockContact,
+  unblockContact,
+  Contact,
 } from '@/lib/db';
+import { syncBlockedListToNative } from '@/lib/sms-plugin';
+import { dispatchCall } from '@/lib/telecom-plugin';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -29,122 +35,178 @@ function ProfileContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const urlName = searchParams.get('name') || 'Neural Link';
+  const urlName = searchParams.get('name') || 'Unknown';
   const urlPhone = searchParams.get('phone') || '';
   const urlAvatar = searchParams.get('avatar') || '';
 
   const [contact, setContact] = useState<Contact | null>(null);
   const [isEditMode, setIsEditMode] = useState(false);
 
-  // Form states
+  // Editable fields
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [editEmail, setEditEmail] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
 
+  // Load contact
   useEffect(() => {
     async function loadContact() {
-      if (!urlPhone) return;
-      const all = await getContacts();
-      const match = all.find(c => c.phone === urlPhone);
-      
-      if (match) {
-        setContact(match);
-        setEditName(match.name);
-        setEditPhone(match.phone);
-        setEditAvatar(match.avatar || '');
-        setIsFavorite(match.favorite);
-      } else {
-        // Fallback or create a temporary record if it doesn't exist
-        const temp: Contact = {
-          id: generateId('temp'),
-          name: urlName,
-          phone: urlPhone,
-          avatar: urlAvatar || undefined,
-          favorite: false
-        };
-        setContact(temp);
-        setEditName(urlName);
-        setEditPhone(urlPhone);
-        setEditAvatar(urlAvatar);
-        setIsFavorite(false);
+      try {
+        const all = await getContacts();
+        const match = urlPhone
+          ? all.find((c) => c.phone === urlPhone)
+          : all.find((c) => c.name === urlName);
+        if (match) {
+          setContact(match);
+          setEditName(match.name);
+          setEditPhone(match.phone);
+          setEditAvatar(match.avatar || '');
+          setEditEmail(match.email || '');
+          setIsFavorite(match.favorite);
+        } else {
+          setContact({
+            id: generateId('temp'),
+            name: urlName,
+            phone: urlPhone,
+            avatar: urlAvatar || undefined,
+            favorite: false,
+          });
+          setEditName(urlName);
+          setEditPhone(urlPhone);
+          setEditAvatar(urlAvatar);
+          setIsFavorite(false);
+        }
+        // Block status
+        const blocked = await getBlockedContacts();
+        const digits = (urlPhone || '').replace(/\D/g, '');
+        setIsBlocked(
+          blocked.some((b) => {
+            const bd = (b.phone || '').replace(/\D/g, '');
+            return bd && digits && (bd === digits || bd.endsWith(digits) || digits.endsWith(bd));
+          })
+        );
+      } catch (e) {
+        console.error('loadContact failed', e);
       }
     }
-    const handle = setTimeout(() => {
-      loadContact();
-    }, 0);
-    return () => clearTimeout(handle);
+    loadContact();
   }, [urlPhone, urlName, urlAvatar]);
 
   const triggerVibration = () => {
-    if (typeof window !== 'undefined' && window.navigator && window.navigator.vibrate) {
-      window.navigator.vibrate(30);
-    }
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
   };
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setEditAvatar(reader.result);
-      }
+      if (typeof reader.result === 'string') setEditAvatar(reader.result);
     };
     reader.readAsDataURL(file);
   };
 
   const handleSave = async () => {
     if (!contact || !editName.trim() || !editPhone.trim()) return;
-
     triggerVibration();
-
-    const updatedContact: Contact = {
+    const updated: Contact = {
       ...contact,
       name: editName.trim(),
       phone: editPhone.replace(/\s+/g, ''),
+      email: editEmail.trim() || undefined,
       avatar: editAvatar || undefined,
-      favorite: isFavorite
+      favorite: isFavorite,
     };
-
-    await saveContact(updatedContact);
-    setContact(updatedContact);
+    await saveContact(updated);
+    setContact(updated);
     setIsEditMode(false);
   };
 
   const handleToggleFavorite = async () => {
+    if (!contact || isEditMode) return;
+    triggerVibration();
+    const next = !isFavorite;
+    setIsFavorite(next);
+    const updated = { ...contact, favorite: next };
+    await saveContact(updated);
+    setContact(updated);
+  };
+
+  const handleToggleBlock = async () => {
     if (!contact) return;
     triggerVibration();
-    const nextVal = !isFavorite;
-    setIsFavorite(nextVal);
-
-    if (!isEditMode) {
-      const updatedContact: Contact = {
-        ...contact,
-        favorite: nextVal
-      };
-      await saveContact(updatedContact);
-      setContact(updatedContact);
+    try {
+      if (isBlocked) {
+        await unblockContact(`blocked-${(contact.phone || '').replace(/\D/g, '')}`);
+        setIsBlocked(false);
+      } else {
+        await blockContact({ name: contact.name, phone: contact.phone });
+        setIsBlocked(true);
+      }
+      const list = await getBlockedContacts();
+      await syncBlockedListToNative(list.map((x) => x.phone));
+    } catch (e) {
+      console.error('toggleBlock failed', e);
     }
   };
 
-  // Back exits edit mode instead of leaving the page.
+  const handleDelete = async () => {
+    if (!contact) return;
+    triggerVibration();
+    try {
+      await deleteContact(contact.id);
+      router.back();
+    } catch (e) {
+      console.error('delete failed', e);
+    }
+  };
+
+  const handleCall = async () => {
+    if (!editPhone) return;
+    triggerVibration();
+    await dispatchCall(editPhone);
+  };
+
+  const handleSms = () => {
+    if (!editPhone) return;
+    triggerVibration();
+    router.push(
+      `/chat-detail?phone=${encodeURIComponent(editPhone)}&name=${encodeURIComponent(editName)}&avatar=${encodeURIComponent(editAvatar)}`
+    );
+  };
+
+  const handleShare = async () => {
+    if (!editPhone) return;
+    triggerVibration();
+    const text = `${editName}\n${editPhone}`;
+    try {
+      if (typeof navigator !== 'undefined' && (navigator as any).share) {
+        await (navigator as any).share({ title: editName, text });
+      } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(text);
+      }
+    } catch (e) {
+      console.error('share failed', e);
+    }
+  };
+
+  // Back exits edit mode first
   useBackHandler(isEditMode, () => {
     setIsEditMode(false);
     if (contact) {
       setEditName(contact.name);
       setEditPhone(contact.phone);
       setEditAvatar(contact.avatar || '');
+      setEditEmail(contact.email || '');
     }
   });
 
   return (
     <div className="flex flex-col h-screen w-full md:max-w-md md:mx-auto bg-zinc-950 text-white relative">
-      
-      {/* Sticky default Header with back navigation route to Contacts */}
       <Header
-        title="Node Profile"
+        title={isEditMode ? 'Edit Contact' : 'Contact'}
         onBack={() => {
           if (isEditMode) {
             setIsEditMode(false);
@@ -152,146 +214,168 @@ function ProfileContent() {
               setEditName(contact.name);
               setEditPhone(contact.phone);
               setEditAvatar(contact.avatar || '');
+              setEditEmail(contact.email || '');
             }
           } else {
-            router.push('/contacts');
+            router.back();
           }
         }}
         rightAction={
-          <button
-            onClick={handleToggleFavorite}
-            className="p-1 -mr-1 rounded-full text-zinc-400 hover:text-amber-400 transition-colors cursor-pointer"
-            title="Toggle Favorite"
-          >
-            <Star className={`h-5 w-5 ${isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
-          </button>
+          <div className="flex items-center gap-1">
+            {!isEditMode && (
+              <button
+                onClick={() => {
+                  triggerVibration();
+                  setIsEditMode(true);
+                }}
+                className="p-2 rounded-full text-zinc-400 hover:text-[#00D4FF] transition-colors"
+                title="Edit"
+              >
+                <Pencil className="h-5 w-5" />
+              </button>
+            )}
+            {!isEditMode && (
+              <button
+                onClick={handleToggleFavorite}
+                className="p-2 rounded-full text-zinc-400 hover:text-amber-400 transition-colors"
+                title="Favorite"
+              >
+                <Star className={`h-5 w-5 ${isFavorite ? 'fill-amber-400 text-amber-400' : ''}`} />
+              </button>
+            )}
+          </div>
         }
       />
 
-      {/* Profile Details area */}
-      <main className="flex-1 p-6 overflow-y-auto space-y-6 flex flex-col items-center" id="profile-container">
-        
-        {/* Large Avatar container (128px) */}
+      <main className="flex-1 p-6 overflow-y-auto space-y-6 flex flex-col items-center">
+        {/* Avatar */}
         <div className="relative mb-2">
-          {/* Neon colorful glowing background ring */}
-          <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-[#00D4FF] to-[#FF006E] opacity-75 blur-md animate-pulse" />
+          <div className="absolute -inset-1 rounded-full bg-gradient-to-tr from-[#00D4FF] to-[#FF006E] opacity-70 blur-md" />
           <div className="w-32 h-32 rounded-full overflow-hidden bg-zinc-900 relative border-2 border-zinc-950 z-10 flex items-center justify-center text-4xl font-extrabold text-[#00D4FF] uppercase tracking-widest shadow-2xl">
             {editAvatar ? (
-              <img
-                src={editAvatar}
-                alt={editName}
-                className="w-full h-full object-cover"
-                id="profile-avatar-display"
-              />
+              <img src={editAvatar} alt={editName} className="w-full h-full object-cover" />
             ) : (
               editName.slice(0, 2)
             )}
-
-            {/* Editing Camera overlay button */}
             {isEditMode && (
-              <label className="absolute inset-0 bg-black/60 z-20 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all">
-                <Camera className="h-6 w-6 text-white stroke-[2.5]" />
-                <span className="text-[9px] text-white/80 font-mono tracking-wider uppercase font-semibold">Upload Photo</span>
-                <input
-                  type="file"
-                  onChange={handleAvatarChange}
-                  accept="image/*"
-                  className="hidden"
-                />
+              <label className="absolute inset-0 bg-black/60 z-20 flex flex-col items-center justify-center gap-1 cursor-pointer">
+                <Camera className="h-6 w-6 text-white" />
+                <span className="text-[9px] text-white/80 font-mono uppercase font-semibold">
+                  Change Photo
+                </span>
+                <input type="file" onChange={handleAvatarChange} accept="image/*" className="hidden" />
               </label>
             )}
           </div>
         </div>
 
-        {/* Name and Phone editable details block */}
-        <div className="w-full text-center space-y-4 max-w-xs select-none">
+        {/* Name / phone / email */}
+        <div className="w-full max-w-xs space-y-4">
           {isEditMode ? (
-            <div className="space-y-3" id="profile-edit-inputs">
-              <div className="space-y-1 text-left">
-                <label className="text-[9px] uppercase tracking-widest text-[#00D4FF] font-mono font-bold block">Display Name</label>
+            <div className="space-y-3">
+              <div>
+                <label className="text-[9px] uppercase tracking-widest text-[#00D4FF] font-mono font-bold block mb-1">
+                  Name
+                </label>
                 <input
                   type="text"
-                  required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-802 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-[#00D4FF]"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#00D4FF]"
                 />
               </div>
-
-              <div className="space-y-1 text-left">
-                <label className="text-[9px] uppercase tracking-widest text-[#FF006E] font-mono font-bold block">Phone Node Number</label>
+              <div>
+                <label className="text-[9px] uppercase tracking-widest text-[#FF006E] font-mono font-bold block mb-1">
+                  Phone
+                </label>
                 <input
                   type="tel"
-                  required
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-802 rounded-xl py-2 px-4 text-sm text-white focus:outline-none focus:border-[#FF006E]"
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#FF006E]"
+                />
+              </div>
+              <div>
+                <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
+                  Email (optional)
+                </label>
+                <input
+                  type="email"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-zinc-600"
                 />
               </div>
             </div>
           ) : (
-            <div className="space-y-1" id="profile-read-labels">
-              <h2 className="text-xl font-bold font-display text-white tracking-tight flex items-center justify-center gap-2">
+            <div className="text-center space-y-1">
+              <h2 className="text-2xl font-bold text-white flex items-center justify-center gap-2">
                 {editName}
-                {isFavorite && (
-                  <Star className="h-4 w-4 fill-amber-400 text-amber-400" />
-                )}
+                {isFavorite && <Star className="h-4 w-4 fill-amber-400 text-amber-400" />}
               </h2>
-              <p className="text-sm text-zinc-500 font-mono tracking-wide">{editPhone}</p>
-              <div className="flex justify-center items-center gap-1.5 text-[10px] text-[#00D4FF] font-mono uppercase font-semibold mt-1">
-                <Globe className="h-3 w-3" />
-                Channel node active
-              </div>
+              {editPhone && (
+                <p className="text-sm text-zinc-400 font-mono tracking-wide">{editPhone}</p>
+              )}
+              {editEmail && (
+                <p className="text-xs text-[#00D4FF] font-mono truncate">{editEmail}</p>
+              )}
+              {isBlocked && (
+                <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full bg-red-950/30 border border-red-900/40">
+                  <Ban className="h-3 w-3 text-red-400" />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-red-400">
+                    Blocked
+                  </span>
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Action buttons row (Message, Call, SMS) */}
+        {/* Actions row */}
         {!isEditMode && (
-          <div className="grid grid-cols-3 gap-4 w-full max-w-xs pt-4" id="profile-actions-bar">
-            
-            {/* 1. Message */}
+          <div className="grid grid-cols-4 gap-3 w-full max-w-sm pt-2">
             <button
-              onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(editPhone)}&name=${encodeURIComponent(editName)}&avatar=${encodeURIComponent(editAvatar)}`)}
-              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl transition-all cursor-pointer group active:scale-95 border border-zinc-850"
+              onClick={handleSms}
+              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl border border-zinc-850 active:scale-95 transition-all"
             >
-              <MessageSquare className="h-5 w-5 text-[#00D4FF] mb-1.5 group-hover:scale-105" />
-              <span className="text-[10px] font-sans text-zinc-300 font-medium">Text Chat</span>
+              <MessageSquare className="h-5 w-5 text-[#00D4FF] mb-1.5" />
+              <span className="text-[10px] text-zinc-300 font-medium">Message</span>
             </button>
-
-            {/* 2. Call */}
             <button
-              onClick={() => {
-                triggerVibration();
-                window.location.href = `tel:${editPhone}`;
-              }}
-              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl transition-all cursor-pointer group active:scale-95 border border-zinc-850"
+              onClick={handleCall}
+              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl border border-zinc-850 active:scale-95 transition-all"
             >
-              <Phone className="h-5 w-5 text-emerald-400 mb-1.5 group-hover:scale-105" />
-              <span className="text-[10px] font-sans text-zinc-300 font-medium">Call Node</span>
+              <Phone className="h-5 w-5 text-emerald-400 mb-1.5" />
+              <span className="text-[10px] text-zinc-300 font-medium">Call</span>
             </button>
-
-            {/* 3. SMS */}
             <button
-              onClick={() => {
-                triggerVibration();
-                window.location.href = `sms:${editPhone}`;
-              }}
-              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl transition-all cursor-pointer group active:scale-95 border border-zinc-850"
+              onClick={handleShare}
+              className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 py-3 rounded-2xl border border-zinc-850 active:scale-95 transition-all"
             >
-              <Mail className="h-5 w-5 text-[#FF006E] mb-1.5 group-hover:scale-105" />
-              <span className="text-[10px] font-sans text-zinc-300 font-medium">SMS Out</span>
+              <Share2 className="h-5 w-5 text-purple-400 mb-1.5" />
+              <span className="text-[10px] text-zinc-300 font-medium">Share</span>
             </button>
-
+            <button
+              onClick={handleToggleBlock}
+              className={`flex flex-col items-center py-3 rounded-2xl border active:scale-95 transition-all ${
+                isBlocked
+                  ? 'bg-emerald-950/20 border-emerald-900/40'
+                  : 'bg-red-950/20 border-red-900/30'
+              }`}
+            >
+              <Ban className={`h-5 w-5 mb-1.5 ${isBlocked ? 'text-emerald-400' : 'text-red-400'}`} />
+              <span className={`text-[10px] font-medium ${isBlocked ? 'text-emerald-400' : 'text-red-400'}`}>
+                {isBlocked ? 'Unblock' : 'Block'}
+              </span>
+            </button>
           </div>
         )}
 
-        {/* Edit/Save persistent action buttons */}
-        <div className="w-full max-w-xs pt-8 mt-auto" id="profile-save-controls">
+        {/* Save / Cancel + Delete */}
+        <div className="w-full max-w-sm pt-6 mt-auto">
           {isEditMode ? (
             <div className="flex gap-2">
               <button
-                type="button"
                 onClick={() => {
                   triggerVibration();
                   setIsEditMode(false);
@@ -299,36 +383,31 @@ function ProfileContent() {
                     setEditName(contact.name);
                     setEditPhone(contact.phone);
                     setEditAvatar(contact.avatar || '');
+                    setEditEmail(contact.email || '');
                   }
                 }}
-                className="flex-1 py-3 bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white font-semibold text-xs rounded-xl border border-zinc-804 transition-all cursor-pointer active:scale-97"
+                className="flex-1 py-3 bg-zinc-900 text-zinc-400 font-semibold text-xs rounded-xl border border-zinc-800 active:scale-97"
               >
-                Abort Changes
+                Cancel
               </button>
               <button
-                type="button"
                 onClick={handleSave}
-                className="flex-1 py-3 bg-gradient-to-tr from-[#FF006E] to-[#d6005c] hover:opacity-90 text-white font-semibold text-xs rounded-xl shadow-[0_0_12px_rgba(255,0,110,0.3)] transition-all cursor-pointer active:scale-97 flex items-center justify-center gap-1.5"
+                className="flex-1 py-3 bg-gradient-to-tr from-[#FF006E] to-[#d6005c] text-white font-semibold text-xs rounded-xl shadow-lg active:scale-97 flex items-center justify-center gap-1.5"
               >
-                <Check className="h-4 w-4 stroke-[2.5]" />
-                Commit Node
+                <Check className="h-4 w-4" />
+                Save
               </button>
             </div>
           ) : (
             <button
-              type="button"
-              onClick={() => {
-                triggerVibration();
-                setIsEditMode(true);
-              }}
-              className="w-full py-3.5 bg-zinc-900 border border-zinc-802 text-zinc-300 hover:text-white hover:border-[#00D4FF]/40 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-97 shadow-md"
+              onClick={handleDelete}
+              className="w-full py-3 bg-red-950/10 border border-red-900/20 text-red-400 font-semibold text-xs rounded-xl active:scale-97 flex items-center justify-center gap-2"
             >
-              <Edit2 className="h-3.5 w-3.5 text-[#00D4FF]" />
-              Modify Connection Settings
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Contact
             </button>
           )}
         </div>
-
       </main>
     </div>
   );
@@ -336,11 +415,13 @@ function ProfileContent() {
 
 export default function ProfilePage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <label className="text-zinc-500 text-xs font-mono">Opening Contact Core...</label>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-black flex items-center justify-center">
+          <label className="text-zinc-500 text-xs font-mono">Loading contact…</label>
+        </div>
+      }
+    >
       <ProfileContent />
     </Suspense>
   );

@@ -11,6 +11,7 @@ interface HeaderProps {
   backHref?: string;
   rightAction?: React.ReactNode;
   onBack?: () => void;
+  onTitleClick?: () => void;
 }
 
 export default function Header({
@@ -20,6 +21,7 @@ export default function Header({
   backHref,
   rightAction,
   onBack,
+  onTitleClick,
 }: HeaderProps) {
   const router = useRouter();
 
@@ -49,7 +51,10 @@ export default function Header({
             <X className="h-5 w-5 stroke-[2.5]" />
           </button>
           
-          <div className="flex flex-col">
+          <div
+            className={`flex flex-col ${onTitleClick ? 'cursor-pointer active:opacity-70' : ''}`}
+            onClick={onTitleClick}
+          >
             <h1 className="font-bold text-sm tracking-tight font-display text-zinc-900">
               {title}
             </h1>

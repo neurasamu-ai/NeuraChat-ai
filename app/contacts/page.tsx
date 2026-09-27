@@ -113,11 +113,11 @@ export default function ContactsPage() {
     if (wasMoved || wasLongPress) return;
 
     triggerVibration();
-    if (!contact.phone) {
-      setActiveContact(contact);
-      return;
-    }
-    router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
+    // Tap opens the unified contact card (profile page) where the user can
+    // message, call, share, block, or edit. Long press opens the quick sheet.
+    router.push(
+      `/profile?phone=${encodeURIComponent(contact.phone || '')}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`
+    );
   };
 
   // Active Selected contact for Bottom Action Sheet

@@ -675,6 +675,12 @@ function ChatDetailContent() {
         title={name}
         isChatDetail={true}
         backHref="/chats"
+        onTitleClick={() => {
+          triggerVibration();
+          router.push(
+            `/profile?phone=${encodeURIComponent(phone)}&name=${encodeURIComponent(name)}&avatar=${encodeURIComponent(avatar)}`
+          );
+        }}
         rightAction={
           <div className="flex items-center gap-1.5 select-none">
             {/* SIM badge — tap to change SMS SIM for this chat */}

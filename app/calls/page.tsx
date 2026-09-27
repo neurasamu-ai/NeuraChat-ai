@@ -363,7 +363,15 @@ export default function CallsPage() {
                     exit={{ opacity: 0, x: -50 }}
                     className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-900 hover:border-zinc-805 transition-all select-none"
                   >
-                    <div className="flex items-center gap-3">
+                    <div
+                      className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-70"
+                      onClick={() => {
+                        triggerVibration();
+                        router.push(
+                          `/profile?phone=${encodeURIComponent(log.phone)}&name=${encodeURIComponent(displayName)}&avatar=`
+                        );
+                      }}
+                    >
                       {/* Circle Avatar with initials fallback */}
                       <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
                         {displayName.slice(0, 2)}
