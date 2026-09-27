@@ -25,6 +25,9 @@ import {
 } from 'lucide-react';
 import {
   getMessages,
+  getRecentMessages,
+  getMessagesBefore,
+  getMessagesCount,
   saveMessage,
   deleteMessage,
   getChats,
@@ -52,6 +55,10 @@ function ChatDetailContent() {
   const chatId = chatIdFromPhone(phone);
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const reloadDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [inputText, setInputText] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
@@ -119,15 +126,67 @@ function ChatDetailContent() {
     fetchForwardContacts();
   }, []);
 
-  // Load message logs
+  // Load the most recent slice of the conversation. Older messages load
+  // on demand when the user scrolls to the top.
+  const MESSAGE_PAGE_SIZE = 100;
+
   const loadMessages = async () => {
     if (!phone) return;
     try {
-      // Only load existing messages. Chat entry is created on first send.
-      const logs = await getMessages(chatId);
+      const logs = await getRecentMessages(chatId, MESSAGE_PAGE_SIZE);
       setMessages(logs);
+      // If we fetched exactly the page size, there may be older messages.
+      setHasMore(logs.length === MESSAGE_PAGE_SIZE);
     } catch (e) {
-      console.error(e);
+      console.error('loadMessages failed', e);
+    }
+  };
+
+  // Debounced reload — used by live SMS status updates so a burst of
+  // events does not cause a full re-read for every single one.
+  const scheduleReload = () => {
+    if (reloadDebounceRef.current) {
+      clearTimeout(reloadDebounceRef.current);
+    }
+    reloadDebounceRef.current = setTimeout(() => {
+      reloadDebounceRef.current = null;
+      loadMessages();
+    }, 200);
+  };
+
+  // Load an older page of messages (triggered on scroll to top).
+  const loadOlderMessages = async () => {
+    if (!phone || isLoadingMore || !hasMore || messages.length === 0) return;
+    setIsLoadingMore(true);
+    try {
+      const oldest = messages[0].timestamp;
+      const older = await getMessagesBefore(chatId, oldest, MESSAGE_PAGE_SIZE);
+
+      if (older.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      // Preserve the visual scroll position: record the current distance
+      // from the top before prepending, then restore it after render.
+      const container = messagesContainerRef.current;
+      const prevScrollHeight = container?.scrollHeight ?? 0;
+      const prevScrollTop = container?.scrollTop ?? 0;
+
+      setMessages((prev) => [...older, ...prev]);
+      setHasMore(older.length === MESSAGE_PAGE_SIZE);
+
+      requestAnimationFrame(() => {
+        const c = messagesContainerRef.current;
+        if (c) {
+          const newScrollHeight = c.scrollHeight;
+          c.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+        }
+      });
+    } catch (e) {
+      console.error('loadOlderMessages failed', e);
+    } finally {
+      setIsLoadingMore(false);
     }
   };
 
@@ -262,7 +321,7 @@ function ChatDetailContent() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        loadMessages();
+        scheduleReload();
         markChatRead();
       }
     };
@@ -568,13 +627,36 @@ function ChatDetailContent() {
     const handler = (e: Event) => {
       const detail = (e as CustomEvent).detail as { chatId?: string } | undefined;
       if (!detail || detail.chatId === chatId) {
-        loadMessages();
+        scheduleReload();
       }
     };
     window.addEventListener('neura-sms-status', handler);
     return () => window.removeEventListener('neura-sms-status', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
+  // Load older messages when the user scrolls near the top.
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      if (container.scrollTop < 80 && hasMore && !isLoadingMore) {
+        loadOlderMessages();
+      }
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasMore, isLoadingMore, chatId]);
+
+  // Cleanup debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (reloadDebounceRef.current) {
+        clearTimeout(reloadDebounceRef.current);
+      }
+    };
+  }, []);
+
   useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
   useBackHandler(isShareOpen, () => setIsShareOpen(false));
   useBackHandler(isForwarding, () => {
@@ -689,7 +771,7 @@ function ChatDetailContent() {
       />
 
       {/* Messages Scroll Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
         {messages.length === 0 ? (
           /* Empty State emoji hello with name */
           <div className="flex flex-col items-center justify-center h-full text-center py-20 select-none" id="messages-empty-state">
