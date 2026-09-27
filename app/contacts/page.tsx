@@ -143,8 +143,6 @@ export default function ContactsPage() {
       await loadContactsFromDB();
     } catch (e) {
       console.error(e);
-    } catch (e) {
-      console.error(e);
     }
   };
 
