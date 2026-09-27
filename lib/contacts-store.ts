@@ -2,9 +2,10 @@
 
 import { Contact, getContacts } from './db';
 
-// Module-level contacts store shared across every screen. Pages subscribe
-// with useContacts() so unmount/mount of a tab never resets the list and
-// sync work runs once per app session, not once per mount.
+// Module-level contacts store shared across every screen.
+// Every mutation creates a NEW snapshot object so React's
+// useSyncExternalStore can detect changes by reference. Mutating a single
+// shared object would make every subscriber think nothing changed.
 
 type Listener = () => void;
 
@@ -16,7 +17,7 @@ interface ContactsState {
   error: string | null;
 }
 
-const state: ContactsState = {
+let snapshot: ContactsState = {
   contacts: [],
   loading: false,
   syncing: false,
@@ -32,70 +33,58 @@ function emit() {
   }
 }
 
+function setState(patch: Partial<ContactsState>) {
+  snapshot = { ...snapshot, ...patch };
+  emit();
+}
+
 export function subscribe(l: Listener): () => void {
   listeners.add(l);
-  return () => listeners.delete(l);
+  return () => { listeners.delete(l); };
 }
 
 export function getState(): ContactsState {
-  return state;
+  return snapshot;
 }
 
-// Direct cache read (SSR safe).
 export function getCachedContacts(): Contact[] {
-  return state.contacts;
+  return snapshot.contacts;
 }
 
-// Full refresh: reads IndexedDB into the store. Also serves as the initial
-// load for a cold start.
 export async function loadContactsFromDB(): Promise<Contact[]> {
-  if (state.loading) return state.contacts;
-  state.loading = true;
-  emit();
+  if (snapshot.loading) return snapshot.contacts;
+  setState({ loading: true });
   try {
     const rows = await getContacts();
-    state.contacts = rows;
-    state.loadedOnce = true;
-    state.error = null;
+    setState({ contacts: rows, loadedOnce: true, error: null });
     return rows;
   } catch (e: any) {
     console.error('[contacts-store] load failed', e);
-    state.error = e?.message || String(e);
-    return state.contacts;
+    setState({ error: e?.message || String(e) });
+    return snapshot.contacts;
   } finally {
-    state.loading = false;
-    emit();
+    setState({ loading: false });
   }
 }
 
-// Called by sync code when new contacts arrive (bulk). No DB read.
 export function setContacts(rows: Contact[]): void {
-  state.contacts = rows;
-  state.loadedOnce = true;
-  emit();
+  setState({ contacts: rows, loadedOnce: true });
 }
 
 export function setSyncing(v: boolean): void {
-  state.syncing = v;
-  emit();
+  setState({ syncing: v });
 }
 
 export function isSyncing(): boolean {
-  return state.syncing;
+  return snapshot.syncing;
 }
 
 export function hasLoadedOnce(): boolean {
-  return state.loadedOnce;
+  return snapshot.loadedOnce;
 }
 
-
 // ---- Auto-sync with throttle ----
-//
-// Runs a native sync at most once every SYNC_INTERVAL_MS. Called on app
-// start and on foreground so contacts stay fresh without hammering the
-// device on every mount.
-
-const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 min
+const SYNC_INTERVAL_MS = 10 * 60 * 1000;
 const LAST_SYNC_KEY = 'contacts_last_sync_ts';
 
 let syncPromise: Promise<void> | null = null;
@@ -117,18 +106,12 @@ function setLastSyncTs(ts: number): void {
   } catch {}
 }
 
-// Ensure the cache is shown immediately, then kick a native sync in the
-// background if it is due. Returns as soon as the cache read completes.
 export async function bootstrapContacts(): Promise<void> {
-  // 1. Show cached data instantly.
   await loadContactsFromDB();
 
-  // 2. Kick a background sync if due.
   const now = Date.now();
   const last = getLastSyncTs();
   if (now - last < SYNC_INTERVAL_MS) return;
-
-  // De-dupe parallel calls.
   if (syncPromise) return syncPromise;
 
   syncPromise = (async () => {
@@ -148,7 +131,6 @@ export async function bootstrapContacts(): Promise<void> {
   return syncPromise;
 }
 
-// Force a sync regardless of the throttle (manual refresh button).
 export async function forceSyncContacts(): Promise<void> {
   if (syncPromise) return syncPromise;
   syncPromise = (async () => {
