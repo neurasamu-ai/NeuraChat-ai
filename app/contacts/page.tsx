@@ -22,7 +22,6 @@ import {
   Ban
 } from 'lucide-react';
 import {
-  getContacts,
   saveContact,
   deleteContact,
   Contact
@@ -37,12 +36,15 @@ import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAc
 import { dispatchCall } from '@/lib/telecom-plugin';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
+import { useContacts } from '@/lib/use-contacts';
+import { loadContactsFromDB, setSyncing as setStoreSyncing } from '@/lib/contacts-store';
 
 export default function ContactsPage() {
   const router = useRouter();
 
-  const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const contactsStore = useContacts();
+  const contacts = contactsStore.contacts;
+  const storeLoading = contactsStore.loading && !contactsStore.loadedOnce;
   const [syncing, setSyncing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -138,12 +140,11 @@ export default function ContactsPage() {
 
   const loadContactsData = async () => {
     try {
-      const data = await getContacts();
-      setContacts(data);
+      await loadContactsFromDB();
     } catch (e) {
       console.error(e);
-    } finally {
-      setLoading(false);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -227,10 +228,8 @@ export default function ContactsPage() {
       if (cancelled) return;
 
       try {
-        const synced = await syncDeviceContacts();
-        if (!cancelled && synced.length > 0) {
-          await loadContactsData();
-        }
+        await syncDeviceContacts();
+        // store already refreshed internally
       } catch (e) {
         console.error('auto sync failed', e);
       }
@@ -487,7 +486,7 @@ export default function ContactsPage() {
           />
         </div>
 
-        {loading ? (
+        {storeLoading ? (
           <div className="space-y-2.5" id="contacts-skeleton">
             {[1, 2, 3].map(n => (
               <div key={n} className="flex gap-3 p-2 bg-zinc-950 border border-zinc-900 rounded-lg animate-pulse">

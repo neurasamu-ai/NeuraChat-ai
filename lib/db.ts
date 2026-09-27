@@ -332,6 +332,22 @@ export async function saveContact(contact: Contact): Promise<void> {
   await db.put('contacts', contact);
 }
 
+// Bulk write: many contacts in one transaction. Dramatically faster than
+// calling saveContact in a loop for large contact lists.
+export async function saveContactsBulk(contacts: Contact[]): Promise<number> {
+  if (!contacts || contacts.length === 0) return 0;
+  const db = await getDB();
+  if (!db) return 0;
+  const tx = db.transaction('contacts', 'readwrite');
+  let written = 0;
+  for (const c of contacts) {
+    await tx.store.put(c);
+    written++;
+  }
+  await tx.done;
+  return written;
+}
+
 export async function deleteContact(id: string): Promise<void> {
   const db = await getDB();
   if (!db) return;

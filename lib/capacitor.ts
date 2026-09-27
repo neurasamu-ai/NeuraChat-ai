@@ -46,13 +46,12 @@ function sourceLabelFor(accountType: string | null, accountName: string | null):
 }
 
 export async function syncDeviceContacts(): Promise<Contact[]> {
-  const syncedContacts: Contact[] = [];
+  const collected: Contact[] = [];
 
   try {
     if (typeof window === 'undefined') return [];
     if (!isNativePlatform()) return [];
 
-    // Prefer our own NeuraContactsPlugin (richer data: account, rawContactId)
     if (isContactsPluginAvailable()) {
       const rows = await getContactsWithSources();
       if (rows.length > 0) {
@@ -71,7 +70,7 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
           const id = `cap-${stableKey}`;
           const prev = existingById.get(id);
 
-          const newContact: Contact = {
+          collected.push({
             id,
             name: name || prev?.name || 'Unknown',
             phone: row.phone || prev?.phone || '',
@@ -83,11 +82,23 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
             rawContactId: row.rawContactId || undefined,
             contactId: row.contactId || undefined,
             sourceLabel: sourceLabelFor(row.accountType, row.accountName),
-          };
-          await saveContact(newContact);
-          syncedContacts.push(newContact);
+          });
         }
-        return syncedContacts;
+
+        // Bulk write + refresh the global store once. Avoids hundreds of
+        // individual transactions and prevents partial lists from being
+        // surfaced to the UI.
+        const { saveContactsBulk } = await import('./db');
+        await saveContactsBulk(collected);
+
+        try {
+          const { loadContactsFromDB } = await import('./contacts-store');
+          await loadContactsFromDB();
+        } catch (e) {
+          console.warn('[contacts] store refresh failed', e);
+        }
+
+        return collected;
       }
     }
 
@@ -128,7 +139,7 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
       const id = `cap-${stableKey}`;
       const prev = existingById.get(id);
 
-      const newContact: Contact = {
+      collected.push({
         id,
         name: name || prev?.name || 'Unknown',
         phone: cleanPhone || prev?.phone || '',
@@ -136,13 +147,21 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
         avatar: prev?.avatar,
         favorite: prev?.favorite ?? false,
         sourceLabel: prev?.sourceLabel || 'Device',
-      };
-      await saveContact(newContact);
-      syncedContacts.push(newContact);
+      });
+    }
+
+    const { saveContactsBulk } = await import('./db');
+    await saveContactsBulk(collected);
+
+    try {
+      const { loadContactsFromDB } = await import('./contacts-store');
+      await loadContactsFromDB();
+    } catch (e) {
+      console.warn('[contacts] store refresh failed', e);
     }
   } catch (error) {
     console.error('[Contacts] syncDeviceContacts failed:', error);
   }
 
-  return syncedContacts;
+  return collected;
 }
