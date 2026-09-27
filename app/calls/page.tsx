@@ -22,7 +22,6 @@ import {
   getCallLogs,
   saveCallLog,
   deleteCallLog,
-  getContacts,
   Contact,
   CallLog
 } from '@/lib/db';
@@ -36,7 +35,8 @@ import { normalizePhone, phonesMatch } from '@/lib/phone';
 export default function CallsPage() {
   const router = useRouter();
   const [callLogs, setCallLogs] = useState<CallLog[]>([]);
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const contactsStore = useContacts();
+  const contacts = contactsStore.contacts;
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
 
@@ -113,9 +113,7 @@ export default function CallsPage() {
   const loadCallsAndContacts = async () => {
     try {
       const logs = await getCallLogs();
-      const storedContacts = await getContacts();
       setCallLogs(logs);
-      setContacts(storedContacts);
     } catch (e) {
       console.error(e);
     } finally {

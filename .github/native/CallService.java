@@ -140,6 +140,21 @@ public class CallService extends InCallService {
         // by the UI / getCurrentCall (best effort).
         isIncoming = pc.isIncoming;
 
+        // Outgoing call: emit immediately so the JS layer can log it in
+        // app history regardless of which screen placed the call.
+        if (!pc.isIncoming) {
+            try {
+                String num = getNumber(call);
+                String nm = lookupName(num);
+                pc.number = num;
+                pc.name = nm;
+                pc.wasLogged = true;
+                TelecomPlugin.dispatchOutgoingCall(num, nm, System.currentTimeMillis());
+            } catch (Exception e) {
+                Log.w(TAG, "dispatchOutgoingCall failed", e);
+            }
+        }
+
         updateState(call, call.getState());
 
         // Bring MainActivity up so the in-call UI can render.

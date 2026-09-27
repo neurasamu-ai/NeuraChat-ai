@@ -47,6 +47,10 @@ export interface TelecomPluginType {
     eventName: 'answeredCall',
     listener: (data: { number: string; name: string; timestamp: number }) => void
   ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'outgoingCall',
+    listener: (data: { number: string; name: string; timestamp: number }) => void
+  ): Promise<{ remove: () => void }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
   acceptCall(): Promise<void>;
@@ -390,5 +394,18 @@ export async function snoozeCallNative(number: string, minutes: number): Promise
   } catch (e) {
     console.error('[Telecom] snoozeCall failed', e);
     return false;
+  }
+}
+
+
+export async function addOutgoingCallListener(
+  cb: (data: { number: string; name: string; timestamp: number }) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isTelecomPluginAvailable()) return null;
+  try {
+    return await TelecomPlugin.addListener('outgoingCall', cb);
+  } catch (e) {
+    console.error('[Telecom] addOutgoingCallListener failed', e);
+    return null;
   }
 }
