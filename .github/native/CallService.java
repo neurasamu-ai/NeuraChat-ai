@@ -111,6 +111,14 @@ public class CallService extends InCallService {
                 try { call.disconnect(); } catch (Exception ignore) {}
                 return;
             }
+            // Snoozed number: silently reject until the window expires.
+            if (isIncoming && num != null && !num.isEmpty()
+                    && SnoozeStore.isSnoozed(getApplicationContext(), num)) {
+                Log.d(TAG, "rejecting snoozed incoming call from " + num);
+                try { call.reject(false, null); } catch (Exception ignore) {}
+                try { call.disconnect(); } catch (Exception ignore) {}
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "blocked check failed", e);
         }

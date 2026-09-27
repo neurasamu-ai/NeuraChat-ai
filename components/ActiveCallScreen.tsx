@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Pause, Play, User, Grid3x3, Circle, Square, X } from 'lucide-react';
 import { sendSms, isSmsPluginAvailable } from '@/lib/sms-plugin';
+import { snoozeCallNative } from '@/lib/telecom-plugin';
 import {
   getCurrentCall,
   addCallStateListener,
@@ -116,15 +117,28 @@ export default function ActiveCallScreen() {
 
   const handleSnooze = async (minutes: number) => {
     setSnoozeOpen(false);
+    const target = call.number || '';
+
+    // Register the snooze window first so any further call from this
+    // number is auto-rejected by CallService until it expires.
+    if (target) {
+      try {
+        await snoozeCallNative(target, minutes);
+        console.log(`snoozed ${target} for ${minutes} min`);
+      } catch (e) {
+        console.error('snoozeCallNative failed', e);
+      }
+    }
+
+    // Reject the current incoming call.
     try {
-      // Reject the current incoming call.
       await endCall();
     } catch (e) {
       console.error('snooze endCall failed', e);
     }
-    // Send an SMS to the caller.
+
+    // Send the auto-reply SMS.
     try {
-      const target = call.number || '';
       if (target && isSmsPluginAvailable()) {
         const message = `I'm busy right now. Please call back in ${minutes} minutes.`;
         await sendSms(target, message);

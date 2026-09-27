@@ -65,6 +65,7 @@ jobs:
         cp .github/native/AiWebViewPlugin.java $TARGET/
         cp .github/native/AiWebViewActivity.java $TARGET/
         cp .github/native/BlockedStore.java $TARGET/
+        cp .github/native/SnoozeStore.java $TARGET/
         cp .github/native/NeuraContactsPlugin.java $TARGET/
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/

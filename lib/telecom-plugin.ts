@@ -54,6 +54,7 @@ export interface TelecomPluginType {
   toggleSpeaker(options: { enable: boolean }): Promise<{ speakerOn: boolean }>;
   toggleMute(options: { enable: boolean }): Promise<{ muted: boolean }>;
   toggleHold(options: { enable: boolean }): Promise<void>;
+  snoozeCall(options: { number: string; minutes: number }): Promise<{ ok: boolean }>;
   playDtmf(options: { tone: string }): Promise<{ ok: boolean }>;
   stopDtmf(): Promise<void>;
   startRecording(): Promise<{ ok: boolean; path?: string }>;
@@ -378,4 +379,16 @@ export async function swapToCall(id: string): Promise<boolean> {
   if (!isTelecomPluginAvailable()) return false;
   try { await TelecomPlugin.swapToCall({ id }); return true; }
   catch (e) { console.error(e); return false; }
+}
+
+
+export async function snoozeCallNative(number: string, minutes: number): Promise<boolean> {
+  if (!isTelecomPluginAvailable()) return false;
+  try {
+    await TelecomPlugin.snoozeCall({ number, minutes });
+    return true;
+  } catch (e) {
+    console.error('[Telecom] snoozeCall failed', e);
+    return false;
+  }
 }

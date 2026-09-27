@@ -734,4 +734,26 @@ public class TelecomPlugin extends Plugin {
         if (lastRecordingPath != null) ret.put("lastPath", lastRecordingPath);
         call.resolve(ret);
     }
+
+    // Snooze a caller: sets a window during which any call from that number
+    // is auto-rejected. CallService reads this store on every incoming call.
+    @PluginMethod
+    public void snoozeCall(PluginCall call) {
+        String number = call.getString("number");
+        Integer minutes = call.getInt("minutes");
+        if (number == null || number.isEmpty() || minutes == null) {
+            call.reject("number and minutes are required");
+            return;
+        }
+        try {
+            SnoozeStore.setSnooze(getContext(), number, minutes);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("minutes", minutes);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "snoozeCall failed", e);
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
 }

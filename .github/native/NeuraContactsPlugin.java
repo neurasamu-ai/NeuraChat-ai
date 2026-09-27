@@ -86,7 +86,13 @@ public class NeuraContactsPlugin extends Plugin {
 
                 JSObject acc = new JSObject();
                 acc.put("id", a.type + "|" + a.name);
-                acc.put("label", isGoogle ? "Google" : a.type);
+                // Include the account email so the user can tell multiple
+                // Google accounts apart in the Save-to dropdown.
+                String friendlyType = isGoogle ? "Google" : "Exchange";
+                String label = (a.name != null && !a.name.isEmpty())
+                    ? friendlyType + " · " + a.name
+                    : friendlyType;
+                acc.put("label", label);
                 acc.put("accountName", a.name);
                 acc.put("accountType", a.type);
                 acc.put("writable", true);
