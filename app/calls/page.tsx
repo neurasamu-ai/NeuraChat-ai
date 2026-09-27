@@ -31,6 +31,7 @@ import { generateId, getCurrentTimestamp, getRandomCallDuration } from '@/lib/ut
 import { useBackHandler } from '@/lib/use-back-handler';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { normalizePhone, phonesMatch } from '@/lib/phone';
+import { useContacts } from '@/lib/use-contacts';
 
 export default function CallsPage() {
   const router = useRouter();
