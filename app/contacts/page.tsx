@@ -26,7 +26,6 @@ import {
   deleteContact,
   Contact
 } from '@/lib/db';
-import { syncDeviceContacts, isNativePlatform } from '@/lib/capacitor';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
@@ -37,7 +36,7 @@ import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { useContacts } from '@/lib/use-contacts';
-import { loadContactsFromDB, setSyncing as setStoreSyncing } from '@/lib/contacts-store';
+import { bootstrapContacts, forceSyncContacts, loadContactsFromDB } from '@/lib/contacts-store';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -151,10 +150,8 @@ export default function ContactsPage() {
     triggerVibration();
     setSyncing(true);
     try {
-      if (isNativePlatform()) {
-        await syncDeviceContacts();
-      }
-      await loadContactsData();
+      await forceSyncContacts();
+      await loadContactsFromDB();
     } catch (e) {
       console.error('reload failed', e);
     } finally {
@@ -200,11 +197,9 @@ export default function ContactsPage() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        loadContactsData();
-        // If native and empty, try a sync too (idempotent).
-        if (isNativePlatform()) {
-          syncDeviceContacts().then(() => loadContactsData()).catch(() => {});
-        }
+        // Reads from the cache instantly; a sync runs only if the throttle
+        // window has elapsed since the last successful sync.
+        bootstrapContacts().catch(() => {});
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -214,26 +209,15 @@ export default function ContactsPage() {
 
   useEffect(() => {
     let cancelled = false;
-
-    const run = async () => {
-      await loadContactsData();
-      if (cancelled) return;
-      if (typeof window === 'undefined') return;
-      if (!isNativePlatform()) return;
-
-      // Shorter warm-up; sync runs after the cached list is already shown.
-      await new Promise((r) => setTimeout(r, 150));
-      if (cancelled) return;
-
+    (async () => {
       try {
-        await syncDeviceContacts();
-        // store already refreshed internally
+        // Cache first (instant), then a throttled background sync if due.
+        await bootstrapContacts();
       } catch (e) {
-        console.error('auto sync failed', e);
+        console.error('bootstrap failed', e);
       }
-    };
-
-    run();
+      if (cancelled) return;
+    })();
     return () => {
       cancelled = true;
     };

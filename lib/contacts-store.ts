@@ -87,3 +87,82 @@ export function isSyncing(): boolean {
 export function hasLoadedOnce(): boolean {
   return state.loadedOnce;
 }
+
+
+// ---- Auto-sync with throttle ----
+//
+// Runs a native sync at most once every SYNC_INTERVAL_MS. Called on app
+// start and on foreground so contacts stay fresh without hammering the
+// device on every mount.
+
+const SYNC_INTERVAL_MS = 10 * 60 * 1000; // 10 min
+const LAST_SYNC_KEY = 'contacts_last_sync_ts';
+
+let syncPromise: Promise<void> | null = null;
+
+function getLastSyncTs(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const v = localStorage.getItem(LAST_SYNC_KEY);
+    return v ? parseInt(v, 10) || 0 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLastSyncTs(ts: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(LAST_SYNC_KEY, String(ts));
+  } catch {}
+}
+
+// Ensure the cache is shown immediately, then kick a native sync in the
+// background if it is due. Returns as soon as the cache read completes.
+export async function bootstrapContacts(): Promise<void> {
+  // 1. Show cached data instantly.
+  await loadContactsFromDB();
+
+  // 2. Kick a background sync if due.
+  const now = Date.now();
+  const last = getLastSyncTs();
+  if (now - last < SYNC_INTERVAL_MS) return;
+
+  // De-dupe parallel calls.
+  if (syncPromise) return syncPromise;
+
+  syncPromise = (async () => {
+    try {
+      const { syncDeviceContacts } = await import('./capacitor');
+      setSyncing(true);
+      await syncDeviceContacts();
+      setLastSyncTs(Date.now());
+    } catch (e) {
+      console.error('[contacts-store] background sync failed', e);
+    } finally {
+      setSyncing(false);
+      syncPromise = null;
+    }
+  })();
+
+  return syncPromise;
+}
+
+// Force a sync regardless of the throttle (manual refresh button).
+export async function forceSyncContacts(): Promise<void> {
+  if (syncPromise) return syncPromise;
+  syncPromise = (async () => {
+    try {
+      const { syncDeviceContacts } = await import('./capacitor');
+      setSyncing(true);
+      await syncDeviceContacts();
+      setLastSyncTs(Date.now());
+    } catch (e) {
+      console.error('[contacts-store] forced sync failed', e);
+    } finally {
+      setSyncing(false);
+      syncPromise = null;
+    }
+  })();
+  return syncPromise;
+}
