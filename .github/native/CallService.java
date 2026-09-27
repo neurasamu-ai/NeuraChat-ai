@@ -95,6 +95,26 @@ public class CallService extends InCallService {
     @Override
     public void onCallAdded(Call call) {
         super.onCallAdded(call);
+
+        // Drop blocked incoming calls before we do anything else.
+        try {
+            String num = "";
+            if (call.getDetails() != null && call.getDetails().getHandle() != null) {
+                num = call.getDetails().getHandle().getSchemeSpecificPart();
+            }
+            boolean isIncoming = call.getDetails() != null
+                && call.getDetails().getCallDirection() == Call.Details.DIRECTION_INCOMING;
+            if (isIncoming && num != null && !num.isEmpty()
+                    && BlockedStore.isBlocked(getApplicationContext(), num)) {
+                Log.d(TAG, "rejecting blocked incoming call from " + num);
+                try { call.reject(false, null); } catch (Exception ignore) {}
+                try { call.disconnect(); } catch (Exception ignore) {}
+                return;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "blocked check failed", e);
+        }
+
         activeCall = call;
         call.registerCallback(callCallback);
 

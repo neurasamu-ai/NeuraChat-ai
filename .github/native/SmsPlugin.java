@@ -479,4 +479,27 @@ public class SmsPlugin extends Plugin {
         }
         call.resolve(ret);
     }
+
+    // Receive the blocked list from JS and persist it for the native
+    // receivers to consult. Called whenever the user blocks or unblocks.
+    @PluginMethod
+    public void syncBlockedList(PluginCall call) {
+        try {
+            com.getcapacitor.JSArray arr = call.getArray("numbers");
+            java.util.List<String> out = new java.util.ArrayList<>();
+            if (arr != null) {
+                for (int i = 0; i < arr.length(); i++) {
+                    out.add(arr.getString(i));
+                }
+            }
+            BlockedStore.replaceAll(getContext(), out.toArray(new String[0]));
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("count", out.size());
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "syncBlockedList failed", e);
+            call.reject("Failed: " + e.getMessage());
+        }
+    }
 }

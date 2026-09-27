@@ -42,6 +42,7 @@ export interface SmsPluginType {
   requestDefaultSmsRole(): Promise<{ launched: boolean }>;
   openAppInfo(): Promise<void>;
   getPendingNavigation(): Promise<{ type?: string; phone?: string; name?: string }>;
+  syncBlockedList(options: { numbers: string[] }): Promise<{ ok: boolean; count?: number }>;
   addListener(
     eventName: 'smsReceived' | 'smsSent',
     listener: (data: IncomingSms) => void
@@ -226,5 +227,17 @@ export async function getPendingNavigation(): Promise<{
   } catch (e) {
     console.error('[Sms] getPendingNavigation failed', e);
     return {};
+  }
+}
+
+
+export async function syncBlockedListToNative(numbers: string[]): Promise<boolean> {
+  if (!isSmsPluginAvailable()) return false;
+  try {
+    await SmsPlugin.syncBlockedList({ numbers });
+    return true;
+  } catch (e) {
+    console.error('[Sms] syncBlockedList failed', e);
+    return false;
   }
 }

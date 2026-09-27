@@ -104,6 +104,18 @@ export default function SmsInboxBridge() {
         return;
       }
 
+      // Push the persisted blocked list to native so SMS / calls from
+      // blocked numbers are dropped even after a cold start.
+      try {
+        const { getBlockedContacts } = await import('@/lib/db');
+        const { syncBlockedListToNative } = await import('@/lib/sms-plugin');
+        const list = await getBlockedContacts();
+        await syncBlockedListToNative(list.map((x) => x.phone));
+        console.log('[SmsInbox] blocked list synced to native, count=', list.length);
+      } catch (e) {
+        console.error('[SmsInbox] blocked list sync failed', e);
+      }
+
       // Drain queued SMS (received while app was closed)
       try {
         const queued = await drainIncomingSms();

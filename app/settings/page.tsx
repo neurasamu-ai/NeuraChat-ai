@@ -14,7 +14,8 @@ import {
   Laptop,
   Phone,
   MessageSquare,
-  Shield as ShieldIcon
+  Shield as ShieldIcon,
+  Ban
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -24,6 +25,8 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
+import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -52,6 +55,8 @@ export default function SettingsPage() {
   const [smsSimId, setSmsSimId] = useState<number | null>(null);
   const [defaultSmsOk, setDefaultSmsOk] = useState<boolean>(true);
   const [defaultDialerOk, setDefaultDialerOk] = useState<boolean>(true);
+  const [isBlockedOpen, setIsBlockedOpen] = useState(false);
+  const [blockedList, setBlockedList] = useState<BlockedContact[]>([]);
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -66,6 +71,18 @@ export default function SettingsPage() {
 
 
   // Load communication settings when the modal opens.
+  useEffect(() => {
+    if (!isBlockedOpen) return;
+    (async () => {
+      try {
+        const list = await getBlockedContacts();
+        setBlockedList(list);
+      } catch (e) {
+        console.error('blocked load failed', e);
+      }
+    })();
+  }, [isBlockedOpen]);
+
   useEffect(() => {
     if (!isCommsOpen) return;
     (async () => {
@@ -143,6 +160,7 @@ export default function SettingsPage() {
   // ---- Back-button integration ----
   useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
   useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
+  useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
   return (
@@ -281,6 +299,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <Phone className="h-4 w-4 text-[#10b981]" />
               <span className="text-xs font-medium text-zinc-200">Calls & SMS</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
+
+          {/* Blocked Contacts */}
+          <div
+            onClick={() => {
+              triggerVibration();
+              setIsBlockedOpen(true);
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <Ban className="h-4 w-4 text-red-500" />
+              <span className="text-xs font-medium text-zinc-200">Blocked Contacts</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -582,6 +615,74 @@ export default function SettingsPage() {
                 >
                   Done
                 </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ========== BLOCKED CONTACTS MODAL ========== */}
+        <AnimatePresence>
+          {isBlockedOpen && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[80vh] overflow-y-auto"
+              >
+                <button
+                  onClick={() => setIsBlockedOpen(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold text-white mb-1">Blocked Contacts</h3>
+                <p className="text-[11px] text-zinc-500 mb-4">
+                  Calls and messages from these numbers are ignored.
+                </p>
+
+                {blockedList.length === 0 ? (
+                  <div className="text-center py-10">
+                    <Ban className="h-8 w-8 mx-auto text-zinc-600 mb-3" />
+                    <p className="text-xs text-zinc-500">No blocked contacts</p>
+                    <p className="text-[10px] text-zinc-600 mt-1">
+                      Long-press a contact or use the options menu to block.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {blockedList.map((b) => (
+                      <div
+                        key={b.id}
+                        className="flex items-center justify-between p-3 rounded-2xl bg-zinc-900 border border-zinc-800"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-semibold text-white truncate">{b.name}</p>
+                          <p className="text-[10px] text-zinc-500 font-mono truncate">
+                            {b.phone}
+                          </p>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            triggerVibration();
+                            await unblockContact(b.id);
+                            const list = await getBlockedContacts();
+                            setBlockedList(list);
+                            try {
+                              await syncBlockedListToNative(list.map((x) => x.phone));
+                            } catch (e) {
+                              console.error('native block sync failed', e);
+                            }
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-[#00D4FF]/15 text-[#00D4FF] text-[10px] font-bold uppercase tracking-wider active:scale-95"
+                        >
+                          Unblock
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
             </div>
           )}

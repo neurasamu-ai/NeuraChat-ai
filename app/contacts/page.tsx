@@ -18,7 +18,8 @@ import {
   Camera,
   Trash2,
   Info,
-  RefreshCw
+  RefreshCw,
+  Ban
 } from 'lucide-react';
 import {
   getContacts,
@@ -34,6 +35,8 @@ import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
 import { dispatchCall } from '@/lib/telecom-plugin';
+import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
+import { syncBlockedListToNative } from '@/lib/sms-plugin';
 
 export default function ContactsPage() {
   const router = useRouter();
@@ -128,6 +131,7 @@ export default function ContactsPage() {
   const [accounts, setAccounts] = useState<WritableAccount[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [activeIsBlocked, setActiveIsBlocked] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('neurachat');
   const [addAvatar, setAddAvatar] = useState<string>('');
   const [addError, setAddError] = useState('');
@@ -427,6 +431,22 @@ export default function ContactsPage() {
     }
     groupedContacts[key].push(c);
   });
+
+  // Reflect block status whenever the action sheet opens.
+  useEffect(() => {
+    if (!activeContact) {
+      setActiveIsBlocked(false);
+      return;
+    }
+    (async () => {
+      try {
+        const blocked = await isBlocked(activeContact.phone);
+        setActiveIsBlocked(blocked);
+      } catch (e) {
+        console.error('isBlocked failed', e);
+      }
+    })();
+  }, [activeContact]);
 
   // ---- Back-button integration ----
   useBackHandler(isAddOpen, () => setIsAddOpen(false));
@@ -754,6 +774,38 @@ export default function ContactsPage() {
                       {activeContact.favorite ? 'Remove from Favorites' : 'Add to Favorites'}
                     </span>
                     <Star className={`h-4 w-4 ${activeContact.favorite ? 'fill-amber-400 text-amber-400' : 'text-zinc-500'}`} />
+                  </button>
+
+                  <button
+                    onClick={async () => {
+                      triggerVibration();
+                      if (!activeContact) return;
+                      if (activeIsBlocked) {
+                        await unblockContact(`blocked-${(activeContact.phone || '').replace(/\D/g, '')}`);
+                        setActiveIsBlocked(false);
+                      } else {
+                        await blockContact({ name: activeContact.name, phone: activeContact.phone });
+                        setActiveIsBlocked(true);
+                      }
+                      // Push the updated block list to native so SMS / calls
+                      // from this number are dropped immediately.
+                      try {
+                        const list = await getBlockedContacts();
+                        await syncBlockedListToNative(list.map((x) => x.phone));
+                      } catch (e) {
+                        console.error('native block sync failed', e);
+                      }
+                    }}
+                    className={`w-full border py-2.5 px-4 rounded-xl flex items-center justify-between transition-colors cursor-pointer ${
+                      activeIsBlocked
+                        ? 'bg-emerald-950/10 border-emerald-900/30 hover:bg-emerald-900/10 text-emerald-400'
+                        : 'bg-red-950/10 border-red-900/20 hover:bg-red-900/10 text-red-400'
+                    }`}
+                  >
+                    <span className="text-xs font-sans font-medium">
+                      {activeIsBlocked ? 'Unblock Contact' : 'Block Contact'}
+                    </span>
+                    <Ban className="h-4 w-4" />
                   </button>
 
                   <button

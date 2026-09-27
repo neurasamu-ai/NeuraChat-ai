@@ -44,6 +44,13 @@ export interface CallLog {
   duration: number;
 }
 
+export interface BlockedContact {
+  id: string;
+  name: string;
+  phone: string;
+  blockedAt: number;
+}
+
 export interface UserProfile {
   name: string;
   avatar?: string;
@@ -53,7 +60,7 @@ export interface UserProfile {
 }
 
 const DB_NAME = 'neurachat_db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -83,6 +90,18 @@ export function getDB() {
         }
         if (!db.objectStoreNames.contains('userProfile')) {
           db.createObjectStore('userProfile');
+        }
+        if (!db.objectStoreNames.contains('blocked')) {
+          const blocked = db.createObjectStore('blocked', { keyPath: 'id' });
+          blocked.createIndex('phone', 'phone');
+        }
+
+        // Migration v2 -> v3: add blocked store
+        if (oldVersion >= 2 && oldVersion < 3) {
+          if (!db.objectStoreNames.contains('blocked')) {
+            const blocked = db.createObjectStore('blocked', { keyPath: 'id' });
+            blocked.createIndex('phone', 'phone');
+          }
         }
 
         // Migration v1 -> v2: add indexes to existing stores (data preserved)
@@ -379,4 +398,49 @@ export async function saveUserProfile(profile: UserProfile): Promise<void> {
   const db = await getDB();
   if (!db) return;
   await db.put('userProfile', profile, 'main');
+}
+
+// ============================================
+// BLOCKED CONTACTS
+// ============================================
+
+export async function getBlockedContacts(): Promise<BlockedContact[]> {
+  const db = await getDB();
+  if (!db) return [];
+  const all = await db.getAll('blocked');
+  return all.sort((a, b) => b.blockedAt - a.blockedAt);
+}
+
+export async function isBlocked(phone: string): Promise<boolean> {
+  if (!phone) return false;
+  const db = await getDB();
+  if (!db) return false;
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return false;
+  const rows = await db.getAll('blocked');
+  return rows.some((b) => {
+    const bDigits = (b.phone || '').replace(/\D/g, '');
+    if (!bDigits) return false;
+    return bDigits === digits || digits.endsWith(bDigits) || bDigits.endsWith(digits);
+  });
+}
+
+export async function blockContact(contact: { name: string; phone: string }): Promise<void> {
+  const db = await getDB();
+  if (!db) return;
+  const phone = (contact.phone || '').replace(/\s+/g, '');
+  if (!phone) return;
+  const id = `blocked-${phone.replace(/\D/g, '')}`;
+  await db.put('blocked', {
+    id,
+    name: contact.name || phone,
+    phone,
+    blockedAt: Date.now(),
+  });
+}
+
+export async function unblockContact(id: string): Promise<void> {
+  const db = await getDB();
+  if (!db) return;
+  await db.delete('blocked', id);
 }

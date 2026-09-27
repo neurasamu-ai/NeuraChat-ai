@@ -37,6 +37,12 @@ public class SmsReceiver extends BroadcastReceiver {
             }
 
             // 1. Persist + queue for app inbox
+            // Drop messages from blocked numbers before anything else runs.
+            if (sender != null && BlockedStore.isBlocked(context, sender)) {
+                Log.d(TAG, "dropped blocked SMS from " + sender);
+                return;
+            }
+
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
             // 2. Show notification with Reply + Mark as read
             SmsNotifier.show(context, sender, body.toString(), timestamp);
