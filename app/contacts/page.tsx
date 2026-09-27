@@ -33,7 +33,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
-import { dispatchCall } from '@/lib/telecom-plugin';
+import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { useContacts } from '@/lib/use-contacts';
@@ -638,7 +638,12 @@ export default function ContactsPage() {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 triggerVibration();
-                                await dispatchCall(contact.phone);
+                                try {
+                                  const pref = getPreferredCallSimId();
+                                  await placeCall(contact.phone, pref || undefined);
+                                } catch (err) {
+                                  console.error('call failed', err);
+                                }
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
                               className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
@@ -730,7 +735,12 @@ export default function ContactsPage() {
                   <button
                     onClick={async () => {
                       triggerVibration();
-                      await dispatchCall(activeContact.phone);
+                      try {
+                        const pref = getPreferredCallSimId();
+                        await placeCall(activeContact.phone, pref || undefined);
+                      } catch (err) {
+                        console.error('call failed', err);
+                      }
                     }}
                     className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 p-3 rounded-2xl transition-colors cursor-pointer group active:scale-95"
                   >
