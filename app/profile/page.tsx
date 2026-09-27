@@ -26,7 +26,7 @@ import {
   Contact,
 } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
-import { updateContactNative, deleteRawContact } from '@/lib/neura-contacts';
+import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount } from '@/lib/neura-contacts';
 import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
@@ -51,6 +51,8 @@ function ProfileContent() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [accounts, setAccounts] = useState<WritableAccount[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
   // Load contact
   useEffect(() => {
@@ -96,6 +98,37 @@ function ProfileContent() {
     loadContact();
   }, [urlPhone, urlName, urlAvatar]);
 
+  // Load writable accounts for the Save-to dropdown (edit mode).
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getWritableAccounts();
+        setAccounts(list);
+      } catch (e) {
+        console.error('accounts load failed', e);
+      }
+    })();
+  }, []);
+
+  // Initialize selected account once the contact is loaded.
+  useEffect(() => {
+    if (!contact) return;
+    const match = accounts.find((a) => {
+      // Match by accountType + accountName when present.
+      if (contact.accountType && a.accountType === contact.accountType) {
+        if (!contact.accountName || !a.accountName) return true;
+        return a.accountName === contact.accountName;
+      }
+      // Device / local contacts: no accountType.
+      if (!contact.accountType && a.id === 'device') return true;
+      // NeuraChat-only contacts.
+      if (!contact.rawContactId && a.id === 'neurachat') return true;
+      return false;
+    });
+    if (match) setSelectedAccountId(match.id);
+    else if (accounts.length > 0) setSelectedAccountId(accounts[0].id);
+  }, [contact, accounts]);
+
   const triggerVibration = () => {
     if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(30);
   };
@@ -118,10 +151,67 @@ function ProfileContent() {
     const newPhone = editPhone.replace(/\s+/g, '');
     const newEmail = editEmail.trim();
 
-    // If this contact came from the device / Google / SIM, update it at the
-    // source first. Only update the local record after the native write
-    // succeeds (or there is no native source to write to).
-    if (contact.rawContactId && (contact.accountType || contact.accountName)) {
+    const chosen = accounts.find((a) => a.id === selectedAccountId);
+    const originalWasNative = !!contact.rawContactId;
+
+    // Determine if the user changed accounts (a "move").
+    const accountChanged = (() => {
+      if (!chosen) return false;
+      if (!originalWasNative) {
+        // Was a local-only NeuraChat contact; user picked native → move.
+        return chosen.id !== 'neurachat';
+      }
+      // Was native; compare accountType / accountName.
+      const origType = contact.accountType || null;
+      const origName = contact.accountName || null;
+      const newType = chosen.accountType || null;
+      const newName2 = chosen.accountName || null;
+      return origType !== newType || origName !== newName2;
+    })();
+
+    // ---------- Move: delete old raw contact, create new in chosen account ----------
+    if (accountChanged && chosen && chosen.id !== 'neurachat') {
+      try {
+        if (contact.rawContactId) {
+          await deleteRawContact(contact.rawContactId);
+        }
+        const res = await saveContactToAccount({
+          name: newName,
+          phone: newPhone,
+          email: newEmail || undefined,
+          accountType: chosen.accountType,
+          accountName: chosen.accountName,
+        });
+        if (!res.success) {
+          console.warn('Move failed:', res.error);
+        } else {
+          // Update local record with the new raw/contact ids from the
+          // freshly-created raw contact.
+          const updated: Contact = {
+            ...contact,
+            rawContactId: res.rawContactId,
+            contactId: res.contactId,
+            accountType: chosen.accountType || undefined,
+            accountName: chosen.accountName || undefined,
+            sourceLabel: chosen.label,
+            name: newName,
+            phone: newPhone,
+            email: newEmail || undefined,
+            avatar: editAvatar || undefined,
+            favorite: isFavorite,
+          };
+          await saveContact(updated);
+          setContact(updated);
+          setIsEditMode(false);
+          return;
+        }
+      } catch (e) {
+        console.error('move failed', e);
+      }
+    }
+
+    // ---------- In-place native update ----------
+    if (contact.rawContactId) {
       try {
         const res = await updateContactNative({
           rawContactId: contact.rawContactId,
@@ -137,6 +227,7 @@ function ProfileContent() {
       }
     }
 
+    // ---------- Local save (always) ----------
     const updated: Contact = {
       ...contact,
       name: newName,
@@ -349,6 +440,31 @@ function ProfileContent() {
                   onChange={(e) => setEditEmail(e.target.value)}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-zinc-600"
                 />
+              </div>
+
+              <div>
+                <label className="text-[9px] uppercase tracking-widest text-[#00D4FF] font-mono font-bold block mb-1">
+                  Save to
+                </label>
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-4 text-sm text-white focus:outline-none focus:border-[#00D4FF] cursor-pointer"
+                >
+                  {accounts.length === 0 ? (
+                    <option value="neurachat">NeuraChat</option>
+                  ) : (
+                    accounts.map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                      </option>
+                    ))
+                  )}
+                </select>
+                <p className="text-[9px] text-zinc-600 mt-1 leading-tight">
+                  Changing the account moves the contact there (old entry is
+                  removed from the previous account).
+                </p>
               </div>
             </div>
           ) : (
