@@ -13,8 +13,6 @@ import {
   Smile,
   X,
   FileImage,
-  Check,
-  CheckCheck,
   Phone,
   Video,
   Share2,
@@ -37,6 +35,7 @@ import {
   Contact
 } from '@/lib/db';
 import Header from '@/components/Header';
+import MessageBubble from '@/components/MessageBubble';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
@@ -425,6 +424,7 @@ function ChatDetailContent() {
     }
   };
 
+
   // Long press triggering for messages. Movement cancels the timer so that
   // scrolling never selects a bubble.
   const handleMessagePressStart = (msg: Message, x?: number, y?: number) => {
@@ -477,16 +477,17 @@ function ChatDetailContent() {
     msgTouchStartRef.current = null;
     if (wasMoved || wasLongPress) return;
 
-    // Only allow tap-to-toggle when selection mode is already active
-    // (initiated by an earlier long press).
-    if (selectedMsgIds.length > 0) {
+    // Only allow tap-to-toggle when selection mode is already active.
+    // Uses the updater form so this handler never closes over
+    // selectedMsgIds, which lets MessageBubble stay memoized.
+    setSelectedMsgIds((prev) => {
+      if (prev.length === 0) return prev;
       triggerVibration();
-      if (selectedMsgIds.includes(msg.id)) {
-        setSelectedMsgIds(prev => prev.filter(id => id !== msg.id));
-      } else {
-        setSelectedMsgIds(prev => [...prev, msg.id]);
+      if (prev.includes(msg.id)) {
+        return prev.filter((id) => id !== msg.id);
       }
-    }
+      return [...prev, msg.id];
+    });
   };
 
   const handleCopySelected = () => {
@@ -701,86 +702,18 @@ function ChatDetailContent() {
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isUser = msg.sender === 'user';
-            const isSelected = selectedMsgIds.includes(msg.id);
-            return (
-              <motion.div
-                key={msg.id}
-                onPointerDown={(e) => handleMessagePressStart(msg, e.clientX, e.clientY)}
-                onPointerUp={handleMessagePressEnd}
-                onPointerCancel={handleMessagePressEnd}
-                onTouchStart={(e) => {
-                  const t = e.touches[0];
-                  handleMessagePressStart(msg, t?.clientX, t?.clientY);
-                }}
-                onTouchMove={(e) => {
-                  const t = e.touches[0];
-                  if (t) handleMessageMove(t.clientX, t.clientY);
-                }}
-                onTouchEnd={handleMessagePressEnd}
-                onClick={() => handleMessageClick(msg)}
-                initial={{ opacity: 0, x: isUser ? 25 : -25, scale: 0.95 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                className={`flex ${isUser ? 'justify-end' : 'justify-start'} select-none cursor-pointer`}
-              >
-                {/* User message bubble size is 50% less width (max-w-[43%]), crisp styled and time at top-right inside bubble */}
-                <div
-                  className={`p-2.5 px-3 rounded-xl relative transition-all duration-200 flex flex-col justify-between ${
-                    isUser
-                      ? 'max-w-[44%] bg-[#cbfe00] text-zinc-950 rounded-tr-none'
-                      : 'max-w-[70%] bg-zinc-900 border border-zinc-805 text-zinc-100 rounded-tl-none'
-                  } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
-                >
-                  {/* Top-Right Time inside the Bubble */}
-                  <div className="flex justify-end items-center mb-1 select-none opacity-60 text-[9px] font-mono leading-none">
-                    <span className={isUser ? 'text-zinc-800 font-semibold' : 'text-zinc-400'}>
-                      {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
-                  </div>
-
-                  {/* Image Bubble rendering */}
-                  {msg.image && (
-                    <div className="mb-2 rounded-lg overflow-hidden border border-black/10">
-                      <img
-                        src={msg.image}
-                        alt="Shared asset"
-                        className="max-h-40 w-full object-cover"
-                      />
-                    </div>
-                  )}
-
-                  {/* Body Text */}
-                  {msg.text && (
-                    <p className="text-xs leading-relaxed font-sans break-words whitespace-pre-wrap font-medium">
-                      {msg.text}
-                    </p>
-                  )}
-
-                  {/* Status / retry row */}
-                  {isUser && (
-                    <div className="flex justify-end mt-0.5">
-                      {msg.status === 'failed' ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRetryMessage(msg);
-                          }}
-                          className="text-[10px] font-bold text-red-600 underline-offset-2 hover:underline"
-                        >
-                          Retry
-                        </button>
-                      ) : msg.status === 'read' ? (
-                        <CheckCheck className="h-3 w-3 text-emerald-700 font-bold opacity-80" />
-                      ) : (
-                        <Check className="h-3 w-3 text-zinc-650 opacity-80" />
-                      )}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })
+          messages.map((msg) => (
+            <MessageBubble
+              key={msg.id}
+              msg={msg}
+              isSelected={selectedMsgIds.includes(msg.id)}
+              onRetry={handleRetryMessage}
+              onPressStart={handleMessagePressStart}
+              onPressEnd={handleMessagePressEnd}
+              onMove={handleMessageMove}
+              onClick={handleMessageClick}
+            />
+          ))
         )}
         <div ref={scrollRef} className="h-2" />
       </div>
