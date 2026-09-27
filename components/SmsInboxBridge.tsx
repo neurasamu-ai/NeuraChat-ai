@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect } from 'react';
-import { getMessages, saveMessage, saveChat, getChats, Chat, Message } from '@/lib/db';
+import { getMessages, saveMessage, Chat, Message } from '@/lib/db';
+import { upsertChat, loadChatsFromDB, getState as getChatsState } from '@/lib/chats-store';
+import { loadCallLogsFromDB } from '@/lib/call-log-store';
 import { generateId } from '@/lib/utils';
 import {
   drainIncomingSms,
@@ -26,17 +28,17 @@ async function persistIncoming(msg: IncomingSms) {
   const isOutgoing = msg.direction === 'outgoing';
   const chatId = chatIdFor(address);
 
-  // Ensure chat exists.
+  // Ensure chat exists via the global chats store so every screen updates.
   try {
-    const chats = await getChats();
-    const existing = chats.find((c) => c.id === chatId);
+    const current = getChatsState().chats;
+    const existing = current.find((c) => c.id === chatId);
     if (existing) {
-      existing.lastMessage = msg.body || '';
-      existing.timestamp = msg.timestamp || Date.now();
-      if (!isOutgoing) {
-        existing.unread = (existing.unread || 0) + 1;
-      }
-      await saveChat(existing);
+      await upsertChat({
+        ...existing,
+        lastMessage: msg.body || '',
+        timestamp: msg.timestamp || Date.now(),
+        unread: isOutgoing ? existing.unread || 0 : (existing.unread || 0) + 1,
+      });
     } else {
       const newChat: Chat = {
         id: chatId,
@@ -47,7 +49,7 @@ async function persistIncoming(msg: IncomingSms) {
         unread: isOutgoing ? 0 : 1,
         archived: false,
       };
-      await saveChat(newChat);
+      await upsertChat(newChat);
     }
   } catch (e) {
     console.error('[SmsInbox] chat upsert failed', e);
@@ -102,6 +104,13 @@ export default function SmsInboxBridge() {
       if (!isSmsPluginAvailable()) {
         console.warn('[SmsInbox] plugin not available, skipping');
         return;
+      }
+
+      // Prime the chats store so upsertChat has current data.
+      try {
+        await loadChatsFromDB();
+      } catch (e) {
+        console.warn('[SmsInbox] chats-store prime failed', e);
       }
 
       // Push the persisted blocked list to native so SMS / calls from

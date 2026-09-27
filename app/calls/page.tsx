@@ -19,9 +19,6 @@ import {
   MessageSquare
 } from 'lucide-react';
 import {
-  getCallLogs,
-  saveCallLog,
-  deleteCallLog,
   Contact,
   CallLog
 } from '@/lib/db';
@@ -32,10 +29,13 @@ import { useBackHandler } from '@/lib/use-back-handler';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { normalizePhone, phonesMatch } from '@/lib/phone';
 import { useContacts } from '@/lib/use-contacts';
+import { useCallLogs } from '@/lib/use-call-logs';
+import { loadCallLogsFromDB, addCallLog, removeCallLog } from '@/lib/call-log-store';
 
 export default function CallsPage() {
   const router = useRouter();
-  const [callLogs, setCallLogs] = useState<CallLog[]>([]);
+  const callLogsStore = useCallLogs();
+  const callLogs = callLogsStore.logs;
   const contactsStore = useContacts();
   const contacts = contactsStore.contacts;
   const [loading, setLoading] = useState(true);
@@ -113,8 +113,7 @@ export default function CallsPage() {
 
   const loadCallsAndContacts = async () => {
     try {
-      const logs = await getCallLogs();
-      setCallLogs(logs);
+      await loadCallLogsFromDB();
     } catch (e) {
       console.error(e);
     } finally {
@@ -218,10 +217,9 @@ export default function CallsPage() {
       duration: getRandomCallDuration()
     };
 
-    await saveCallLog(newLog);
+    await addCallLog(newLog);
     setIsDialerOpen(false);
     setDialNumber('');
-    loadCallsAndContacts();
 
     // Route to native call. With 2+ SIMs, show the SIM picker.
     try {
@@ -255,8 +253,7 @@ export default function CallsPage() {
   const handleDeleteLog = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     triggerVibration();
-    await deleteCallLog(id);
-    loadCallsAndContacts();
+    await removeCallLog(id);
   };
 
   // Safe duration formatter

@@ -30,8 +30,6 @@ import {
   getMessagesCount,
   saveMessage,
   deleteMessage,
-  getChats,
-  saveChat,
   getContacts,
   Message,
   Chat,
@@ -39,6 +37,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import MessageBubble from '@/components/MessageBubble';
+import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/lib/chats-store';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
@@ -193,9 +192,6 @@ function ChatDetailContent() {
   // Ensure a chat entry exists for this contact.
   const ensureChatExists = async () => {
     try {
-      const currentChats = await getChats();
-      const exists = currentChats.some(c => c.id === chatId);
-      if (exists) return;
       const matchingChat: Chat = {
         id: chatId,
         name,
@@ -206,7 +202,7 @@ function ChatDetailContent() {
         unread: 0,
         archived: false,
       };
-      await saveChat(matchingChat);
+      await upsertChat(matchingChat);
     } catch (e) {
       console.error('ensureChatExists failed', e);
     }
@@ -227,14 +223,19 @@ function ChatDetailContent() {
           if (cd.length < 7) return false;
           return cd.endsWith(digits) || digits.endsWith(cd);
         });
-        if (found && found.name) {
-          // Update the chat record so the Chats list also shows the name.
-          const chats = await getChats();
-          const c = chats.find((x) => x.id === chatId);
-          if (c && c.name !== found.name) {
-            c.name = found.name;
-            await saveChat(c);
-          }
+        if (found && found.name && found.name !== name) {
+          // Push the resolved name into the global chats store so the
+          // Chats list + this header update instantly.
+          await upsertChat({
+            id: chatId,
+            name: found.name,
+            phone,
+            avatar,
+            lastMessage: '',
+            timestamp: getCurrentTimestamp(),
+            unread: 0,
+            archived: false,
+          });
         }
       } catch (e) {
         console.error('resolveName failed', e);
@@ -280,15 +281,12 @@ function ChatDetailContent() {
     alertToast('Using default SIM', 'info');
   };
 
-  // Mark this chat as read whenever it is opened.
+  // Mark this chat as read whenever it is opened. Goes through the global
+  // chats store so the Chats list badge clears instantly.
   const markChatRead = async () => {
     try {
-      const chats = await getChats();
-      const c = chats.find((x) => x.id === chatId);
-      if (c && (c.unread || 0) > 0) {
-        c.unread = 0;
-        await saveChat(c);
-      }
+      storeMarkRead(chatId);
+      await persistChatRead(chatId);
     } catch (e) {
       console.error('markChatRead failed', e);
     }

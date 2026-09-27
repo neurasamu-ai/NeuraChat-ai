@@ -16,9 +16,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import {
-  getChats,
-  saveChat,
-  deleteChat,
   getContacts,
   saveContact,
   Contact,
@@ -28,12 +25,15 @@ import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { useChats } from '@/lib/use-chats';
+import { loadChatsFromDB, upsertChat, removeChat } from '@/lib/chats-store';
 import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
 import { AI_CHAT_ID, AI_CHAT_NAME } from '@/lib/ai-webview';
 
 export default function ChatsPage() {
   const router = useRouter();
-  const [chats, setChats] = useState<Chat[]>([]);
+  const chatsStore = useChats();
+  const chats = chatsStore.chats;
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -56,8 +56,7 @@ export default function ChatsPage() {
   // Fetch chats and update
   const loadChatsData = async () => {
     try {
-      const data = await getChats();
-      setChats(data);
+      await loadChatsFromDB();
     } catch (err) {
       console.error(err);
     } finally {
@@ -132,39 +131,34 @@ export default function ChatsPage() {
   const handleDeleteSelected = async () => {
     triggerVibration();
     for (const id of selectedChatIds) {
-      await deleteChat(id);
+      await removeChat(id);
     }
     setSelectedChatIds([]);
     setIsSelectionMode(false);
-    loadChatsData();
   };
 
   const handleArchiveSelected = async () => {
     triggerVibration();
     for (const id of selectedChatIds) {
-      const match = chats.find(c => c.id === id);
+      const match = chats.find((c) => c.id === id);
       if (match) {
-        match.archived = !match.archived;
-        await saveChat(match);
+        await upsertChat({ ...match, archived: !match.archived });
       }
     }
     setSelectedChatIds([]);
     setIsSelectionMode(false);
-    loadChatsData();
   };
 
   const handleMarkReadSelected = async () => {
     triggerVibration();
     for (const id of selectedChatIds) {
-      const match = chats.find(c => c.id === id);
+      const match = chats.find((c) => c.id === id);
       if (match) {
-        match.unread = 0;
-        await saveChat(match);
+        await upsertChat({ ...match, unread: 0 });
       }
     }
     setSelectedChatIds([]);
     setIsSelectionMode(false);
-    loadChatsData();
   };
 
   // Contacts sync & add functions
