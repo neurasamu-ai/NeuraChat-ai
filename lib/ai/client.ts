@@ -50,7 +50,7 @@ export async function* streamChat(
 
   const settings = (await getProviderSetting(providerId)) || undefined;
   const baseUrl = (settings?.baseUrl || provider.defaultBaseUrl || '').trim();
-  const model = (settings?.model || provider.defaultModel || '').trim();
+  const model = (settings?.model || provider.defaultModelHint || '').trim();
 
   if (!baseUrl) {
     yield { error: `No base URL set for ${provider.name}. Configure it in Settings → AI Providers.` };
