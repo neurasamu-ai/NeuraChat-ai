@@ -48,6 +48,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SettingsPlugin.class);
         registerPlugin(NeuraContactsPlugin.class);
         registerPlugin(AiWebViewPlugin.class);
+        registerPlugin(BackupPlugin.class);
 
         super.onCreate(savedInstanceState);
         instance = this;

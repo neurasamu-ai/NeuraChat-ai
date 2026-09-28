@@ -15,7 +15,8 @@ import {
   Phone,
   MessageSquare,
   Shield as ShieldIcon,
-  Ban
+  Ban,
+  Database
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -27,6 +28,7 @@ import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
+import { runBackup, listBackups, restoreFromFile } from '@/lib/backup';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -57,6 +59,10 @@ export default function SettingsPage() {
   const [defaultDialerOk, setDefaultDialerOk] = useState<boolean>(true);
   const [isBlockedOpen, setIsBlockedOpen] = useState(false);
   const [blockedList, setBlockedList] = useState<BlockedContact[]>([]);
+  const [isBackupOpen, setIsBackupOpen] = useState(false);
+  const [backupList, setBackupList] = useState<Array<{ filename: string; modified: number; size: number }>>([]);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMessage, setBackupMessage] = useState('');
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -161,6 +167,57 @@ export default function SettingsPage() {
   useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
   useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
+  useBackHandler(isBackupOpen, () => setIsBackupOpen(false));
+
+  useEffect(() => {
+    if (!isBackupOpen) return;
+    (async () => {
+      try {
+        const list = await listBackups();
+        setBackupList(list);
+      } catch (e) {
+        console.error('list backups failed', e);
+      }
+    })();
+  }, [isBackupOpen]);
+
+  const handleCreateBackup = async () => {
+    triggerVibration();
+    setBackupBusy(true);
+    setBackupMessage('');
+    try {
+      const res = await runBackup();
+      if (res.ok) {
+        setBackupMessage(`Saved to ${res.path || 'Downloads/NeuraChat'}`);
+        const list = await listBackups();
+        setBackupList(list);
+      } else {
+        setBackupMessage('Backup failed: ' + (res.error || 'unknown'));
+      }
+    } catch (e: any) {
+      setBackupMessage('Backup failed: ' + (e?.message || 'unknown'));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const handleRestore = async (filename: string) => {
+    triggerVibration();
+    setBackupBusy(true);
+    setBackupMessage('');
+    try {
+      const res = await restoreFromFile(filename);
+      if (res.ok) {
+        setBackupMessage(`Restored ${res.stats?.contacts || 0} contacts, ${res.stats?.chats || 0} chats, ${res.stats?.messages || 0} messages`);
+      } else {
+        setBackupMessage('Restore failed: ' + (res.error || 'unknown'));
+      }
+    } catch (e: any) {
+      setBackupMessage('Restore failed: ' + (e?.message || 'unknown'));
+    } finally {
+      setBackupBusy(false);
+    }
+  };
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
   return (
@@ -314,6 +371,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <Ban className="h-4 w-4 text-red-500" />
               <span className="text-xs font-medium text-zinc-200">Blocked Contacts</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
+
+          {/* Backup & Restore */}
+          <div
+            onClick={() => {
+              triggerVibration();
+              setIsBackupOpen(true);
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <Database className="h-4 w-4 text-[#00D4FF]" />
+              <span className="text-xs font-medium text-zinc-200">Backup & Restore</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -611,6 +683,88 @@ export default function SettingsPage() {
 
                 <button
                   onClick={() => setIsCommsOpen(false)}
+                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
+                >
+                  Done
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ========== BACKUP & RESTORE MODAL ========== */}
+        <AnimatePresence>
+          {isBackupOpen && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
+              >
+                <button
+                  onClick={() => setIsBackupOpen(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold text-white mb-1">Backup & Restore</h3>
+                <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
+                  Backups are saved to <span className="font-mono text-zinc-400">Downloads/NeuraChat/</span> as JSON.
+                  An automatic backup runs a few minutes after each app start and
+                  when you send the app to the background.
+                </p>
+
+                <button
+                  onClick={handleCreateBackup}
+                  disabled={backupBusy}
+                  className="w-full py-3 rounded-2xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 disabled:opacity-50 mb-3"
+                >
+                  {backupBusy ? 'Working…' : 'Create backup now'}
+                </button>
+
+                {backupMessage && (
+                  <div className="text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mb-4 leading-snug">
+                    {backupMessage}
+                  </div>
+                )}
+
+                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                  Existing backups
+                </p>
+
+                {backupList.length === 0 ? (
+                  <p className="text-[11px] text-zinc-600 py-4 text-center">
+                    No backups found yet.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {backupList.map((b) => (
+                      <div
+                        key={b.filename}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800"
+                      >
+                        <div className="min-w-0 flex-1 mr-2">
+                          <p className="text-[11px] text-white font-mono truncate">{b.filename}</p>
+                          <p className="text-[9px] text-zinc-500 mt-0.5">
+                            {new Date(b.modified).toLocaleString()} · {(b.size / 1024).toFixed(1)} KB
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleRestore(b.filename)}
+                          disabled={backupBusy}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-400 text-[10px] font-bold uppercase tracking-wider active:scale-95 disabled:opacity-50 shrink-0"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => setIsBackupOpen(false)}
                   className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
                 >
                   Done
