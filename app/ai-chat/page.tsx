@@ -521,7 +521,7 @@ export default function AiChatPage() {
             <button
               onClick={() => {
                 triggerVibration();
-                router.push('/settings');
+                router.push('/settings?ai=1');
               }}
               className="p-2 rounded-full text-zinc-400 hover:text-white transition-colors"
               title="Settings"
@@ -895,7 +895,7 @@ export default function AiChatPage() {
                   <button
                     onClick={() => {
                       setPickerOpen(false);
-                      router.push('/settings');
+                      router.push('/settings?ai=1');
                     }}
                     className="px-4 py-2 rounded-xl bg-[#00D4FF] text-black text-xs font-bold active:scale-95"
                   >

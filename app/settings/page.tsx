@@ -199,6 +199,17 @@ export default function SettingsPage() {
     }
   };
 
+  // Auto-open AI Providers if the URL has ?ai=1 (link from AI chat).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ai') === '1') {
+      setIsAiProvidersOpen(true);
+      // Clean the query so a back navigation does not reopen.
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isAiProvidersOpen) return;
     loadAiState();
