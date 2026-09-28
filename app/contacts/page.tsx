@@ -32,7 +32,8 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
-import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
+import CallSimPicker from '@/components/CallSimPicker';
+import { useSimCall } from '@/hooks/use-sim-call';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { useContacts } from '@/lib/use-contacts';
@@ -133,6 +134,9 @@ export default function ContactsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [activeIsBlocked, setActiveIsBlocked] = useState(false);
+
+  // SIM-picker-aware calling.
+  const simCall = useSimCall();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('neurachat');
   const [addAvatar, setAddAvatar] = useState<string>('');
   const [addError, setAddError] = useState('');
@@ -622,12 +626,7 @@ export default function ContactsPage() {
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 triggerVibration();
-                                try {
-                                  const pref = getPreferredCallSimId();
-                                  await placeCall(contact.phone, pref || undefined);
-                                } catch (err) {
-                                  console.error('call failed', err);
-                                }
+                                await simCall.startCall(contact.phone);
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
                               className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
@@ -719,12 +718,7 @@ export default function ContactsPage() {
                   <button
                     onClick={async () => {
                       triggerVibration();
-                      try {
-                        const pref = getPreferredCallSimId();
-                        await placeCall(activeContact.phone, pref || undefined);
-                      } catch (err) {
-                        console.error('call failed', err);
-                      }
+                      await simCall.startCall(activeContact.phone);
                     }}
                     className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 p-3 rounded-2xl transition-colors cursor-pointer group active:scale-95"
                   >
@@ -1017,6 +1011,16 @@ export default function ContactsPage() {
         </button>
 
       <BottomNav currentTab="contacts" />
+
+      {/* SIM picker for calls */}
+      <CallSimPicker
+        isOpen={simCall.pickerOpen}
+        accounts={simCall.accounts}
+        remember={simCall.remember}
+        onRememberChange={simCall.setRemember}
+        onPick={simCall.pick}
+        onCancel={simCall.cancel}
+      />
     </>
   );
 }

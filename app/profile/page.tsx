@@ -27,7 +27,8 @@ import {
 } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount } from '@/lib/neura-contacts';
-import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
+import CallSimPicker from '@/components/CallSimPicker';
+import { useSimCall } from '@/hooks/use-sim-call';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -52,6 +53,9 @@ function ProfileContent() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // SIM-picker-aware calling (matches chat-detail and Calls tab).
+  const simCall = useSimCall();
   const [accounts, setAccounts] = useState<WritableAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
@@ -298,13 +302,7 @@ function ProfileContent() {
   const handleCall = async () => {
     if (!editPhone) return;
     triggerVibration();
-    try {
-      const pref = getPreferredCallSimId();
-      const res = await placeCall(editPhone, pref || undefined);
-      if (!res.success) console.error('call failed', res.error);
-    } catch (e) {
-      console.error('call threw', e);
-    }
+    await simCall.startCall(editPhone);
   };
 
   const handleSms = () => {
@@ -618,6 +616,16 @@ function ProfileContent() {
             </div>
           )}
         </AnimatePresence>
+
+        {/* SIM picker for calls (2+ SIMs, no remembered preference) */}
+        <CallSimPicker
+          isOpen={simCall.pickerOpen}
+          accounts={simCall.accounts}
+          remember={simCall.remember}
+          onRememberChange={simCall.setRemember}
+          onPick={simCall.pick}
+          onCancel={simCall.cancel}
+        />
       </main>
     </div>
   );

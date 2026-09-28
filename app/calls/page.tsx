@@ -467,7 +467,11 @@ export default function CallsPage() {
                               key={contact.id}
                               onClick={() => {
                                 triggerVibration();
-                                setDialNumber(contact.phone);
+                                // Close the dialer and open the contact card.
+                                setIsDialerOpen(false);
+                                router.push(
+                                  `/profile?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`
+                                );
                               }}
                               className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 cursor-pointer active:scale-[0.99] transition-all"
                             >
