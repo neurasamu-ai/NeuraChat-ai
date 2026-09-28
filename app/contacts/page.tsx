@@ -134,6 +134,7 @@ export default function ContactsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Contact | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [activeIsBlocked, setActiveIsBlocked] = useState(false);
+  const [skeletonTimedOut, setSkeletonTimedOut] = useState(false);
 
   // SIM-picker-aware calling.
   const simCall = useSimCall();
@@ -433,6 +434,15 @@ export default function ContactsPage() {
     })();
   }, [activeContact]);
 
+  // Never let the skeleton stay forever: if loading/syncing takes more
+  // than 15s, fall through to whatever we have (or an empty state).
+  useEffect(() => {
+    if (!(storeLoading || (contactsStore.syncing && contacts.length === 0))) return;
+    const t = setTimeout(() => setSkeletonTimedOut(true), 15000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeLoading, contactsStore.syncing, contacts.length]);
+
   // ---- Back-button integration ----
   useBackHandler(isAddOpen, () => setIsAddOpen(false));
   useBackHandler(!!activeContact, () => setActiveContact(null));
@@ -472,7 +482,7 @@ export default function ContactsPage() {
           />
         </div>
 
-        {storeLoading || (contactsStore.syncing && contacts.length === 0) ? (
+        {!skeletonTimedOut && (storeLoading || (contactsStore.syncing && contacts.length === 0)) ? (
           <div className="space-y-2.5" id="contacts-skeleton">
             {[1, 2, 3].map(n => (
               <div key={n} className="flex gap-3 p-2 bg-zinc-950 border border-zinc-900 rounded-lg animate-pulse">

@@ -111,7 +111,13 @@ export async function bootstrapContacts(): Promise<void> {
 
   const now = Date.now();
   const last = getLastSyncTs();
-  if (now - last < SYNC_INTERVAL_MS) return;
+  const cacheEmpty = snapshot.contacts.length === 0;
+
+  // If the cache is empty, always sync — the throttle is only useful when we
+  // already have data. Otherwise a fresh install (or a bad sync that
+  // returned nothing) would leave the contacts list stuck empty until the
+  // 10-minute window elapses.
+  if (!cacheEmpty && now - last < SYNC_INTERVAL_MS) return;
   if (syncPromise) return syncPromise;
 
   syncPromise = (async () => {
