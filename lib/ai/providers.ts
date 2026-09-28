@@ -5,6 +5,24 @@ import { ProviderDef } from './types';
 // or tomorrow (gpt-6, gemini-3, etc.).
 export const PROVIDERS: ProviderDef[] = [
   {
+    id: 'custom-openai',
+    name: 'Custom (OpenAI-compatible)',
+    kind: 'openai',
+    defaultBaseUrl: '',
+    defaultModelHint: '',
+    requiresKey: true,
+    description: 'Any OpenAI-compatible endpoint',
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    kind: 'openai',
+    defaultBaseUrl: 'https://openrouter.ai/api/v1',
+    defaultModelHint: 'openai/gpt-4o-mini',
+    requiresKey: true,
+    description: 'One key, many models',
+  },
+  {
     id: 'openai',
     name: 'ChatGPT (OpenAI)',
     kind: 'openai',
@@ -66,24 +84,6 @@ export const PROVIDERS: ProviderDef[] = [
     defaultModelHint: 'glm-4-plus',
     requiresKey: true,
     description: 'Z.AI (Zhipu) OpenAI-compatible',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    kind: 'openai',
-    defaultBaseUrl: 'https://openrouter.ai/api/v1',
-    defaultModelHint: 'openai/gpt-4o-mini',
-    requiresKey: true,
-    description: 'One key, many models',
-  },
-  {
-    id: 'custom-openai',
-    name: 'Custom (OpenAI-compatible)',
-    kind: 'openai',
-    defaultBaseUrl: '',
-    defaultModelHint: '',
-    requiresKey: true,
-    description: 'Any OpenAI-compatible endpoint',
   },
 ];
 

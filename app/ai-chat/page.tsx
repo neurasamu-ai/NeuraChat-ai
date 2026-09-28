@@ -25,6 +25,9 @@ export default function AiChatPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('api');
+  // Increment on every mode change so the container is force-remounted,
+  // which clears any stuck focus/scroll state left behind by the WebView.
+  const [modeKey, setModeKey] = useState(0);
 
   // ---- API mode state ----
   const [activeProviderId, setActiveProviderId] = useState<string>('openai');
@@ -73,6 +76,26 @@ export default function AiChatPage() {
       scrollRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, mode]);
+
+  const switchMode = (m: Mode) => {
+    triggerVibration();
+    setMode(m);
+    setModeKey((k) => k + 1);
+  };
+
+  // When the app returns from the WebView, reset the mode state so taps
+  // work again (WebView sometimes leaves the WebView with focus and React
+  // misses the first tap).
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        // Force a re-render so touch handlers rebind cleanly.
+        setModeKey((k) => k + 1);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useBackHandler(pickerOpen, () => setPickerOpen(false));
   useBackHandler(webPickerOpen, () => setWebPickerOpen(false));
@@ -283,13 +306,14 @@ export default function AiChatPage() {
         }
       />
 
-      <div className="flex-1 flex flex-col min-h-0 bg-zinc-950">
+      <div key={modeKey} className="flex-1 flex flex-col min-h-0 bg-zinc-950">
         {/* Mode toggle + provider/model badge */}
         <div className="px-4 pt-3 pb-2 flex items-center justify-center gap-2">
           {/* API / Web toggle */}
           <div className="flex items-center p-0.5 rounded-xl bg-zinc-900 border border-zinc-800">
             <button
-              onClick={() => { triggerVibration(); setMode('api'); }}
+              type="button"
+              onClick={() => switchMode('api')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
                 mode === 'api' ? 'bg-[#00D4FF] text-black' : 'text-zinc-400'
               }`}
@@ -297,7 +321,8 @@ export default function AiChatPage() {
               API
             </button>
             <button
-              onClick={() => { triggerVibration(); setMode('web'); }}
+              type="button"
+              onClick={() => switchMode('web')}
               className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${
                 mode === 'web' ? 'bg-[#00D4FF] text-black' : 'text-zinc-400'
               }`}
@@ -313,9 +338,9 @@ export default function AiChatPage() {
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border transition-all active:scale-95"
               style={{ backgroundColor: '#18181b', borderColor: 'rgba(0,212,255,0.35)' }}
             >
-              <Sparkles className="h-3 w-3 text-[#00D4FF]" />
-              <span className="text-[11px] font-bold text-white truncate max-w-[100px]">{providerName}</span>
-              <ChevronDown className="h-3 w-3 text-zinc-400" />
+              <Sparkles className="h-3 w-3 text-[#00D4FF] shrink-0" />
+              <span className="text-[11px] font-bold text-white truncate max-w-[130px]">{providerName || 'Select'}</span>
+              <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
             </button>
           ) : (
             <button
