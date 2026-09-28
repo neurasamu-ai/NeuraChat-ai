@@ -272,3 +272,12 @@ html.light #settings-core-options-list {
     opacity: 1;
   }
 }
+
+/* --- Call UI theme slow blink --- */
+.call-theme-blink {
+  animation: call-theme-pulse 3.5s ease-in-out infinite;
+}
+@keyframes call-theme-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}

@@ -16,7 +16,8 @@ import {
   MessageSquare,
   Shield as ShieldIcon,
   Ban,
-  Database
+  Database,
+  Palette
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -29,6 +30,7 @@ import { useBackHandler } from '@/lib/use-back-handler';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { runBackup, listBackups, restoreFromFile } from '@/lib/backup';
+import { CALL_THEMES, getCallThemeId, setCallThemeId } from '@/lib/call-themes';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -63,6 +65,8 @@ export default function SettingsPage() {
   const [backupList, setBackupList] = useState<Array<{ filename: string; modified: number; size: number }>>([]);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupMessage, setBackupMessage] = useState('');
+  const [isCallThemeOpen, setIsCallThemeOpen] = useState(false);
+  const [selectedCallTheme, setSelectedCallTheme] = useState('neon');
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -168,6 +172,18 @@ export default function SettingsPage() {
   useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
   useBackHandler(isBackupOpen, () => setIsBackupOpen(false));
+  useBackHandler(isCallThemeOpen, () => setIsCallThemeOpen(false));
+
+  useEffect(() => {
+    if (!isCallThemeOpen) return;
+    setSelectedCallTheme(getCallThemeId());
+  }, [isCallThemeOpen]);
+
+  const applyCallTheme = (id: string) => {
+    triggerVibration();
+    setCallThemeId(id);
+    setSelectedCallTheme(id);
+  };
 
   useEffect(() => {
     if (!isBackupOpen) return;
@@ -371,6 +387,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <Ban className="h-4 w-4 text-red-500" />
               <span className="text-xs font-medium text-zinc-200">Blocked Contacts</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
+
+          {/* Call UI Themes */}
+          <div
+            onClick={() => {
+              triggerVibration();
+              setIsCallThemeOpen(true);
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <Palette className="h-4 w-4 text-[#FF006E]" />
+              <span className="text-xs font-medium text-zinc-200">Call UI Themes</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -683,6 +714,137 @@ export default function SettingsPage() {
 
                 <button
                   onClick={() => setIsCommsOpen(false)}
+                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
+                >
+                  Done
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ========== CALL UI THEMES MODAL ========== */}
+        <AnimatePresence>
+          {isCallThemeOpen && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
+              >
+                <button
+                  onClick={() => setIsCallThemeOpen(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white z-10"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold text-white mb-1">Call UI Themes</h3>
+                <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
+                  Pick a theme for the in-call screen. Independent of your
+                  app&apos;s light / dark appearance.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {CALL_THEMES.map((t) => {
+                    const selected = selectedCallTheme === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => applyCallTheme(t.id)}
+                        className="rounded-2xl overflow-hidden border transition-all active:scale-[0.98] relative"
+                        style={{
+                          borderColor: selected ? t.ctrlActiveBorder : t.ctrlBorder,
+                          boxShadow: selected ? `0 0 0 2px ${t.ctrlActiveBorder}` : 'none',
+                        }}
+                      >
+                        {/* Mini preview */}
+                        <div
+                          className="aspect-[9/12] p-2.5 flex flex-col items-center justify-start relative overflow-hidden"
+                          style={{ background: t.bg }}
+                        >
+                          {/* glows */}
+                          <div className="absolute -top-12 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full blur-2xl pointer-events-none"
+                            style={{ background: t.glowTop }} />
+                          <div className="absolute -bottom-12 left-1/2 -translate-x-1/2 w-32 h-32 rounded-full blur-2xl pointer-events-none"
+                            style={{ background: t.glowBottom }} />
+
+                          <p className="text-[6px] uppercase tracking-[0.2em] font-mono mb-1.5 z-10"
+                            style={{ color: t.labelColor }}>
+                            In call
+                          </p>
+
+                          {/* Avatar */}
+                          <div className="relative mb-1.5 z-10">
+                            <div
+                              className="absolute -inset-1 rounded-full blur-md"
+                              style={{ background: t.haloColor }}
+                            />
+                            <div
+                              className="relative w-8 h-8 rounded-full flex items-center justify-center font-bold text-[10px]"
+                              style={{
+                                background: t.avatarBg,
+                                border: `1px solid ${t.avatarBorder}`,
+                                color: t.avatarText,
+                              }}
+                            >
+                              AM
+                            </div>
+                          </div>
+
+                          <p className="text-[8px] font-bold truncate z-10"
+                            style={{ color: t.nameColor }}>
+                            Amir
+                          </p>
+                          <p className="text-[5px] font-mono z-10"
+                            style={{ color: t.statusColor }}>
+                            00:42
+                          </p>
+
+                          {/* Mini controls */}
+                          <div className="grid grid-cols-3 gap-0.5 mt-2 w-full z-10">
+                            {[0, 1, 2].map(i => (
+                              <div
+                                key={i}
+                                className="h-3 rounded-md"
+                                style={{
+                                  background: i === 0 ? t.ctrlActiveBg : t.ctrlBg,
+                                  border: `0.5px solid ${i === 0 ? t.ctrlActiveBorder : t.ctrlBorder}`,
+                                }}
+                              />
+                            ))}
+                          </div>
+
+                          {/* End button */}
+                          <div
+                            className="w-6 h-6 rounded-full mt-1.5 z-10"
+                            style={{
+                              background: t.endBg,
+                              boxShadow: `0 0 8px ${t.endShadow}`,
+                            }}
+                          />
+                        </div>
+
+                        {/* Label */}
+                        <div className="bg-zinc-900 px-2 py-1.5 text-left">
+                          <p className="text-[10px] font-semibold text-white truncate">
+                            {t.name}
+                          </p>
+                          {selected && (
+                            <p className="text-[9px] font-bold uppercase tracking-wider mt-0.5"
+                              style={{ color: t.ctrlActiveBorder }}>
+                              ✓ Applied
+                            </p>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setIsCallThemeOpen(false)}
                   className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
                 >
                   Done
