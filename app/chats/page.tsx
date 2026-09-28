@@ -16,7 +16,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import {
-  getContacts,
   saveContact,
   Contact,
   Chat,
@@ -58,7 +57,6 @@ export default function ChatsPage() {
 
   // New Chat Dialog States
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
-  const [contacts, setContacts] = useState<Contact[]>([]);
   const [contactSearch, setContactSearch] = useState('');
 
   // Manual Contact Add States
@@ -178,12 +176,7 @@ export default function ChatsPage() {
   // Contacts sync & add functions
   const openNewChat = async () => {
     setIsNewChatOpen(true);
-    try {
-      const stored = await getContacts();
-      setContacts(stored);
-    } catch (e) {
-      console.error(e);
-    }
+    // Contacts are provided by the global store; no fetch needed here.
   };
 
   const handleSelectContactForChat = async (contact: Contact) => {
@@ -215,7 +208,12 @@ export default function ChatsPage() {
         favorite: false
       };
       await saveContact(newContact);
-      setContacts(await getContacts());
+      // Store subscribes to IndexedDB writes, so contacts list updates
+      // automatically once the new record is saved.
+      try {
+        const { loadContactsFromDB } = await import('@/lib/contacts-store');
+        await loadContactsFromDB();
+      } catch {}
       setIsManualAddOpen(false);
       setManualName('');
       setManualPhone('');
