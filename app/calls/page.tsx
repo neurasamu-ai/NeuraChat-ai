@@ -42,18 +42,19 @@ export default function CallsPage() {
   const [activeFilter, setActiveFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
 
   // Dynamic caller name lookup from contacts database
-  const resolveCallerName = (phone: string, fallbackName: string) => {
-    // Only match if the raw digits length is close enough. Prevents 3-digit
-    // service numbers (111, 5555) from matching real contacts by suffix.
+  const findContactFor = (phone: string) => {
     const phoneDigits = (phone || '').replace(/\D/g, '');
-    if (phoneDigits.length >= 7) {
-      const found = contacts.find((c) => {
-        const cDigits = (c.phone || '').replace(/\D/g, '');
-        if (cDigits.length < 7) return false;
-        return phonesMatch(c.phone, phone);
-      });
-      if (found) return found.name;
-    }
+    if (phoneDigits.length < 7) return null;
+    return contacts.find((c) => {
+      const cDigits = (c.phone || '').replace(/\D/g, '');
+      if (cDigits.length < 7) return false;
+      return phonesMatch(c.phone, phone);
+    }) || null;
+  };
+
+  const resolveCallerName = (phone: string, fallbackName: string) => {
+    const found = findContactFor(phone);
+    if (found) return found.name;
     return fallbackName !== 'Unknown' ? fallbackName : phone;
   };
 
@@ -351,6 +352,7 @@ export default function CallsPage() {
             <AnimatePresence>
               {filteredLogs.map((log) => {
                 const displayName = resolveCallerName(log.phone, log.name);
+                const contact = findContactFor(log.phone);
                 return (
                   <motion.div
                     key={log.id}
@@ -364,14 +366,22 @@ export default function CallsPage() {
                       onClick={() => {
                         triggerVibration();
                         router.push(
-                          `/profile?phone=${encodeURIComponent(log.phone)}&name=${encodeURIComponent(displayName)}&avatar=`
+                          `/profile?phone=${encodeURIComponent(log.phone)}&name=${encodeURIComponent(displayName)}&avatar=${encodeURIComponent(contact?.avatar || '')}`
                         );
                       }}
                     >
-                      {/* Circle Avatar with initials fallback */}
-                      <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
-                        {displayName.slice(0, 2)}
-                      </div>
+                      {/* Circle Avatar: contact photo when available, else initials */}
+                      {contact?.avatar ? (
+                        <img
+                          src={contact.avatar}
+                          alt={displayName}
+                          className="w-10 h-10 rounded-full object-cover border border-zinc-700 shadow-inner"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
+                          {displayName.slice(0, 2)}
+                        </div>
+                      )}
 
                       <div className="min-w-0">
                         <h4 className="text-xs font-semibold text-white font-sans truncate pr-2">
@@ -440,57 +450,72 @@ export default function CallsPage() {
                   <X className="h-5 w-5" />
                 </button>
 
-                {/* Match List Area (Red Circle space) */}
-                <div className="w-full max-w-[280px] min-h-[4rem] mb-4 flex flex-col items-center justify-center">
-                  {dialNumber ? (
-                    matchedContacts.length > 0 ? (
-                      <div className="w-full max-h-24 overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40 transition-all">
-                        {matchedContacts.map(contact => (
-                          <div
-                            key={contact.id}
-                            onClick={() => {
-                              triggerVibration();
-                              setDialNumber(contact.phone);
-                            }}
-                            className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 cursor-pointer active:scale-[0.99] transition-all"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="w-6.5 h-6.5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#00D4FF] font-bold text-[10px] uppercase">
-                                {contact.name.slice(0, 2)}
-                              </div>
-                              <div className="text-left min-w-0">
-                                <p className="text-[11px] font-bold text-white truncate leading-tight">{contact.name}</p>
-                                <p className="text-[9px] font-mono text-zinc-400 truncate leading-tight">{contact.phone}</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDialCall(contact.phone);
+                {/* Match List Area — matched contacts on the left, a
+                    persistent "New" button on the right so a fresh number
+                    can always be saved even when some contacts match. */}
+                <div className="w-full max-w-[360px] min-h-[4rem] mb-4 flex flex-row items-stretch gap-2">
+                  <div className="flex-1 flex items-center">
+                    {dialNumber ? (
+                      matchedContacts.length > 0 ? (
+                        <div className="w-full max-h-24 overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40">
+                          {matchedContacts.map(contact => (
+                            <div
+                              key={contact.id}
+                              onClick={() => {
+                                triggerVibration();
+                                setDialNumber(contact.phone);
                               }}
-                              className="p-1 px-2.5 rounded bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] text-[9px] font-bold tracking-wide active:scale-95 transition-all"
+                              className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 cursor-pointer active:scale-[0.99] transition-all"
                             >
-                              Call
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                              <div className="flex items-center gap-2 min-w-0">
+                                {contact.avatar ? (
+                                  <img src={contact.avatar} alt={contact.name} className="w-6.5 h-6.5 rounded-full object-cover border border-zinc-700" />
+                                ) : (
+                                  <div className="w-6.5 h-6.5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#00D4FF] font-bold text-[10px] uppercase">
+                                    {contact.name.slice(0, 2)}
+                                  </div>
+                                )}
+                                <div className="text-left min-w-0">
+                                  <p className="text-[11px] font-bold text-white truncate leading-tight">{contact.name}</p>
+                                  <p className="text-[9px] font-mono text-zinc-400 truncate leading-tight">{contact.phone}</p>
+                                </div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDialCall(contact.phone);
+                                }}
+                                className="p-1 px-2.5 rounded bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] text-[9px] font-bold tracking-wide active:scale-95 transition-all"
+                              >
+                                Call
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-zinc-500 font-mono italic px-3">
+                          No saved contact matches
+                        </div>
+                      )
                     ) : (
-                      <motion.button
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        onClick={() => {
-                          triggerVibration();
-                          router.push(`/contacts?add=true&phone=${encodeURIComponent(dialNumber)}`);
-                        }}
-                        className="text-xs font-semibold text-[#00D4FF] bg-[#00D4FF]/10 border border-[#00D4FF]/20 px-3.5 py-2 rounded-full flex items-center gap-1.5 hover:bg-[#00D4FF]/20 active:scale-95 transition-all cursor-pointer"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                        Create New Contact
-                      </motion.button>
-                    )
-                  ) : (
-                    <span className="text-[10px] text-zinc-600 font-mono italic">Enter digits to search database...</span>
+                      <span className="text-[10px] text-zinc-600 font-mono italic px-3">Enter digits to search database...</span>
+                    )}
+                  </div>
+
+                  {/* Persistent "New contact" button — visible whenever any
+                      digit is typed, regardless of matches. */}
+                  {dialNumber && (
+                    <button
+                      onClick={() => {
+                        triggerVibration();
+                        router.push(`/contacts?add=true&phone=${encodeURIComponent(dialNumber)}`);
+                      }}
+                      className="w-16 rounded-xl bg-gradient-to-br from-[#00D4FF] to-[#008BBF] text-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all shrink-0 shadow-lg"
+                      title="Save as new contact"
+                    >
+                      <Plus className="h-5 w-5 stroke-[3]" />
+                      <span className="text-[9px] font-bold uppercase tracking-wide">New</span>
+                    </button>
                   )}
                 </div>
 

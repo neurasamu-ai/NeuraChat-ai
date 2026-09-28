@@ -26,6 +26,7 @@ import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { useChats } from '@/lib/use-chats';
+import { useContacts } from '@/lib/use-contacts';
 import { loadChatsFromDB, upsertChat, removeChat } from '@/lib/chats-store';
 import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
 import { AI_CHAT_ID, AI_CHAT_NAME } from '@/lib/ai-webview';
@@ -34,6 +35,19 @@ export default function ChatsPage() {
   const router = useRouter();
   const chatsStore = useChats();
   const chats = chatsStore.chats;
+  const contactsStore = useContacts();
+  const contacts = contactsStore.contacts;
+
+  // Look up the contact (for avatar) using normalized phone match.
+  const findContactForChat = (chat: { phone: string }) => {
+    const digits = (chat.phone || '').replace(/\D/g, '');
+    if (digits.length < 7) return null;
+    return contacts.find((c) => {
+      const cd = (c.phone || '').replace(/\D/g, '');
+      if (cd.length < 7) return false;
+      return cd === digits || cd.endsWith(digits) || digits.endsWith(cd);
+    }) || null;
+  };
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -385,11 +399,25 @@ export default function ChatsPage() {
                       </div>
                     )}
 
-                    {/* Avatar with initials or placeholder */}
+                    {/* Avatar: photo when we have one, else initials */}
                     <div className="relative">
-                      <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-800 to-zinc-900 border border-zinc-800 flex items-center justify-center text-[#00D4FF] font-semibold text-lg font-display uppercase tracking-wider relative shadow-inner">
-                        {chat.name.slice(0, 2)}
-                      </div>
+                      {(() => {
+                        const c = findContactForChat(chat);
+                        if (c?.avatar) {
+                          return (
+                            <img
+                              src={c.avatar}
+                              alt={chat.name}
+                              className="w-12 h-12 rounded-full object-cover border border-zinc-800 shadow-inner"
+                            />
+                          );
+                        }
+                        return (
+                          <div className="w-12 h-12 rounded-full overflow-hidden bg-gradient-to-tr from-zinc-800 to-zinc-900 border border-zinc-800 flex items-center justify-center text-[#00D4FF] font-semibold text-lg font-display uppercase tracking-wider shadow-inner">
+                            {chat.name.slice(0, 2)}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Chat Description Blocks */}
