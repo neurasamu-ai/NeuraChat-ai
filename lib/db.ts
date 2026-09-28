@@ -60,7 +60,7 @@ export interface UserProfile {
 }
 
 const DB_NAME = 'neurachat_db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase> | null = null;
 
@@ -98,6 +98,20 @@ export function getDB() {
         if (!db.objectStoreNames.contains('aiMessages')) {
           const ai = db.createObjectStore('aiMessages', { keyPath: 'id' });
           ai.createIndex('threadId', 'threadId');
+        }
+        if (!db.objectStoreNames.contains('aiThreads')) {
+          const th = db.createObjectStore('aiThreads', { keyPath: 'id' });
+          th.createIndex('providerId', 'providerId');
+          th.createIndex('updatedAt', 'updatedAt');
+        }
+
+        // Migration v4 -> v5: add aiThreads store
+        if (oldVersion >= 4 && oldVersion < 5) {
+          if (!db.objectStoreNames.contains('aiThreads')) {
+            const th = db.createObjectStore('aiThreads', { keyPath: 'id' });
+            th.createIndex('providerId', 'providerId');
+            th.createIndex('updatedAt', 'updatedAt');
+          }
         }
 
         // Migration v3 -> v4: add aiMessages store
