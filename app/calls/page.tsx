@@ -452,12 +452,14 @@ export default function CallsPage() {
 
                 {/* Match List Area — matched contacts on the left, a
                     persistent "New" button on the right so a fresh number
-                    can always be saved even when some contacts match. */}
-                <div className="w-full max-w-[360px] min-h-[4rem] mb-4 flex flex-row items-stretch gap-2">
-                  <div className="flex-1 flex items-center">
-                    {dialNumber ? (
+                    can always be saved. The button is fixed-width and
+                    never shrinks, so no amount of matches can push it off
+                    screen. Up to ~6 rows are visible; more rows scroll. */}
+                <div className="w-full max-w-[360px] mb-4 flex flex-row items-stretch gap-2">
+                  <div className="flex-1 min-w-0 flex items-center">
+                    {dialNumber && dialNumber.length > 0 ? (
                       matchedContacts.length > 0 ? (
-                        <div className="w-full max-h-24 overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40">
+                        <div className="w-full max-h-[288px] overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40">
                           {matchedContacts.map(contact => (
                             <div
                               key={contact.id}
@@ -493,7 +495,7 @@ export default function CallsPage() {
                           ))}
                         </div>
                       ) : (
-                        <div className="text-[10px] text-zinc-500 font-mono italic px-3">
+                        <div className="w-full h-12 flex items-center justify-center text-[10px] text-zinc-500 font-mono italic px-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
                           No saved contact matches
                         </div>
                       )
@@ -502,15 +504,15 @@ export default function CallsPage() {
                     )}
                   </div>
 
-                  {/* Persistent "New contact" button — visible whenever any
-                      digit is typed, regardless of matches. */}
-                  {dialNumber && (
+                  {/* Persistent "New contact" button — fixed width, always
+                      visible as soon as any character is typed. */}
+                  {dialNumber && dialNumber.length > 0 && (
                     <button
                       onClick={() => {
                         triggerVibration();
                         router.push(`/contacts?add=true&phone=${encodeURIComponent(dialNumber)}`);
                       }}
-                      className="w-16 rounded-xl bg-gradient-to-br from-[#00D4FF] to-[#008BBF] text-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all shrink-0 shadow-lg"
+                      className="w-14 rounded-xl bg-gradient-to-br from-[#00D4FF] to-[#008BBF] text-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all shrink-0 shadow-lg"
                       title="Save as new contact"
                     >
                       <Plus className="h-5 w-5 stroke-[3]" />

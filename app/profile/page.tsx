@@ -31,6 +31,7 @@ import { placeCall, getPreferredCallSimId } from '@/lib/telecom-plugin';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { loadContactsFromDB } from '@/lib/contacts-store';
 
 function ProfileContent() {
   const router = useRouter();
@@ -201,6 +202,7 @@ function ProfileContent() {
             favorite: isFavorite,
           };
           await saveContact(updated);
+    try { await loadContactsFromDB(); } catch {}
           setContact(updated);
           setIsEditMode(false);
           return;
@@ -237,6 +239,7 @@ function ProfileContent() {
       favorite: isFavorite,
     };
     await saveContact(updated);
+    try { await loadContactsFromDB(); } catch {}
     setContact(updated);
     setIsEditMode(false);
   };
@@ -248,6 +251,7 @@ function ProfileContent() {
     setIsFavorite(next);
     const updated = { ...contact, favorite: next };
     await saveContact(updated);
+    try { await loadContactsFromDB(); } catch {}
     setContact(updated);
   };
 
