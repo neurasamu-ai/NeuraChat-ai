@@ -1,126 +1,306 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, ChevronDown, X, ExternalLink, Shield } from 'lucide-react';
+import { ChevronDown, X, Send, Settings as SettingsIcon, Trash2, Sparkles } from 'lucide-react';
 import Header from '@/components/Header';
-import {
-  AI_MODELS,
-  AiModel,
-  getPreferredAiModelId,
-  setPreferredAiModelId,
-  getAiModel,
-  openAiWebView,
-  isAiWebViewAvailable,
-} from '@/lib/ai-webview';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { PROVIDERS, getProvider } from '@/lib/ai/providers';
+import { getProviderSettings } from '@/lib/ai/keystore';
+import { streamChat } from '@/lib/ai/client';
+import { ChatMessage } from '@/lib/ai/types';
+import {
+  AiMessage,
+  loadAiMessages,
+  saveAiMessage,
+  clearAiMessages,
+} from '@/lib/ai/storage';
+import { generateId } from '@/lib/utils';
 
 export default function AiChatPage() {
   const router = useRouter();
-  const [modelId, setModelId] = useState<string>('chatgpt');
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [opening, setOpening] = useState(false);
 
+  const [activeProviderId, setActiveProviderId] = useState<string>('openai');
+  const [activeModel, setActiveModel] = useState<string>('');
+  const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
+
+  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [streaming, setStreaming] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  const abortRef = useRef<AbortController | null>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const threadId = `ai-${activeProviderId}`;
+
+  // Load enabled providers + settings
   useEffect(() => {
-    setModelId(getPreferredAiModelId());
+    (async () => {
+      const settings = await getProviderSettings();
+      const enabled = settings.filter((s) => s.enabled).map((s) => s.providerId);
+      setEnabledProviders(enabled);
+      const firstEnabled = enabled[0] || 'openai';
+      setActiveProviderId(firstEnabled);
+      const s = settings.find((x) => x.providerId === firstEnabled);
+      const def = getProvider(firstEnabled);
+      setActiveModel(s?.model || def?.defaultModel || '');
+    })();
   }, []);
 
-  const model = getAiModel(modelId) || AI_MODELS[0];
+  // Load thread when provider changes
+  useEffect(() => {
+    (async () => {
+      const msgs = await loadAiMessages(threadId);
+      setMessages(msgs);
+    })();
+  }, [threadId]);
 
-  const openModel = async (m: AiModel) => {
-    setOpening(true);
+  // Scroll on new content
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  useBackHandler(pickerOpen, () => setPickerOpen(false));
+
+  const triggerVibration = () => {
+    if (typeof window !== 'undefined' && navigator.vibrate) navigator.vibrate(25);
+  };
+
+  const handleClear = async () => {
+    triggerVibration();
+    await clearAiMessages(threadId);
+    setMessages([]);
+  };
+
+  const stopStreaming = () => {
+    if (abortRef.current) {
+      try { abortRef.current.abort(); } catch {}
+      abortRef.current = null;
+    }
+    setStreaming(false);
+  };
+
+  const handleSend = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const text = input.trim();
+    if (!text || streaming) return;
+
+    triggerVibration();
+    setInput('');
+
+    const userMsg: AiMessage = {
+      id: generateId('ai-u'),
+      threadId,
+      role: 'user',
+      content: text,
+      timestamp: Date.now(),
+      providerId: activeProviderId,
+      model: activeModel,
+    };
+    await saveAiMessage(userMsg);
+    setMessages((prev) => [...prev, userMsg]);
+
+    // Build the request history (last 20 messages for context).
+    const history: ChatMessage[] = [...messages, userMsg]
+      .slice(-20)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    // Placeholder assistant message that we stream into.
+    const assistantId = generateId('ai-a');
+    const assistantMsg: AiMessage = {
+      id: assistantId,
+      threadId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      providerId: activeProviderId,
+      model: activeModel,
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+    setStreaming(true);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    let acc = '';
+    let meta: { providerId: string; keyId?: string; model?: string } | undefined;
+
     try {
-      await openAiWebView(m.url, m.name, m.id);
-    } catch (e) {
-      console.error('openAiWebView failed', e);
+      for await (const delta of streamChat(activeProviderId, history, controller.signal)) {
+        if (delta.error) {
+          acc += (acc ? '\n\n' : '') + `⚠️ ${delta.error}`;
+          break;
+        }
+        if (delta.text) {
+          acc += delta.text;
+          if (delta.meta) meta = delta.meta;
+          // Update UI on the fly.
+          setMessages((prev) =>
+            prev.map((m) => (m.id === assistantId ? { ...m, content: acc } : m))
+          );
+        }
+        if (delta.done) {
+          if (delta.meta) meta = delta.meta;
+          break;
+        }
+      }
+    } catch (err: any) {
+      acc += (acc ? '\n\n' : '') + `⚠️ ${err?.message || 'stream failed'}`;
     } finally {
-      setTimeout(() => setOpening(false), 800);
+      abortRef.current = null;
+      setStreaming(false);
+
+      const finalMsg: AiMessage = {
+        ...assistantMsg,
+        content: acc || '(no response)',
+        providerId: meta?.providerId || activeProviderId,
+        model: meta?.model || activeModel,
+      };
+      await saveAiMessage(finalMsg);
+      setMessages((prev) => prev.map((m) => (m.id === assistantId ? finalMsg : m)));
     }
   };
 
-  const pickModel = (m: AiModel) => {
-    setPreferredAiModelId(m.id);
-    setModelId(m.id);
-    setPickerOpen(false);
+  const openProviderPicker = () => {
+    triggerVibration();
+    setPickerOpen(true);
   };
 
-  useBackHandler(pickerOpen, () => setPickerOpen(false));
+  const pickProvider = async (providerId: string) => {
+    triggerVibration();
+    setPickerOpen(false);
+    const settings = await getProviderSettings();
+    const s = settings.find((x) => x.providerId === providerId);
+    const def = getProvider(providerId);
+    setActiveProviderId(providerId);
+    setActiveModel(s?.model || def?.defaultModel || '');
+  };
+
+  const activeProvider = getProvider(activeProviderId);
+  const providerName = activeProvider?.name || activeProviderId;
 
   return (
     <>
       <Header
-        title=""
+        title="Chat With AI's"
         onBack={() => router.back()}
         rightAction={
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider"
-            style={{
-              backgroundColor: '#18181b',
-              color: model.color === '#000000' ? '#ffffff' : model.color,
-              border: `1px solid ${model.color === '#000000' ? '#ffffff33' : model.color + '66'}`,
-            }}
-          >
-            <span>{model.emoji}</span>
-            <span>{model.name}</span>
-            <ChevronDown className="h-3 w-3" />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={handleClear}
+              className="p-2 rounded-full text-zinc-400 hover:text-red-400 transition-colors"
+              title="Clear chat"
+            >
+              <Trash2 className="h-4.5 w-4.5" />
+            </button>
+            <button
+              onClick={() => {
+                triggerVibration();
+                router.push('/settings');
+              }}
+              className="p-2 rounded-full text-zinc-400 hover:text-white transition-colors"
+              title="AI Providers"
+            >
+              <SettingsIcon className="h-4.5 w-4.5" />
+            </button>
+          </div>
         }
       />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 -mt-8">
-        {/* Big model card */}
-        <motion.div
-          initial={{ scale: 0.9, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="w-full max-w-sm rounded-3xl border p-6 text-center"
-          style={{
-            backgroundColor: '#0a0a0a',
-            borderColor: model.color === '#000000' ? '#333' : model.color + '55',
-          }}
-        >
-          <div
-            className="w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-3xl mb-4"
-            style={{ backgroundColor: model.color === '#000000' ? '#18181b' : model.color + '22' }}
-          >
-            {model.emoji}
-          </div>
-          <h2 className="text-xl font-bold text-white mb-1">{model.name}</h2>
-          <p className="text-xs text-zinc-500 mb-5">
-            Opens the official {model.name} website in a private in-app browser.
-            Your login is remembered.
-          </p>
-
+      <div className="flex-1 flex flex-col min-h-0 bg-zinc-950">
+        {/* Provider badge */}
+        <div className="px-4 pt-3 pb-2 flex items-center justify-center">
           <button
-            onClick={() => openModel(model)}
-            disabled={opening}
-            className="w-full py-3.5 rounded-2xl text-sm font-bold text-black active:scale-95 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-            style={{ backgroundColor: model.color === '#000000' ? '#ffffff' : model.color }}
+            onClick={openProviderPicker}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all active:scale-95"
+            style={{
+              backgroundColor: '#18181b',
+              borderColor: 'rgba(0,212,255,0.35)',
+            }}
           >
-            <Sparkles className="h-4 w-4" />
-            {opening ? 'Opening…' : `Open ${model.name}`}
+            <Sparkles className="h-3.5 w-3.5 text-[#00D4FF]" />
+            <span className="text-xs font-bold text-white">{providerName}</span>
+            <span className="text-[10px] text-zinc-500 font-mono truncate max-w-[120px]">
+              {activeModel}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
           </button>
-
-          <button
-            onClick={() => setPickerOpen(true)}
-            className="w-full mt-3 py-2.5 rounded-2xl text-xs font-semibold text-zinc-300 border border-zinc-800 hover:bg-zinc-900 active:scale-95 transition-all"
-          >
-            Change model
-          </button>
-        </motion.div>
-
-        {/* Info strip */}
-        <div className="mt-6 flex items-start gap-2 max-w-sm text-[10px] text-zinc-500 leading-relaxed">
-          <Shield className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-          <p>
-            The web session runs in its own window. Cookies persist so you only sign
-            in once per model. Downloads from the page are saved to your device.
-          </p>
         </div>
-      </main>
 
-      {/* Model picker modal */}
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {messages.length === 0 && (
+            <div className="text-center py-16 select-none">
+              <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-[#00D4FF]/20 to-[#FF006E]/20 border border-[#00D4FF]/40 flex items-center justify-center">
+                <Sparkles className="h-6 w-6 text-[#00D4FF]" />
+              </div>
+              <p className="text-sm font-bold text-white mb-1">Start a conversation</p>
+              <p className="text-[11px] text-zinc-500 px-8 leading-relaxed">
+                Messages go directly to your provider. Your API keys stay on
+                this device.
+              </p>
+            </div>
+          )}
+
+          {messages.map((m) => {
+            const isUser = m.role === 'user';
+            return (
+              <div key={m.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                    isUser
+                      ? 'bg-[#00D4FF] text-black rounded-tr-sm'
+                      : 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-sm'
+                  }`}
+                >
+                  {m.content || (streaming ? '…' : '')}
+                </div>
+              </div>
+            );
+          })}
+          <div ref={scrollRef} className="h-1" />
+        </div>
+
+        {/* Input */}
+        <form
+          onSubmit={handleSend}
+          className="px-3 py-3 bg-zinc-950 border-t border-zinc-900 flex items-center gap-2"
+        >
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Message…"
+            disabled={streaming}
+            className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#00D4FF] disabled:opacity-50"
+          />
+          {streaming ? (
+            <button
+              type="button"
+              onClick={stopStreaming}
+              className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center active:scale-95"
+              title="Stop"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={!input.trim()}
+              className="w-10 h-10 rounded-xl bg-[#00D4FF] text-black flex items-center justify-center active:scale-95 disabled:opacity-30"
+              title="Send"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          )}
+        </form>
+      </div>
+
+      {/* Provider picker modal */}
       <AnimatePresence>
         {pickerOpen && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6">
@@ -139,55 +319,49 @@ export default function AiChatPage() {
 
               <h3 className="text-base font-bold text-white mb-1">Choose AI</h3>
               <p className="text-[11px] text-zinc-500 mb-4">
-                Switching here changes the model for every future open. Each one
-                keeps its own login session.
+                Only providers you enabled in Settings → AI Providers appear here.
               </p>
 
-              <div className="space-y-2">
-                {AI_MODELS.map((m) => {
-                  const selected = m.id === modelId;
-                  return (
-                    <button
-                      key={m.id}
-                      onClick={() => pickModel(m)}
-                      className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all active:scale-[0.98] ${
-                        selected
-                          ? 'bg-zinc-900 border-zinc-700'
-                          : 'bg-zinc-950 border-zinc-900 hover:bg-zinc-900/60'
-                      }`}
-                    >
-                      <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shrink-0"
-                        style={{
-                          backgroundColor:
-                            m.color === '#000000' ? '#18181b' : m.color + '22',
-                        }}
-                      >
-                        {m.emoji}
-                      </div>
-                      <div className="text-left flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">
-                          {m.name}
-                        </p>
-                        <p className="text-[10px] text-zinc-500 truncate font-mono">
-                          {new URL(m.url).hostname}
-                        </p>
-                      </div>
-                      {selected && (
-                        <span className="text-[#00D4FF] text-xs font-bold">✓</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {!isAiWebViewAvailable() && (
-                <div className="mt-4 flex items-start gap-2 text-[10px] text-yellow-500/80">
-                  <ExternalLink className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-                  <p>
-                    Native WebView plugin not available here — will open in a new
-                    tab instead.
+              {enabledProviders.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-xs text-zinc-400 mb-3">
+                    No provider enabled yet.
                   </p>
+                  <button
+                    onClick={() => {
+                      setPickerOpen(false);
+                      router.push('/settings');
+                    }}
+                    className="px-4 py-2 rounded-xl bg-[#00D4FF] text-black text-xs font-bold active:scale-95"
+                  >
+                    Configure in Settings
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {PROVIDERS.filter((p) => enabledProviders.includes(p.id)).map((p) => {
+                    const selected = p.id === activeProviderId;
+                    return (
+                      <button
+                        key={p.id}
+                        onClick={() => pickProvider(p.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border transition-all active:scale-[0.98] ${
+                          selected
+                            ? 'bg-zinc-900 border-zinc-700'
+                            : 'bg-zinc-950 border-zinc-900 hover:bg-zinc-900/60'
+                        }`}
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-[#00D4FF]/15 flex items-center justify-center">
+                          <Sparkles className="h-4 w-4 text-[#00D4FF]" />
+                        </div>
+                        <div className="text-left flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.name}</p>
+                          <p className="text-[10px] text-zinc-500 truncate">{p.description}</p>
+                        </div>
+                        {selected && <span className="text-[#00D4FF] text-xs font-bold">✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </motion.div>

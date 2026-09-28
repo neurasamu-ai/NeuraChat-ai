@@ -17,7 +17,8 @@ import {
   Shield as ShieldIcon,
   Ban,
   Database,
-  Palette
+  Palette,
+  Sparkles
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -31,6 +32,9 @@ import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { runBackup, listBackups, restoreFromFile } from '@/lib/backup';
 import { CALL_THEMES, getCallThemeId, setCallThemeId } from '@/lib/call-themes';
+import { PROVIDERS, getProvider } from '@/lib/ai/providers';
+import { getApiKeys, addApiKey, deleteApiKey, getProviderSettings, updateProviderSettings } from '@/lib/ai/keystore';
+import { ApiKeyEntry, ProviderSettings } from '@/lib/ai/types';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -67,6 +71,15 @@ export default function SettingsPage() {
   const [backupMessage, setBackupMessage] = useState('');
   const [isCallThemeOpen, setIsCallThemeOpen] = useState(false);
   const [selectedCallTheme, setSelectedCallTheme] = useState('neon');
+  const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
+  const [aiSettings, setAiSettings] = useState<ProviderSettings[]>([]);
+  const [aiKeys, setAiKeys] = useState<ApiKeyEntry[]>([]);
+  const [editingProvider, setEditingProvider] = useState<string | null>(null);
+  const [newKeyLabel, setNewKeyLabel] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
+  const [editBaseUrl, setEditBaseUrl] = useState('');
+  const [editModel, setEditModel] = useState('');
+  const [aiMessage, setAiMessage] = useState('');
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -173,6 +186,93 @@ export default function SettingsPage() {
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
   useBackHandler(isBackupOpen, () => setIsBackupOpen(false));
   useBackHandler(isCallThemeOpen, () => setIsCallThemeOpen(false));
+  useBackHandler(isAiProvidersOpen, () => setIsAiProvidersOpen(false));
+  useBackHandler(!!editingProvider, () => setEditingProvider(null));
+
+  const loadAiState = async () => {
+    try {
+      const [settings, keys] = await Promise.all([getProviderSettings(), getApiKeys()]);
+      setAiSettings(settings);
+      setAiKeys(keys);
+    } catch (e) {
+      console.error('loadAiState failed', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAiProvidersOpen) return;
+    loadAiState();
+  }, [isAiProvidersOpen]);
+
+  const toggleProviderEnabled = async (providerId: string) => {
+    triggerVibration();
+    const cur = aiSettings.find((s) => s.providerId === providerId);
+    await updateProviderSettings(providerId, { enabled: !cur?.enabled });
+    await loadAiState();
+  };
+
+  const openProviderEditor = (providerId: string) => {
+    triggerVibration();
+    const def = getProvider(providerId);
+    const cur = aiSettings.find((s) => s.providerId === providerId);
+    setEditBaseUrl(cur?.baseUrl || def?.defaultBaseUrl || '');
+    setEditModel(cur?.model || def?.defaultModel || '');
+    setEditingProvider(providerId);
+    setNewKeyLabel('');
+    setNewKeyValue('');
+    setAiMessage('');
+  };
+
+  const saveProviderEdits = async () => {
+    if (!editingProvider) return;
+    triggerVibration();
+    setAiMessage('');
+    try {
+      await updateProviderSettings(editingProvider, {
+        baseUrl: editBaseUrl.trim() || undefined,
+        model: editModel.trim() || undefined,
+      });
+      setAiMessage('Saved');
+      await loadAiState();
+    } catch (e: any) {
+      setAiMessage('Save failed: ' + (e?.message || 'unknown'));
+    }
+  };
+
+  const addNewKey = async () => {
+    if (!editingProvider) return;
+    const val = newKeyValue.trim();
+    if (!val) {
+      setAiMessage('Key cannot be empty');
+      return;
+    }
+    triggerVibration();
+    try {
+      await addApiKey(editingProvider, newKeyLabel.trim() || 'Key', val);
+      setNewKeyLabel('');
+      setNewKeyValue('');
+      setAiMessage('Key added');
+      await loadAiState();
+    } catch (e: any) {
+      setAiMessage('Add failed: ' + (e?.message || 'unknown'));
+    }
+  };
+
+  const removeKey = async (id: string) => {
+    triggerVibration();
+    try {
+      await deleteApiKey(id);
+      await loadAiState();
+    } catch (e: any) {
+      setAiMessage('Remove failed: ' + (e?.message || 'unknown'));
+    }
+  };
+
+  const setRotation = async (providerId: string, mode: 'round-robin' | 'fallback') => {
+    triggerVibration();
+    await updateProviderSettings(providerId, { rotation: mode });
+    await loadAiState();
+  };
 
   useEffect(() => {
     if (!isCallThemeOpen) return;
@@ -387,6 +487,21 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <Ban className="h-4 w-4 text-red-500" />
               <span className="text-xs font-medium text-zinc-200">Blocked Contacts</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+          </div>
+
+          {/* AI Providers */}
+          <div
+            onClick={() => {
+              triggerVibration();
+              setIsAiProvidersOpen(true);
+            }}
+            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
+          >
+            <div className="flex items-center gap-3">
+              <Sparkles className="h-4 w-4 text-[#00D4FF]" />
+              <span className="text-xs font-medium text-zinc-200">AI Providers</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -721,6 +836,260 @@ export default function SettingsPage() {
               </motion.div>
             </div>
           )}
+        </AnimatePresence>
+
+        {/* ========== AI PROVIDERS MODAL ========== */}
+        <AnimatePresence>
+          {isAiProvidersOpen && (
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
+              >
+                <button
+                  onClick={() => setIsAiProvidersOpen(false)}
+                  className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+
+                <h3 className="text-base font-bold text-white mb-1">AI Providers</h3>
+                <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
+                  Turn on the providers you use and add at least one API key.
+                  The chat only shows enabled providers.
+                </p>
+
+                <div className="space-y-2">
+                  {PROVIDERS.map((p) => {
+                    const setting = aiSettings.find((x) => x.providerId === p.id);
+                    const enabled = !!setting?.enabled;
+                    const keyCount = aiKeys.filter((k) => k.providerId === p.id).length;
+                    return (
+                      <div
+                        key={p.id}
+                        className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-white truncate">
+                              {p.name}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                              {keyCount} key{keyCount === 1 ? '' : 's'}
+                              {setting?.model ? ` · ${setting.model}` : ''}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => toggleProviderEnabled(p.id)}
+                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider active:scale-95 ${
+                              enabled
+                                ? 'bg-[#00D4FF]/20 text-[#00D4FF]'
+                                : 'bg-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {enabled ? 'On' : 'Off'}
+                          </button>
+                        </div>
+                        <button
+                          onClick={() => openProviderEditor(p.id)}
+                          className="w-full mt-2 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 text-[10px] font-bold uppercase tracking-wider active:scale-95"
+                        >
+                          Manage keys & model
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setIsAiProvidersOpen(false)}
+                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
+                >
+                  Done
+                </button>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* ========== PROVIDER EDITOR MODAL ========== */}
+        <AnimatePresence>
+          {editingProvider && (() => {
+            const p = getProvider(editingProvider);
+            const setting = aiSettings.find((x) => x.providerId === editingProvider);
+            const keys = aiKeys.filter((k) => k.providerId === editingProvider);
+            return (
+              <div className="fixed inset-0 bg-black/92 backdrop-blur-md z-[60] flex items-center justify-center p-6 select-none">
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[88vh] overflow-y-auto"
+                >
+                  <button
+                    onClick={() => setEditingProvider(null)}
+                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+
+                  <h3 className="text-base font-bold text-white mb-1">
+                    {p?.name || editingProvider}
+                  </h3>
+                  {p?.description && (
+                    <p className="text-[10px] text-zinc-500 mb-4">{p.description}</p>
+                  )}
+
+                  {/* Base URL */}
+                  <div className="mb-3">
+                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
+                      Base URL
+                    </label>
+                    <input
+                      type="text"
+                      value={editBaseUrl}
+                      onChange={(e) => setEditBaseUrl(e.target.value)}
+                      placeholder={p?.defaultBaseUrl || 'https://...'}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
+                    />
+                  </div>
+
+                  {/* Model */}
+                  <div className="mb-3">
+                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
+                      Model
+                    </label>
+                    {p?.models && p.models.length > 0 ? (
+                      <select
+                        value={editModel}
+                        onChange={(e) => setEditModel(e.target.value)}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
+                      >
+                        {p.models.map((m) => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={editModel}
+                        onChange={(e) => setEditModel(e.target.value)}
+                        placeholder={p?.defaultModel || 'model-id'}
+                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
+                      />
+                    )}
+                  </div>
+
+                  {/* Rotation */}
+                  <div className="mb-4">
+                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
+                      Key rotation
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {(['round-robin', 'fallback'] as const).map((mode) => {
+                        const selected = setting?.rotation === mode;
+                        return (
+                          <button
+                            key={mode}
+                            onClick={() => setRotation(editingProvider, mode)}
+                            className={`py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider ${
+                              selected
+                                ? 'bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/50'
+                                : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
+                            }`}
+                          >
+                            {mode === 'round-robin' ? 'Round Robin' : 'Fallback'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[9px] text-zinc-600 mt-1 leading-snug">
+                      Round Robin cycles keys; Fallback always tries the first
+                      until it fails.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={saveProviderEdits}
+                    className="w-full py-2.5 rounded-xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 mb-4"
+                  >
+                    Save provider settings
+                  </button>
+
+                  {/* Keys list */}
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                    API Keys
+                  </p>
+
+                  {keys.length === 0 ? (
+                    <p className="text-[11px] text-zinc-600 py-2">No keys yet.</p>
+                  ) : (
+                    <div className="space-y-2 mb-3">
+                      {keys.map((k) => (
+                        <div
+                          key={k.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800"
+                        >
+                          <div className="min-w-0 flex-1 mr-2">
+                            <p className="text-[11px] text-white font-semibold truncate">
+                              {k.label}
+                            </p>
+                            <p className="text-[9px] text-zinc-500 font-mono truncate">
+                              {k.key.slice(0, 6)}…{k.key.slice(-4)}
+                            </p>
+                            {k.lastError && (
+                              <p className="text-[9px] text-red-400 truncate mt-0.5">
+                                {k.lastError}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeKey(k.id)}
+                            className="p-1.5 rounded-lg bg-red-950/30 text-red-400 active:scale-95 shrink-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add key */}
+                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
+                    Add new key
+                  </p>
+                  <input
+                    type="text"
+                    value={newKeyLabel}
+                    onChange={(e) => setNewKeyLabel(e.target.value)}
+                    placeholder="Label (e.g. Personal)"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white mb-2 focus:outline-none focus:border-[#00D4FF]"
+                  />
+                  <input
+                    type="password"
+                    value={newKeyValue}
+                    onChange={(e) => setNewKeyValue(e.target.value)}
+                    placeholder="sk-…  (key is stored locally)"
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono mb-2 focus:outline-none focus:border-[#00D4FF]"
+                  />
+                  <button
+                    onClick={addNewKey}
+                    className="w-full py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-xs uppercase tracking-wider active:scale-97"
+                  >
+                    Add key
+                  </button>
+
+                  {aiMessage && (
+                    <p className="text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mt-3 leading-snug">
+                      {aiMessage}
+                    </p>
+                  )}
+                </motion.div>
+              </div>
+            );
+          })()}
         </AnimatePresence>
 
         {/* ========== CALL UI THEMES MODAL ========== */}
