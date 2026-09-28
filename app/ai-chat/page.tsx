@@ -9,6 +9,7 @@ import {
   History, RotateCcw, Pencil,
 } from 'lucide-react';
 import Header from '@/components/Header';
+import AiHubLogo from '@/components/AiHubLogo';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { PROVIDERS, getProvider } from '@/lib/ai/providers';
 import { getProviderSettings } from '@/lib/ai/keystore';
@@ -594,8 +595,8 @@ export default function AiChatPage() {
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {messages.length === 0 && (
                 <div className="text-center py-16 select-none">
-                  <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-tr from-[#00D4FF]/20 to-[#FF006E]/20 border border-[#00D4FF]/40 flex items-center justify-center">
-                    <Sparkles className="h-6 w-6 text-[#00D4FF]" />
+                  <div className="mx-auto mb-4 flex justify-center">
+                    <AiHubLogo size={72} />
                   </div>
                   <p className="text-sm font-bold text-white mb-1">Start a conversation</p>
                   <p className="text-[11px] text-zinc-500 px-8 leading-relaxed">

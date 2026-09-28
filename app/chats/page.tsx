@@ -22,6 +22,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import AiHubLogo from '@/components/AiHubLogo';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { useChats } from '@/lib/use-chats';
@@ -323,8 +324,8 @@ export default function ChatsPage() {
           onClick={() => router.push('/ai-chat')}
           className="mb-3 rounded-2xl border border-[#00D4FF]/40 bg-gradient-to-r from-[#00D4FF]/10 to-[#FF006E]/10 p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
         >
-          <div className="w-12 h-12 rounded-2xl bg-black/60 flex items-center justify-center text-2xl">
-            ✨
+          <div className="w-12 h-12 flex items-center justify-center">
+            <AiHubLogo size={40} />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
