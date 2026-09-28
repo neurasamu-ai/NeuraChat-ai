@@ -1,13 +1,12 @@
 'use client';
 
 import { getDB } from '../db';
-import { ApiKeyEntry, ProviderSettings } from './types';
+import { ProviderKey, ProviderSettings } from './types';
 import { PROVIDERS } from './providers';
 
-// Keys and provider settings are stored in the existing `userProfile` object
-// store (which is a generic KV store with a `userProfile` key path).
-// We only keep two records: `aiKeys` (array of ApiKeyEntry) and
-// `aiProviders` (array of ProviderSettings).
+// Persisted in the existing userProfile KV store:
+//   aiKeys      -> ProviderKey[]   (one entry per provider)
+//   aiProviders -> ProviderSettings[]
 
 const KEYS_KEY = 'aiKeys';
 const PROVIDERS_KEY = 'aiProviders';
@@ -34,55 +33,53 @@ async function writeRecord<T>(key: string, value: T): Promise<void> {
   }
 }
 
-// ---- API keys ----
-export async function getApiKeys(): Promise<ApiKeyEntry[]> {
-  const list = await readRecord<ApiKeyEntry[]>(KEYS_KEY);
+// ---- API keys (one per provider) ----
+export async function getKeys(): Promise<ProviderKey[]> {
+  const list = await readRecord<ProviderKey[]>(KEYS_KEY);
   return Array.isArray(list) ? list : [];
 }
 
-export async function addApiKey(providerId: string, label: string, key: string): Promise<ApiKeyEntry> {
-  const list = await getApiKeys();
-  const entry: ApiKeyEntry = {
-    id: `k-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    providerId,
-    label: label || 'Key',
-    key: key.trim(),
-    addedAt: Date.now(),
-    requestCount: 0,
-  };
-  list.push(entry);
-  await writeRecord(KEYS_KEY, list);
-  return entry;
+export async function getKeyForProvider(providerId: string): Promise<ProviderKey | undefined> {
+  const list = await getKeys();
+  return list.find((k) => k.providerId === providerId);
 }
 
-export async function updateApiKey(id: string, patch: Partial<ApiKeyEntry>): Promise<void> {
-  const list = await getApiKeys();
-  const next = list.map((k) => (k.id === id ? { ...k, ...patch } : k));
+export async function setKeyForProvider(providerId: string, key: string): Promise<void> {
+  const list = await getKeys();
+  const next = list.filter((k) => k.providerId !== providerId);
+  next.push({ providerId, key: key.trim(), updatedAt: Date.now() });
   await writeRecord(KEYS_KEY, next);
 }
 
-export async function deleteApiKey(id: string): Promise<void> {
-  const list = await getApiKeys();
-  await writeRecord(KEYS_KEY, list.filter((k) => k.id !== id));
+export async function clearKeyForProvider(providerId: string): Promise<void> {
+  const list = await getKeys();
+  await writeRecord(KEYS_KEY, list.filter((k) => k.providerId !== providerId));
 }
 
-export async function getKeysForProvider(providerId: string): Promise<ApiKeyEntry[]> {
-  const list = await getApiKeys();
-  return list.filter((k) => k.providerId === providerId);
+export async function markKeyError(providerId: string, errorMsg: string): Promise<void> {
+  const list = await getKeys();
+  const next = list.map((k) =>
+    k.providerId === providerId ? { ...k, lastError: errorMsg, updatedAt: Date.now() } : k
+  );
+  await writeRecord(KEYS_KEY, next);
 }
 
 // ---- Provider settings ----
 export async function getProviderSettings(): Promise<ProviderSettings[]> {
   const list = await readRecord<ProviderSettings[]>(PROVIDERS_KEY);
-  if (Array.isArray(list) && list.length) return list;
-  // First run: seed a default settings entry for each provider.
+  if (Array.isArray(list) && list.length) {
+    // Ensure every provider has an entry (new providers added later).
+    const map = new Map(list.map((s) => [s.providerId, s]));
+    for (const p of PROVIDERS) {
+      if (!map.has(p.id)) {
+        map.set(p.id, { providerId: p.id, enabled: false });
+      }
+    }
+    return Array.from(map.values());
+  }
   return PROVIDERS.map((p) => ({
     providerId: p.id,
-    enabled: p.id === 'openai', // only OpenAI enabled out of the box
-    baseUrl: undefined,
-    model: undefined,
-    rotation: 'round-robin' as const,
-    rrCursor: 0,
+    enabled: p.id === 'openai',
   }));
 }
 
@@ -96,16 +93,8 @@ export async function updateProviderSettings(
 ): Promise<void> {
   const all = await getProviderSettings();
   const idx = all.findIndex((p) => p.providerId === providerId);
-  if (idx >= 0) {
-    all[idx] = { ...all[idx], ...patch };
-  } else {
-    all.push({
-      providerId,
-      enabled: false,
-      rotation: 'round-robin',
-      ...patch,
-    });
-  }
+  if (idx >= 0) all[idx] = { ...all[idx], ...patch };
+  else all.push({ providerId, enabled: false, ...patch });
   await saveProviderSettings(all);
 }
 

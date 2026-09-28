@@ -12,6 +12,9 @@ interface BackupPluginType {
   writeBackup(options: { filename: string; content: string }): Promise<{ ok: boolean; path?: string }>;
   listBackups(): Promise<{ backups: Array<{ filename: string; modified: number; size: number }> }>;
   readBackup(options: { filename: string }): Promise<{ content: string }>;
+  writeAutoBackup(options: { filename: string; content: string }): Promise<{ ok: boolean; path?: string }>;
+  listAutoBackups(): Promise<{ backups: Array<{ filename: string; modified: number; size: number }> }>;
+  readAutoBackup(options: { filename: string }): Promise<{ content: string }>;
 }
 
 const BackupPlugin = registerPlugin<BackupPluginType>('BackupPlugin');
@@ -102,10 +105,22 @@ export async function runBackup(): Promise<{ ok: boolean; path?: string; error?:
   return writeBackupFile(filename, payload);
 }
 
-// Auto backup — one rolling file, overwritten every run.
+// Auto backup — private folder (hidden from file manager), one rolling
+// file overwritten every run. API keys are intentionally excluded.
 export async function runAutoBackup(): Promise<{ ok: boolean; path?: string; error?: string }> {
-  const payload = await collectPayload();
-  return writeBackupFile(AUTO_BACKUP_FILENAME, payload);
+  if (!isBackupAvailable()) return { ok: false, error: 'Not available' };
+  try {
+    const payload = await collectPayload();
+    const content = JSON.stringify(payload);
+    const res = await BackupPlugin.writeAutoBackup({
+      filename: AUTO_BACKUP_FILENAME,
+      content,
+    });
+    return { ok: !!res.ok, path: res.path };
+  } catch (e: any) {
+    console.error('[backup] auto write failed', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 export async function listBackups(): Promise<Array<{ filename: string; modified: number; size: number }>> {
@@ -191,9 +206,38 @@ export async function restoreFromFile(filename: string): Promise<{ ok: boolean; 
 
 // Check whether an auto backup exists (used on first launch after reinstall).
 export async function findAutoBackup(): Promise<{ filename: string; modified: number } | null> {
-  const list = await listBackups();
-  const found = list.find((b) => b.filename === AUTO_BACKUP_FILENAME);
-  return found ? { filename: found.filename, modified: found.modified } : null;
+  if (!isBackupAvailable()) return null;
+  try {
+    const res = await BackupPlugin.listAutoBackups();
+    const found = (res.backups || []).find((b) => b.filename === AUTO_BACKUP_FILENAME);
+    return found ? { filename: found.filename, modified: found.modified } : null;
+  } catch (e) {
+    console.error('[backup] findAutoBackup failed', e);
+    return null;
+  }
+}
+
+// Manual backups in Downloads — used by the settings "Existing backups"
+// list (only manual, user-created files).
+export async function findManualBackups() {
+  return listBackups();
+}
+
+// Restore a private auto-backup file.
+export async function restoreFromAutoBackup(): Promise<{ ok: boolean; error?: string; stats?: any }> {
+  if (!isBackupAvailable()) return { ok: false, error: 'Not available' };
+  try {
+    const found = await findAutoBackup();
+    if (!found) return { ok: false, error: 'No auto backup' };
+    const res = await BackupPlugin.readAutoBackup({ filename: found.filename });
+    if (!res.content) return { ok: false, error: 'Empty file' };
+    const payload: BackupPayload = JSON.parse(res.content);
+    const stats = await applyPayload(payload);
+    return { ok: true, stats };
+  } catch (e: any) {
+    console.error('[backup] restore auto failed', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 // Wipe local data so the user can start clean before restoring.

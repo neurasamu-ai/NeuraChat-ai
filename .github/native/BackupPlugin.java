@@ -210,4 +210,101 @@ public class BackupPlugin extends Plugin {
             return new String(bos.toByteArray(), StandardCharsets.UTF_8);
         }
     }
+
+    // Write the auto-backup to the app-private external directory so it is
+    // not visible in the file manager. Trade-off: it is wiped on uninstall.
+    @PluginMethod
+    public void writeAutoBackup(PluginCall call) {
+        String filename = call.getString("filename");
+        String content = call.getString("content");
+        if (filename == null || filename.isEmpty() || content == null) {
+            call.reject("filename and content are required");
+            return;
+        }
+        try {
+            File dir = getContext().getExternalFilesDir(null);
+            if (dir == null) {
+                call.reject("External files dir unavailable");
+                return;
+            }
+            File sub = new File(dir, SUBDIR);
+            if (!sub.exists() && !sub.mkdirs()) {
+                call.reject("mkdirs failed");
+                return;
+            }
+            File out = new File(sub, filename);
+            try (FileOutputStream fos = new FileOutputStream(out)) {
+                fos.write(content.getBytes(StandardCharsets.UTF_8));
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("path", "app-private/" + SUBDIR + "/" + filename);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "writeAutoBackup failed", e);
+            call.reject("Backup failed: " + e.getMessage());
+        }
+    }
+
+    // List the private auto-backups.
+    @PluginMethod
+    public void listAutoBackups(PluginCall call) {
+        JSArray out = new JSArray();
+        try {
+            File dir = getContext().getExternalFilesDir(null);
+            if (dir != null) {
+                File sub = new File(dir, SUBDIR);
+                if (sub.exists()) {
+                    File[] files = sub.listFiles();
+                    if (files != null) {
+                        for (File f : files) {
+                            if (!f.getName().endsWith(".json")) continue;
+                            JSObject item = new JSObject();
+                            item.put("filename", f.getName());
+                            item.put("modified", f.lastModified());
+                            item.put("size", f.length());
+                            out.put(item);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "listAutoBackups failed", e);
+            call.reject("List failed: " + e.getMessage());
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("backups", out);
+        call.resolve(ret);
+    }
+
+    // Read a private auto-backup by filename.
+    @PluginMethod
+    public void readAutoBackup(PluginCall call) {
+        String filename = call.getString("filename");
+        if (filename == null || filename.isEmpty()) {
+            call.reject("filename is required");
+            return;
+        }
+        try {
+            File dir = getContext().getExternalFilesDir(null);
+            if (dir == null) { call.reject("No private dir"); return; }
+            File f = new File(new File(dir, SUBDIR), filename);
+            if (!f.exists()) { call.reject("Not found"); return; }
+            String content;
+            try (InputStream is = new java.io.FileInputStream(f)) {
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[8192];
+                int n;
+                while ((n = is.read(buf)) > 0) bos.write(buf, 0, n);
+                content = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+            }
+            JSObject ret = new JSObject();
+            ret.put("content", content);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "readAutoBackup failed", e);
+            call.reject("Read failed: " + e.getMessage());
+        }
+    }
 }

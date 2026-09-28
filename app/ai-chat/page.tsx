@@ -45,7 +45,7 @@ export default function AiChatPage() {
       setActiveProviderId(firstEnabled);
       const s = settings.find((x) => x.providerId === firstEnabled);
       const def = getProvider(firstEnabled);
-      setActiveModel(s?.model || def?.defaultModel || '');
+      setActiveModel(s?.model || def?.defaultModelHint || '');
     })();
   }, []);
 
@@ -177,7 +177,7 @@ export default function AiChatPage() {
     const s = settings.find((x) => x.providerId === providerId);
     const def = getProvider(providerId);
     setActiveProviderId(providerId);
-    setActiveModel(s?.model || def?.defaultModel || '');
+    setActiveModel(s?.model || def?.defaultModelHint || '');
   };
 
   const activeProvider = getProvider(activeProviderId);

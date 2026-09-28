@@ -34,8 +34,8 @@ import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { runBackup, listBackups, restoreFromFile } from '@/lib/backup';
 import { CALL_THEMES, getCallThemeId, setCallThemeId } from '@/lib/call-themes';
 import { PROVIDERS, getProvider } from '@/lib/ai/providers';
-import { getApiKeys, addApiKey, deleteApiKey, getProviderSettings, updateProviderSettings } from '@/lib/ai/keystore';
-import { ApiKeyEntry, ProviderSettings } from '@/lib/ai/types';
+import { getKeys, getKeyForProvider, setKeyForProvider, clearKeyForProvider, getProviderSettings, updateProviderSettings } from '@/lib/ai/keystore';
+import { ProviderKey, ProviderSettings } from '@/lib/ai/types';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -74,12 +74,11 @@ export default function SettingsPage() {
   const [selectedCallTheme, setSelectedCallTheme] = useState('neon');
   const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
   const [aiSettings, setAiSettings] = useState<ProviderSettings[]>([]);
-  const [aiKeys, setAiKeys] = useState<ApiKeyEntry[]>([]);
+  const [aiKeys, setAiKeys] = useState<ProviderKey[]>([]);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
-  const [newKeyLabel, setNewKeyLabel] = useState('');
-  const [newKeyValue, setNewKeyValue] = useState('');
   const [editBaseUrl, setEditBaseUrl] = useState('');
   const [editModel, setEditModel] = useState('');
+  const [editApiKey, setEditApiKey] = useState('');
   const [aiMessage, setAiMessage] = useState('');
 
   // Edit fields
@@ -192,7 +191,7 @@ export default function SettingsPage() {
 
   const loadAiState = async () => {
     try {
-      const [settings, keys] = await Promise.all([getProviderSettings(), getApiKeys()]);
+      const [settings, keys] = await Promise.all([getProviderSettings(), getKeys()]);
       setAiSettings(settings);
       setAiKeys(keys);
     } catch (e) {
@@ -212,15 +211,15 @@ export default function SettingsPage() {
     await loadAiState();
   };
 
-  const openProviderEditor = (providerId: string) => {
+  const openProviderEditor = async (providerId: string) => {
     triggerVibration();
     const def = getProvider(providerId);
     const cur = aiSettings.find((s) => s.providerId === providerId);
+    const existingKey = await getKeyForProvider(providerId);
     setEditBaseUrl(cur?.baseUrl || def?.defaultBaseUrl || '');
-    setEditModel(cur?.model || def?.defaultModel || '');
+    setEditModel(cur?.model || '');
+    setEditApiKey(existingKey?.key || '');
     setEditingProvider(providerId);
-    setNewKeyLabel('');
-    setNewKeyValue('');
     setAiMessage('');
   };
 
@@ -233,6 +232,11 @@ export default function SettingsPage() {
         baseUrl: editBaseUrl.trim() || undefined,
         model: editModel.trim() || undefined,
       });
+      if (editApiKey.trim()) {
+        await setKeyForProvider(editingProvider, editApiKey.trim());
+      } else {
+        await clearKeyForProvider(editingProvider);
+      }
       setAiMessage('Saved');
       await loadAiState();
     } catch (e: any) {
@@ -240,40 +244,11 @@ export default function SettingsPage() {
     }
   };
 
-  const addNewKey = async () => {
-    if (!editingProvider) return;
-    const val = newKeyValue.trim();
-    if (!val) {
-      setAiMessage('Key cannot be empty');
-      return;
-    }
-    triggerVibration();
-    try {
-      await addApiKey(editingProvider, newKeyLabel.trim() || 'Key', val);
-      setNewKeyLabel('');
-      setNewKeyValue('');
-      setAiMessage('Key added');
-      await loadAiState();
-    } catch (e: any) {
-      setAiMessage('Add failed: ' + (e?.message || 'unknown'));
-    }
-  };
+  const canSaveProvider = !!editingProvider
+    && editBaseUrl.trim().length > 0
+    && editModel.trim().length > 0
+    && editApiKey.trim().length > 0;
 
-  const removeKey = async (id: string) => {
-    triggerVibration();
-    try {
-      await deleteApiKey(id);
-      await loadAiState();
-    } catch (e: any) {
-      setAiMessage('Remove failed: ' + (e?.message || 'unknown'));
-    }
-  };
-
-  const setRotation = async (providerId: string, mode: 'round-robin' | 'fallback') => {
-    triggerVibration();
-    await updateProviderSettings(providerId, { rotation: mode });
-    await loadAiState();
-  };
 
   useEffect(() => {
     if (!isCallThemeOpen) return;
@@ -919,8 +894,6 @@ export default function SettingsPage() {
         <AnimatePresence>
           {editingProvider && (() => {
             const p = getProvider(editingProvider);
-            const setting = aiSettings.find((x) => x.providerId === editingProvider);
-            const keys = aiKeys.filter((k) => k.providerId === editingProvider);
             return (
               <div className="fixed inset-0 bg-black/92 backdrop-blur-md z-[60] flex items-center justify-center p-6 select-none">
                 <motion.div
@@ -952,135 +925,56 @@ export default function SettingsPage() {
                       type="text"
                       value={editBaseUrl}
                       onChange={(e) => setEditBaseUrl(e.target.value)}
-                      placeholder={p?.defaultBaseUrl || 'https://...'}
+                      placeholder={p?.defaultBaseUrl || 'https://api.example.com/v1'}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
                     />
                   </div>
 
-                  {/* Model */}
+                  {/* Model name (custom) */}
                   <div className="mb-3">
                     <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                      Model
+                      Model name
                     </label>
-                    {p?.models && p.models.length > 0 ? (
-                      <select
-                        value={editModel}
-                        onChange={(e) => setEditModel(e.target.value)}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#00D4FF]"
-                      >
-                        {p.models.map((m) => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        type="text"
-                        value={editModel}
-                        onChange={(e) => setEditModel(e.target.value)}
-                        placeholder={p?.defaultModel || 'model-id'}
-                        className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                      />
-                    )}
+                    <input
+                      type="text"
+                      value={editModel}
+                      onChange={(e) => setEditModel(e.target.value)}
+                      placeholder={p?.defaultModelHint || 'model-id (type anything)'}
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
+                    />
+                    <p className="text-[9px] text-zinc-600 mt-1 leading-snug">
+                      Type the exact model id. No fixed list — any model the
+                      provider supports works.
+                    </p>
                   </div>
 
-                  {/* Rotation */}
+                  {/* API key */}
                   <div className="mb-4">
                     <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                      Key rotation
+                      API key
                     </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {(['round-robin', 'fallback'] as const).map((mode) => {
-                        const selected = setting?.rotation === mode;
-                        return (
-                          <button
-                            key={mode}
-                            onClick={() => setRotation(editingProvider, mode)}
-                            className={`py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider ${
-                              selected
-                                ? 'bg-[#00D4FF]/20 text-[#00D4FF] border border-[#00D4FF]/50'
-                                : 'bg-zinc-900 border border-zinc-800 text-zinc-400'
-                            }`}
-                          >
-                            {mode === 'round-robin' ? 'Round Robin' : 'Fallback'}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="text-[9px] text-zinc-600 mt-1 leading-snug">
-                      Round Robin cycles keys; Fallback always tries the first
-                      until it fails.
-                    </p>
+                    <input
+                      type="password"
+                      value={editApiKey}
+                      onChange={(e) => setEditApiKey(e.target.value)}
+                      placeholder="sk-…  (stored locally, never leaves the device except to the provider)"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
+                    />
                   </div>
 
                   <button
                     onClick={saveProviderEdits}
-                    className="w-full py-2.5 rounded-xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 mb-4"
+                    disabled={!canSaveProvider}
+                    className="w-full py-2.5 rounded-xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Save provider settings
+                    Save
                   </button>
 
-                  {/* Keys list */}
-                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
-                    API Keys
-                  </p>
-
-                  {keys.length === 0 ? (
-                    <p className="text-[11px] text-zinc-600 py-2">No keys yet.</p>
-                  ) : (
-                    <div className="space-y-2 mb-3">
-                      {keys.map((k) => (
-                        <div
-                          key={k.id}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-zinc-900 border border-zinc-800"
-                        >
-                          <div className="min-w-0 flex-1 mr-2">
-                            <p className="text-[11px] text-white font-semibold truncate">
-                              {k.label}
-                            </p>
-                            <p className="text-[9px] text-zinc-500 font-mono truncate">
-                              {k.key.slice(0, 6)}…{k.key.slice(-4)}
-                            </p>
-                            {k.lastError && (
-                              <p className="text-[9px] text-red-400 truncate mt-0.5">
-                                {k.lastError}
-                              </p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => removeKey(k.id)}
-                            className="p-1.5 rounded-lg bg-red-950/30 text-red-400 active:scale-95 shrink-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                  {!canSaveProvider && (
+                    <p className="text-[10px] text-zinc-500 text-center mt-2">
+                      Fill all three fields to enable Save.
+                    </p>
                   )}
-
-                  {/* Add key */}
-                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
-                    Add new key
-                  </p>
-                  <input
-                    type="text"
-                    value={newKeyLabel}
-                    onChange={(e) => setNewKeyLabel(e.target.value)}
-                    placeholder="Label (e.g. Personal)"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white mb-2 focus:outline-none focus:border-[#00D4FF]"
-                  />
-                  <input
-                    type="password"
-                    value={newKeyValue}
-                    onChange={(e) => setNewKeyValue(e.target.value)}
-                    placeholder="sk-…  (key is stored locally)"
-                    className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono mb-2 focus:outline-none focus:border-[#00D4FF]"
-                  />
-                  <button
-                    onClick={addNewKey}
-                    className="w-full py-2.5 rounded-xl bg-emerald-500 text-black font-bold text-xs uppercase tracking-wider active:scale-97"
-                  >
-                    Add key
-                  </button>
 
                   {aiMessage && (
                     <p className="text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mt-3 leading-snug">

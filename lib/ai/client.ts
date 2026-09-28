@@ -61,59 +61,37 @@ export async function* streamChat(
     return;
   }
 
-  const tried: string[] = [];
-  let lastError = '';
-
-  while (true) {
-    const pick = await pickKey(providerId, tried);
-    if ('error' in pick) {
-      yield { error: lastError || pick.error };
-      return;
-    }
-
-    const { key } = pick;
-    let emittedAnyText = false;
-    let firstError: string | null = null;
-
-    try {
-      for await (const delta of runOnce(provider, key.key, baseUrl, model, messages, signal)) {
-        if (delta.error) {
-          firstError = delta.error;
-          // If we already streamed text for this key, we cannot safely retry
-          // (the UI would show duplicated text). Surface the error instead.
-          if (emittedAnyText) {
-            await markKeyUsed(providerId, key.id, true, delta.error);
-            yield { error: delta.error };
-            return;
-          }
-          break;
-        }
-        if (delta.text) {
-          emittedAnyText = true;
-          yield { text: delta.text, meta: { providerId, keyId: key.id, model } };
-        }
-        if (delta.done) {
-          await markKeyUsed(providerId, key.id, false);
-          yield { done: true, meta: { providerId, keyId: key.id, model } };
-          return;
-        }
-      }
-    } catch (e: any) {
-      firstError = e?.message || String(e);
-    }
-
-    if (firstError) {
-      await markKeyUsed(providerId, key.id, true, firstError);
-      lastError = firstError;
-      tried.push(key.id);
-      // Try the next key (fallback / round-robin).
-      continue;
-    }
-
-    // Ran out of stream without an explicit done — treat as done.
-    yield { done: true, meta: { providerId, keyId: key.id, model } };
+  const pick = await pickKey(providerId);
+  if ('error' in pick) {
+    yield { error: pick.error };
     return;
   }
+  const key = pick.key;
+
+  try {
+    for await (const delta of runOnce(provider, key.key, baseUrl, model, messages, signal)) {
+      if (delta.error) {
+        await markKeyUsed(providerId, true, delta.error);
+        yield { error: delta.error };
+        return;
+      }
+      if (delta.text) {
+        yield { text: delta.text, meta: { providerId, model } };
+      }
+      if (delta.done) {
+        await markKeyUsed(providerId, false);
+        yield { done: true, meta: { providerId, model } };
+        return;
+      }
+    }
+  } catch (e: any) {
+    const msg = e?.message || String(e);
+    await markKeyUsed(providerId, true, msg);
+    yield { error: msg };
+    return;
+  }
+
+  yield { done: true, meta: { providerId, model } };
 }
 
 // Simple non-streaming variant for callers who just want the full text.
