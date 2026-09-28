@@ -123,10 +123,10 @@ export default function CallsPage() {
   };
 
   useEffect(() => {
-    // Store-backed: only reload from DB if the call-log store has not yet
-    // been primed. Otherwise we already have current data.
     if (!callLogsStore.loadedOnce) {
       loadCallsAndContacts();
+    } else {
+      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

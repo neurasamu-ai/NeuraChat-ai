@@ -77,10 +77,11 @@ export default function ChatsPage() {
   };
 
   useEffect(() => {
-    // Only load from DB on first mount if the store is empty. Otherwise the
-    // store already holds up-to-date data and a reload would just flicker.
     if (!chatsStore.loadedOnce) {
       loadChatsData();
+    } else {
+      // Store already primed — hide the loading state so the list renders.
+      setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

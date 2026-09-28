@@ -468,7 +468,7 @@ export default function ContactsPage() {
           />
         </div>
 
-        {storeLoading ? (
+        {storeLoading || (contactsStore.syncing && contacts.length === 0) ? (
           <div className="space-y-2.5" id="contacts-skeleton">
             {[1, 2, 3].map(n => (
               <div key={n} className="flex gap-3 p-2 bg-zinc-950 border border-zinc-900 rounded-lg animate-pulse">
