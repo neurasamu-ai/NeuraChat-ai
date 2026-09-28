@@ -267,8 +267,8 @@ export default function ContactsPage() {
       return;
     }
 
-    if (cleanPhone && !/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
-      setAddError('Please input a valid phone number (7-15 digits).');
+    if (cleanPhone && !/^\+?[0-9]{1,20}$/.test(cleanPhone)) {
+      setAddError('Enter digits only (1-20 characters).');
       return;
     }
 

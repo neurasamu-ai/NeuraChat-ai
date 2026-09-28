@@ -198,8 +198,8 @@ export default function ChatsPage() {
       return;
     }
     const cleanPhone = manualPhone.replace(/\s+/g, '');
-    if (!/^\+?[0-9]{7,15}$/.test(cleanPhone)) {
-      setManualError('Enter a valid phone number (7-15 digits).');
+    if (!/^\+?[0-9]{1,20}$/.test(cleanPhone)) {
+      setManualError('Enter digits only (1-20 characters).');
       return;
     }
 
