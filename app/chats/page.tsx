@@ -77,10 +77,12 @@ export default function ChatsPage() {
   };
 
   useEffect(() => {
-    const handle = setTimeout(() => {
+    // Only load from DB on first mount if the store is empty. Otherwise the
+    // store already holds up-to-date data and a reload would just flicker.
+    if (!chatsStore.loadedOnce) {
       loadChatsData();
-    }, 0);
-    return () => clearTimeout(handle);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Format date helper

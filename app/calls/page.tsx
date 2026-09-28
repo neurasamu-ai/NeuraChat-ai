@@ -123,10 +123,12 @@ export default function CallsPage() {
   };
 
   useEffect(() => {
-    const handle = setTimeout(() => {
+    // Store-backed: only reload from DB if the call-log store has not yet
+    // been primed. Otherwise we already have current data.
+    if (!callLogsStore.loadedOnce) {
       loadCallsAndContacts();
-    }, 0);
-    return () => clearTimeout(handle);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Refresh when a missed call event is persisted by MissedCallBridge.
