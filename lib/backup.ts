@@ -105,22 +105,13 @@ export async function runBackup(): Promise<{ ok: boolean; path?: string; error?:
   return writeBackupFile(filename, payload);
 }
 
-// Auto backup — private folder (hidden from file manager), one rolling
-// file overwritten every run. API keys are intentionally excluded.
+// Auto backup — written to Downloads/NeuraChat/neurachat-autosave.json so
+// it survives an uninstall and can be offered for restore on the next
+// fresh install. API keys are intentionally excluded. The filename makes
+// it clear it is an automatic file, not a manual backup the user created.
 export async function runAutoBackup(): Promise<{ ok: boolean; path?: string; error?: string }> {
-  if (!isBackupAvailable()) return { ok: false, error: 'Not available' };
-  try {
-    const payload = await collectPayload();
-    const content = JSON.stringify(payload);
-    const res = await BackupPlugin.writeAutoBackup({
-      filename: AUTO_BACKUP_FILENAME,
-      content,
-    });
-    return { ok: !!res.ok, path: res.path };
-  } catch (e: any) {
-    console.error('[backup] auto write failed', e);
-    return { ok: false, error: e?.message || String(e) };
-  }
+  const payload = await collectPayload();
+  return writeBackupFile(AUTO_BACKUP_FILENAME, payload);
 }
 
 export async function listBackups(): Promise<Array<{ filename: string; modified: number; size: number }>> {
@@ -206,30 +197,18 @@ export async function restoreFromFile(filename: string): Promise<{ ok: boolean; 
 
 // Check whether an auto backup exists (used on first launch after reinstall).
 export async function findAutoBackup(): Promise<{ filename: string; modified: number } | null> {
-  if (!isBackupAvailable()) return null;
-  try {
-    const res = await BackupPlugin.listAutoBackups();
-    const found = (res.backups || []).find((b) => b.filename === AUTO_BACKUP_FILENAME);
-    return found ? { filename: found.filename, modified: found.modified } : null;
-  } catch (e) {
-    console.error('[backup] findAutoBackup failed', e);
-    return null;
-  }
+  const list = await listBackups();
+  const found = list.find((b) => b.filename === AUTO_BACKUP_FILENAME);
+  return found ? { filename: found.filename, modified: found.modified } : null;
 }
 
-// Manual backups in Downloads — used by the settings "Existing backups"
-// list (only manual, user-created files).
-export async function findManualBackups() {
-  return listBackups();
-}
-
-// Restore a private auto-backup file.
+// Restore the auto backup file from Downloads.
 export async function restoreFromAutoBackup(): Promise<{ ok: boolean; error?: string; stats?: any }> {
   if (!isBackupAvailable()) return { ok: false, error: 'Not available' };
   try {
     const found = await findAutoBackup();
     if (!found) return { ok: false, error: 'No auto backup' };
-    const res = await BackupPlugin.readAutoBackup({ filename: found.filename });
+    const res = await BackupPlugin.readBackup({ filename: found.filename });
     if (!res.content) return { ok: false, error: 'Empty file' };
     const payload: BackupPayload = JSON.parse(res.content);
     const stats = await applyPayload(payload);
