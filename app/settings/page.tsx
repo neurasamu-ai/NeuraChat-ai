@@ -18,7 +18,8 @@ import {
   Ban,
   Database,
   Palette,
-  Sparkles
+  Sparkles,
+  Trash2
 } from 'lucide-react';
 import {
   getUserProfile,
