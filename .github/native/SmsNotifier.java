@@ -10,6 +10,7 @@ import android.os.Build;
 import android.provider.Telephony;
 import android.telephony.SmsManager;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -83,9 +84,29 @@ public class SmsNotifier {
                 markReadPending
             ).build();
 
+            String title = (displayName != null && !displayName.isEmpty()) ? displayName : sender;
+            String timeStr;
+            try {
+                timeStr = android.text.format.DateFormat.getTimeFormat(context).format(new java.util.Date(timestamp));
+            } catch (Exception e) {
+                timeStr = "";
+            }
+
+            RemoteViews customView = null;
+            try {
+                customView = new RemoteViews(context.getPackageName(), R.layout.notification_neura_card);
+                customView.setTextViewText(R.id.neura_card_title, title);
+                customView.setTextViewText(R.id.neura_card_body, body == null ? "" : body);
+                customView.setTextViewText(R.id.neura_card_time, timeStr);
+                customView.setImageViewResource(R.id.neura_card_icon, R.drawable.ic_stat_sms);
+            } catch (Exception e) {
+                Log.w(TAG, "RemoteViews build failed, falling back", e);
+                customView = null;
+            }
+
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_sms)
-                .setContentTitle(displayName != null && !displayName.isEmpty() ? displayName : sender)
+                .setContentTitle(title)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -95,6 +116,12 @@ public class SmsNotifier {
                 .addAction(replyAction)
                 .addAction(markReadAction)
                 .setWhen(timestamp);
+
+            if (customView != null) {
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                builder.setCustomContentView(customView);
+                builder.setCustomBigContentView(customView);
+            }
 
             NotificationManagerCompat nm = NotificationManagerCompat.from(context);
             try {

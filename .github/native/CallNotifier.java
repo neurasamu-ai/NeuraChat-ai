@@ -9,6 +9,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
+import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -16,6 +17,25 @@ import androidx.core.app.NotificationManagerCompat;
 public class CallNotifier {
 
     private static final String TAG = "NeuraCallNotifier";
+
+    private static RemoteViews buildCard(Context context, int iconRes, String title, String body, long when) {
+        try {
+            RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.notification_neura_card);
+            v.setTextViewText(R.id.neura_card_title, title == null ? "" : title);
+            v.setTextViewText(R.id.neura_card_body, body == null ? "" : body);
+            v.setImageViewResource(R.id.neura_card_icon, iconRes);
+            String t = "";
+            try {
+                if (when > 0) t = android.text.format.DateFormat.getTimeFormat(context).format(new java.util.Date(when));
+            } catch (Exception ignored) {}
+            v.setTextViewText(R.id.neura_card_time, t);
+            return v;
+        } catch (Exception e) {
+            Log.w(TAG, "buildCard failed", e);
+            return null;
+        }
+    }
+
     private static final String CHANNEL_ID = "neura_call_missed";
     private static final String CHANNEL_NAME = "Missed Calls";
     private static final int NOTIFICATION_ID = 9001;
@@ -74,6 +94,13 @@ public class CallNotifier {
                 .setContentIntent(openPending)
                 .addAction(R.drawable.ic_stat_call, "Call back", callPending)
                 .addAction(R.drawable.ic_stat_call, "Message", msgPending);
+
+            RemoteViews missedCard = buildCard(context, R.drawable.ic_stat_call, "Missed call", title, System.currentTimeMillis());
+            if (missedCard != null) {
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                builder.setCustomContentView(missedCard);
+                builder.setCustomBigContentView(missedCard);
+            }
 
             try {
                 NotificationManagerCompat.from(context).notify(NOTIFICATION_ID, builder.build());
@@ -156,6 +183,13 @@ public class CallNotifier {
                 .setContentIntent(openPending)
                 .addAction(R.drawable.ic_stat_call, "End", endPending);
 
+            RemoteViews activeCard = buildCard(context, R.drawable.ic_stat_call, "In call", title, 0);
+            if (activeCard != null) {
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                builder.setCustomContentView(activeCard);
+                builder.setCustomBigContentView(activeCard);
+            }
+
             try {
                 NotificationManagerCompat.from(context).notify(ACTIVE_NOTIFICATION_ID, builder.build());
             } catch (SecurityException se) {
@@ -211,6 +245,13 @@ public class CallNotifier {
                 .setOngoing(true)
                 .setProgress(0, 0, true)
                 .setContentIntent(openPending);
+
+            RemoteViews dlCard = buildCard(context, R.drawable.ic_stat_sms, "Downloading", fileName == null ? "File" : fileName, 0);
+            if (dlCard != null) {
+                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
+                builder.setCustomContentView(dlCard);
+                builder.setCustomBigContentView(dlCard);
+            }
 
             try {
                 NotificationManagerCompat.from(context).notify(DL_NOTIFICATION_ID, builder.build());
