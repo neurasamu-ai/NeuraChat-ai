@@ -157,19 +157,39 @@ public class CallService extends InCallService {
 
         updateState(call, call.getState());
 
-        // Bring MainActivity up so the in-call UI can render.
-        Intent intent = new Intent(this, MainActivity.class);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.putExtra("call_state", currentState);
-        startActivity(intent);
-
-        // Ask MainActivity to show over the lock screen for this call.
-        try {
-            if (MainActivity.instance != null) {
-                MainActivity.instance.enableCallOverLockScreen();
+        // Incoming calls: prefer the floating overlay banner so the user
+        // stays in whatever app (incl. camera). Falls back to launching
+        // MainActivity when the overlay permission is missing.
+        boolean overlayShown = false;
+        if (pc.isIncoming && IncomingCallOverlay.canShow(getApplicationContext())) {
+            try {
+                String ovNum = getNumber(call);
+                String ovName = lookupName(ovNum);
+                pc.number = ovNum;
+                pc.name = ovName;
+                IncomingCallOverlay.show(getApplicationContext(), ovNum, ovName);
+                overlayShown = true;
+                Log.d(TAG, "overlay shown for incoming call " + ovNum);
+            } catch (Exception e) {
+                Log.w(TAG, "overlay show failed", e);
+                overlayShown = false;
             }
-        } catch (Exception e) {
-            Log.w(TAG, "enableCallOverLockScreen failed", e);
+        }
+
+        if (!overlayShown) {
+            // Fallback: bring MainActivity up so the in-call UI can render.
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            intent.putExtra("call_state", currentState);
+            startActivity(intent);
+
+            try {
+                if (MainActivity.instance != null) {
+                    MainActivity.instance.enableCallOverLockScreen();
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "enableCallOverLockScreen failed", e);
+            }
         }
 
         // Acquire proximity wake lock for the duration of the call.
@@ -298,6 +318,7 @@ public class CallService extends InCallService {
         isHeld = false;
         callStartedAt = 0L;
         try { CallNotifier.cancelActive(getApplicationContext()); } catch (Exception ignore) {}
+        try { IncomingCallOverlay.hide(getApplicationContext()); } catch (Exception ignore) {}
         releaseProximityLock();
         try {
             if (MainActivity.instance != null) {
@@ -390,6 +411,15 @@ public class CallService extends InCallService {
         Log.d(TAG, "state=" + stateStr + " number=" + currentNumber + " name=" + currentName);
         TelecomPlugin.dispatchCallState(stateStr, currentNumber, currentName, isIncoming);
         dispatchCallsSnapshot();
+
+        // Hide the incoming-call overlay once the call is no longer ringing.
+        try {
+            if (!stateStr.equals("RINGING") && !stateStr.equals("CONNECTING")) {
+                IncomingCallOverlay.hide(getApplicationContext());
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "overlay hide failed", e);
+        }
 
         // Ongoing-call notification: shows while a call is live, tap to
         // reopen the in-call UI.
