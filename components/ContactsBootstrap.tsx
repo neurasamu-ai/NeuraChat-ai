@@ -1,37 +1,41 @@
 'use client';
 
 import { useEffect } from 'react';
-import { isNativePlatform } from '@/lib/capacitor';
 import { bootstrapContacts } from '@/lib/contacts-store';
 
-// Loads the contacts store as soon as the app opens. The store reads the
-// IndexedDB cache first (instant, works offline) and only kicks a native
-// sync when the throttle window has elapsed. Once this has run, the Chats
-// "New" dialog, the dialer match list, and the Contacts tab all see the
-// same list without triggering their own fetches.
+// Loads the contacts store as soon as the app opens. Runs at app startup
+// so every tab (Chats, Dialer, Contacts) sees the same list without
+// triggering its own fetch. The bootstrap function itself handles native
+// checks and cache-first reads.
 export default function ContactsBootstrap() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (!isNativePlatform()) return;
 
     let cancelled = false;
+    let attempt = 0;
 
-    const start = async () => {
-      // Small warm-up so the bridge is ready; the cache read is fast
-      // either way.
-      await new Promise((r) => setTimeout(r, 400));
+    const run = async () => {
       if (cancelled) return;
       try {
         await bootstrapContacts();
+        console.log('[ContactsBootstrap] done');
       } catch (e) {
         console.error('[ContactsBootstrap] failed', e);
+        // Retry a couple of times in case the Capacitor bridge was not
+        // ready yet on a very early call.
+        if (attempt < 2 && !cancelled) {
+          attempt++;
+          setTimeout(run, 1500);
+        }
       }
     };
 
-    start();
+    // Small initial delay so the Capacitor bridge has settled, then run.
+    const t = setTimeout(run, 300);
 
     return () => {
       cancelled = true;
+      clearTimeout(t);
     };
   }, []);
 

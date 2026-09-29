@@ -571,7 +571,7 @@ export default function AiChatPage() {
               style={{ backgroundColor: '#18181b', borderColor: 'rgba(0,212,255,0.35)' }}
             >
               <Sparkles className="h-3 w-3 text-[#00D4FF] shrink-0" />
-              <span className="text-[11px] font-bold text-white truncate flex-1 text-left">{providerName}</span>
+              <span className="text-[11px] font-bold truncate flex-1 text-left" style={{ color: '#ffffff' }}>{providerName}</span>
               <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
             </button>
           ) : (
@@ -581,7 +581,7 @@ export default function AiChatPage() {
               style={{ backgroundColor: '#18181b', borderColor: 'rgba(0,212,255,0.35)' }}
             >
               <Globe className="h-3 w-3 text-[#00D4FF] shrink-0" />
-              <span className="text-[11px] font-bold text-white truncate flex-1 text-left">
+              <span className="text-[11px] font-bold truncate flex-1 text-left" style={{ color: '#ffffff' }}>
                 {webModel?.name || 'ChatGPT'}
               </span>
               <ChevronDown className="h-3 w-3 text-zinc-400 shrink-0" />
