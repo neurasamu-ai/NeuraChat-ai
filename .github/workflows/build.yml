@@ -72,8 +72,14 @@ jobs:
         cp .github/native/SmsReplyReceiver.java $TARGET/
         cp .github/native/CallNotifier.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
+        mkdir -p android/app/src/main/res/layout
+        mkdir -p android/app/src/main/res/values
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/ic_stat_call.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/bg_overlay_*.xml android/app/src/main/res/drawable/
+        cp .github/native/res/layout/overlay_incoming_call.xml android/app/src/main/res/layout/
+        cp .github/native/res/values/styles.xml android/app/src/main/res/values/
+        cp .github/native/IncomingCallOverlay.java $TARGET/
 
     - name: Sync Android
       run: npx cap sync android

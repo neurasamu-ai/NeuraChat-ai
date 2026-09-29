@@ -228,6 +228,12 @@
             </intent-filter>
         </service>
 
+        <!-- 4a-bis. Incoming call overlay service (TYPE_APPLICATION_OVERLAY) -->
+        <service
+            android:name="com.neurasamu.build.chat.IncomingCallOverlay"
+            android:exported="false"
+            android:stopWithTask="false" />
+
         <!-- 4b. SMS Reply / Mark-as-read action receiver -->
         <receiver
             android:name="com.neurasamu.build.chat.SmsReplyReceiver"
