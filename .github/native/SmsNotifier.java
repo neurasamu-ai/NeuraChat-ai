@@ -19,7 +19,7 @@ import androidx.core.app.RemoteInput;
 public class SmsNotifier {
 
     private static final String TAG = "NeuraSmsNotifier";
-    private static final String CHANNEL_ID = "neura_sms_incoming";
+    private static final String CHANNEL_ID = "neura_sms_incoming_v2";
     private static final String CHANNEL_NAME = "Incoming SMS";
     private static final String KEY_REPLY_TEXT = "neura_reply_text";
     private static final int NOTIFICATION_ID = 8001;
@@ -113,6 +113,9 @@ public class SmsNotifier {
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true)
                 .setContentIntent(openPending)
+                .setDefaults(android.app.Notification.DEFAULT_ALL)
+                .setVibrate(new long[]{0, 250, 200, 250})
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .addAction(replyAction)
                 .addAction(markReadAction)
                 .setWhen(timestamp);
@@ -146,6 +149,19 @@ public class SmsNotifier {
             NotificationManager.IMPORTANCE_HIGH
         );
         channel.setDescription("Incoming SMS notifications");
+        channel.enableLights(true);
+        channel.enableVibration(true);
+        channel.setShowBadge(true);
+        channel.setVibrationPattern(new long[]{0, 250, 200, 250});
+        try {
+            channel.setSound(
+                android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                new android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+            );
+        } catch (Exception ignored) {}
         nm.createNotificationChannel(channel);
     }
 

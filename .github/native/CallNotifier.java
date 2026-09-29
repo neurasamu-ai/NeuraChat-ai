@@ -36,7 +36,7 @@ public class CallNotifier {
         }
     }
 
-    private static final String CHANNEL_ID = "neura_call_missed";
+    private static final String CHANNEL_ID = "neura_call_missed_v2";
     private static final String CHANNEL_NAME = "Missed Calls";
     private static final int NOTIFICATION_ID = 9001;
 
@@ -93,7 +93,10 @@ public class CallNotifier {
                 .setAutoCancel(true)
                 .setContentIntent(openPending)
                 .addAction(R.drawable.ic_stat_call, "Call back", callPending)
-                .addAction(R.drawable.ic_stat_call, "Message", msgPending);
+                .addAction(R.drawable.ic_stat_call, "Message", msgPending)
+                .setDefaults(android.app.Notification.DEFAULT_ALL)
+                .setVibrate(new long[]{0, 250, 200, 250})
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
 
             RemoteViews missedCard = buildCard(context, R.drawable.ic_stat_call, "Missed call", title, System.currentTimeMillis());
             if (missedCard != null) {
@@ -120,6 +123,19 @@ public class CallNotifier {
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH);
         channel.setDescription("Missed call notifications");
+        channel.enableLights(true);
+        channel.enableVibration(true);
+        channel.setShowBadge(true);
+        channel.setVibrationPattern(new long[]{0, 250, 200, 250});
+        try {
+            channel.setSound(
+                android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
+                new android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                    .build()
+            );
+        } catch (Exception ignored) {}
         nm.createNotificationChannel(channel);
     }
 
