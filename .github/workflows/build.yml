@@ -72,13 +72,8 @@ jobs:
         cp .github/native/SmsReplyReceiver.java $TARGET/
         cp .github/native/CallNotifier.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
-        mkdir -p android/app/src/main/res/layout
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/ic_stat_call.xml android/app/src/main/res/drawable/
-        cp .github/native/res/drawable/bg_neura_card.xml android/app/src/main/res/drawable/
-        cp .github/native/res/drawable/bg_neura_icon.xml android/app/src/main/res/drawable/
-        cp .github/native/res/drawable/bg_neura_accent.xml android/app/src/main/res/drawable/
-        cp .github/native/res/layout/notification_neura_card.xml android/app/src/main/res/layout/
 
     - name: Sync Android
       run: npx cap sync android

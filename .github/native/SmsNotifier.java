@@ -10,7 +10,6 @@ import android.os.Build;
 import android.provider.Telephony;
 import android.telephony.SmsManager;
 import android.util.Log;
-import android.widget.RemoteViews;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
@@ -19,7 +18,7 @@ import androidx.core.app.RemoteInput;
 public class SmsNotifier {
 
     private static final String TAG = "NeuraSmsNotifier";
-    private static final String CHANNEL_ID = "neura_sms_incoming_v2";
+    private static final String CHANNEL_ID = "neura_sms_incoming";
     private static final String CHANNEL_NAME = "Incoming SMS";
     private static final String KEY_REPLY_TEXT = "neura_reply_text";
     private static final int NOTIFICATION_ID = 8001;
@@ -84,47 +83,18 @@ public class SmsNotifier {
                 markReadPending
             ).build();
 
-            String title = (displayName != null && !displayName.isEmpty()) ? displayName : sender;
-            String timeStr;
-            try {
-                timeStr = android.text.format.DateFormat.getTimeFormat(context).format(new java.util.Date(timestamp));
-            } catch (Exception e) {
-                timeStr = "";
-            }
-
-            RemoteViews customView = null;
-            try {
-                customView = new RemoteViews(context.getPackageName(), R.layout.notification_neura_card);
-                customView.setTextViewText(R.id.neura_card_title, title);
-                customView.setTextViewText(R.id.neura_card_body, body == null ? "" : body);
-                customView.setTextViewText(R.id.neura_card_time, timeStr);
-                customView.setImageViewResource(R.id.neura_card_icon, R.drawable.ic_stat_sms);
-            } catch (Exception e) {
-                Log.w(TAG, "RemoteViews build failed, falling back", e);
-                customView = null;
-            }
-
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_sms)
-                .setContentTitle(title)
+                .setContentTitle(displayName != null && !displayName.isEmpty() ? displayName : sender)
                 .setContentText(body)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
                 .setAutoCancel(true)
                 .setContentIntent(openPending)
-                .setDefaults(android.app.Notification.DEFAULT_ALL)
-                .setVibrate(new long[]{0, 250, 200, 250})
-                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
                 .addAction(replyAction)
                 .addAction(markReadAction)
                 .setWhen(timestamp);
-
-            if (customView != null) {
-                builder.setStyle(new NotificationCompat.DecoratedCustomViewStyle());
-                builder.setCustomContentView(customView);
-                builder.setCustomBigContentView(customView);
-            }
 
             NotificationManagerCompat nm = NotificationManagerCompat.from(context);
             try {
@@ -149,19 +119,6 @@ public class SmsNotifier {
             NotificationManager.IMPORTANCE_HIGH
         );
         channel.setDescription("Incoming SMS notifications");
-        channel.enableLights(true);
-        channel.enableVibration(true);
-        channel.setShowBadge(true);
-        channel.setVibrationPattern(new long[]{0, 250, 200, 250});
-        try {
-            channel.setSound(
-                android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_NOTIFICATION),
-                new android.media.AudioAttributes.Builder()
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
-                    .build()
-            );
-        } catch (Exception ignored) {}
         nm.createNotificationChannel(channel);
     }
 
