@@ -53,9 +53,28 @@ public class SmsReceiver extends BroadcastReceiver {
                 return;
             }
 
+            // Extract the subscription (SIM) that delivered this SMS so
+            // names + notifications can resolve using that SIM's contacts.
+            int subId = -1;
+            try {
+                subId = intent.getIntExtra("subscription", -1);
+            } catch (Exception ignore) {}
+            if (subId < 0) {
+                try {
+                    subId = intent.getIntExtra("subscription_id", -1);
+                } catch (Exception ignore) {}
+            }
+            if (subId < 0) {
+                try {
+                    if (messages.length > 0 && messages[0] != null) {
+                        subId = messages[0].getSubscriptionId();
+                    }
+                } catch (Exception ignore) {}
+            }
+
             // Persist + queue for the app inbox and notify.
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
-            SmsNotifier.show(context, sender, body.toString(), timestamp);
+            SmsNotifier.show(context, sender, body.toString(), timestamp, subId);
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);
         }

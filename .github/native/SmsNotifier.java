@@ -24,11 +24,15 @@ public class SmsNotifier {
     private static final int NOTIFICATION_ID = 8001;
 
     public static void show(Context context, String sender, String body, long timestamp) {
+        show(context, sender, body, timestamp, -1);
+    }
+
+    public static void show(Context context, String sender, String body, long timestamp, int subscriptionId) {
         try {
             ensureChannel(context);
 
             // Look up the display name for the sender, if any.
-            String displayName = lookupName(context, sender);
+            String displayName = NameResolver.resolveForSubscription(context, sender, subscriptionId);
 
             // 1. Tap notification → open app chat for this sender
             Intent openIntent = new Intent(context, MainActivity.class);
@@ -122,7 +126,4 @@ public class SmsNotifier {
         nm.createNotificationChannel(channel);
     }
 
-    private static String lookupName(Context context, String number) {
-        return NameResolver.resolve(context, number);
-    }
 }
