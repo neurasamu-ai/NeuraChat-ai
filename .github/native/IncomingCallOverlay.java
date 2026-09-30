@@ -237,6 +237,10 @@ public class IncomingCallOverlay extends Service {
             cancel.setOnClickListener(v -> snoozePanel.setVisibility(View.GONE));
         }
 
+        // Hide button: dismiss overlay only. Ongoing notification stays.
+        TextView hideBtn = rootView.findViewById(R.id.overlay_btn_hide);
+        if (hideBtn != null) hideBtn.setOnClickListener(v -> hide(getApplicationContext()));
+
         // Body tap → open full call UI (without answering)
         TextView title = rootView.findViewById(R.id.overlay_title);
         TextView subtitle = rootView.findViewById(R.id.overlay_subtitle);
@@ -289,6 +293,8 @@ public class IncomingCallOverlay extends Service {
     }
 
     private void openFullUi() {
+        // Remove the overlay first so it does not sit above the full UI.
+        hide(getApplicationContext());
         try {
             Intent i = new Intent(this, MainActivity.class);
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);

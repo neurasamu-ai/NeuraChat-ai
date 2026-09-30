@@ -1,11 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/overlay_root"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/overlay_wrapper"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:background="@drawable/bg_overlay_card"
-    android:padding="14dp">
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/overlay_root"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/bg_overlay_card"
+        android:padding="14dp">
 
     <!-- Header: avatar + name/number + "Incoming call" -->
     <LinearLayout
@@ -171,4 +176,17 @@
             android:textColor="#A1A1AA"
             android:textSize="12sp" />
     </LinearLayout>
-</LinearLayout>
+
+    <TextView
+        android:id="@+id/overlay_btn_hide"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="6dp"
+        android:gravity="center"
+        android:text="×"
+        android:textColor="#A1A1AA"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+</FrameLayout>
