@@ -175,6 +175,7 @@
             android:text="Cancel"
             android:textColor="#A1A1AA"
             android:textSize="12sp" />
+        </LinearLayout>
     </LinearLayout>
 
     <TextView
