@@ -66,23 +66,20 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
           if (!name && !phone && !email) continue;
           if (!phone && !email) continue;
 
-          const stableKey = row.contactId || phone || email;
-          const id = `cap-${stableKey}`;
+          // One row per raw_contact => one entry per account variant. Keyed
+          // by rawContactId so two accounts with the same number produce two
+          // distinct list items (e.g. "Akira" @ gmail1 and "aka" @ gmail2).
+          const stableKey = row.rawContactId || row.contactId || phone || email;
+          const id = `cap-raw-${stableKey}`;
           const prev = existingById.get(id);
-
-          // Aggregated contact view: DISPLAY_NAME_PRIMARY + PHOTO_URI come
-          // from the system-merged Contacts row, so the name stays stable
-          // regardless of how many accounts/SIMs share the number.
-          const nativePhoto = (row as any).photoUri || '';
-          const nativeFav = (row as any).favorite === true;
 
           collected.push({
             id,
             name: name || prev?.name || 'Unknown',
             phone: row.phone || prev?.phone || '',
             email: email || prev?.email,
-            avatar: nativePhoto || prev?.avatar,
-            favorite: nativeFav || prev?.favorite || false,
+            avatar: prev?.avatar,
+            favorite: prev?.favorite ?? false,
             accountType: row.accountType || undefined,
             accountName: row.accountName || undefined,
             rawContactId: row.rawContactId || undefined,
