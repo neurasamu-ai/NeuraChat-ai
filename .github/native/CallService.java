@@ -46,6 +46,11 @@ public class CallService extends InCallService {
         new java.util.concurrent.ConcurrentHashMap<>();
 
     // Stable ids for all calls currently tracked by the InCallService.
+    // Name hints captured at call start (from web layer). Keyed by Call so
+    // the same name survives across all state changes for that call.
+    private static final java.util.Map<Call, String> hintedNames =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
     private static final java.util.Map<Call, String> callIds =
         new java.util.concurrent.ConcurrentHashMap<>();
     private static int nextCallSeq = 1;
@@ -146,6 +151,15 @@ public class CallService extends InCallService {
             try {
                 String num = getNumber(call);
                 String nm = lookupNameForCall(num, call);
+                // If the web layer passed a name hint (user tapped a specific
+                // contact variant), it wins over the resolved name.
+                try {
+                    String hint = TelecomPlugin.consumePendingNameHint(num);
+                    if (hint != null && !hint.isEmpty()) {
+                        nm = hint;
+                        hintedNames.put(call, hint);
+                    }
+                } catch (Exception ignore) {}
                 pc.number = num;
                 pc.name = nm;
                 pc.wasLogged = true;
@@ -302,6 +316,7 @@ public class CallService extends InCallService {
 
         // Remove the per-call bookkeeping for the disconnected call.
         perCallState.remove(call);
+        try { hintedNames.remove(call); } catch (Exception ignore) {}
 
         // If other calls remain (e.g. a held call), switch the UI to them
         // instead of tearing everything down.
@@ -380,6 +395,13 @@ public class CallService extends InCallService {
         String stateStr = getStateString(state);
         String number = getNumber(call);
         String name = lookupNameForCall(number, call);
+        // If a web-layer name hint was captured for this call, it wins.
+        try {
+            String hint = hintedNames.get(call);
+            if (hint != null && !hint.isEmpty()) {
+                name = hint;
+            }
+        } catch (Exception ignore) {}
 
         PerCall pc = perCallState.get(call);
         if (pc != null) {
