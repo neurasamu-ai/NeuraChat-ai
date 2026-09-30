@@ -145,7 +145,7 @@ public class CallService extends InCallService {
         if (!pc.isIncoming) {
             try {
                 String num = getNumber(call);
-                String nm = lookupName(num);
+                String nm = lookupNameForCall(num, call);
                 pc.number = num;
                 pc.name = nm;
                 pc.wasLogged = true;
@@ -169,7 +169,7 @@ public class CallService extends InCallService {
         if (pc.isIncoming && !appInForeground && IncomingCallOverlay.canShow(getApplicationContext())) {
             try {
                 String ovNum = getNumber(call);
-                String ovName = lookupName(ovNum);
+                String ovName = lookupNameForCall(ovNum, call);
                 pc.number = ovNum;
                 pc.name = ovName;
                 IncomingCallOverlay.show(getApplicationContext(), ovNum, ovName);
@@ -379,7 +379,7 @@ public class CallService extends InCallService {
     private void updateState(Call call, int state) {
         String stateStr = getStateString(state);
         String number = getNumber(call);
-        String name = lookupName(number);
+        String name = lookupNameForCall(number, call);
 
         PerCall pc = perCallState.get(call);
         if (pc != null) {
@@ -463,6 +463,32 @@ public class CallService extends InCallService {
     // Look up a contact name for the given number.
     private String lookupName(String number) {
         return NameResolver.resolve(getApplicationContext(), number);
+    }
+
+    // Subscription id for the SIM that owns this call, or -1 if unknown.
+    private int subIdForCall(Call call) {
+        try {
+            if (call == null || call.getDetails() == null) return -1;
+            android.telecom.PhoneAccountHandle handle = call.getDetails().getAccountHandle();
+            if (handle == null) return -1;
+            android.telecom.TelecomManager tm =
+                (android.telecom.TelecomManager) getSystemService(TELECOM_SERVICE);
+            if (tm == null) return -1;
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                return tm.getSubscriptionId(handle);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "subIdForCall failed", e);
+        }
+        return -1;
+    }
+
+    // Name resolved against the SIM that carried this call. Falls back to
+    // the generic resolver if the subscription is unknown.
+    private String lookupNameForCall(String number, Call call) {
+        int subId = subIdForCall(call);
+        if (subId < 0) return lookupName(number);
+        return NameResolver.resolveForSubscription(getApplicationContext(), number, subId);
     }
 
     // Public wrapper so TelecomPlugin can call the protected platform method.
