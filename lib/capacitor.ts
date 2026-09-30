@@ -70,13 +70,19 @@ export async function syncDeviceContacts(): Promise<Contact[]> {
           const id = `cap-${stableKey}`;
           const prev = existingById.get(id);
 
+          // Aggregated contact view: DISPLAY_NAME_PRIMARY + PHOTO_URI come
+          // from the system-merged Contacts row, so the name stays stable
+          // regardless of how many accounts/SIMs share the number.
+          const nativePhoto = (row as any).photoUri || '';
+          const nativeFav = (row as any).favorite === true;
+
           collected.push({
             id,
             name: name || prev?.name || 'Unknown',
             phone: row.phone || prev?.phone || '',
             email: email || prev?.email,
-            avatar: prev?.avatar,
-            favorite: prev?.favorite ?? false,
+            avatar: nativePhoto || prev?.avatar,
+            favorite: nativeFav || prev?.favorite || false,
             accountType: row.accountType || undefined,
             accountName: row.accountName || undefined,
             rawContactId: row.rawContactId || undefined,

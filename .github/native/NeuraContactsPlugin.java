@@ -268,88 +268,196 @@ public class NeuraContactsPlugin extends Plugin {
         JSArray contacts = new JSArray();
         ContentResolver cr = getContext().getContentResolver();
 
-        String[] projection = new String[] {
-            ContactsContract.Data.CONTACT_ID,
-            ContactsContract.Data.RAW_CONTACT_ID,
-            ContactsContract.Data.MIMETYPE,
-            ContactsContract.Data.DISPLAY_NAME,
-            ContactsContract.CommonDataKinds.Phone.NUMBER,
-            ContactsContract.CommonDataKinds.Email.ADDRESS,
-            ContactsContract.RawContacts.ACCOUNT_TYPE,
-            ContactsContract.RawContacts.ACCOUNT_NAME
-        };
+        java.util.HashMap<String, JSONObject> map = new java.util.HashMap<>();
 
-        Cursor cursor = null;
+        // 1. Aggregated contacts: use Contacts._ID + DISPLAY_NAME_PRIMARY
+        // (the same merged view the default phone/dialer app uses). This is
+        // stable across multiple accounts/SIMs pointing at the same person.
+        Cursor cc = null;
         try {
-            cursor = cr.query(ContactsContract.Data.CONTENT_URI, projection, null, null, null);
-            if (cursor == null) {
-                JSObject ret = new JSObject();
-                ret.put("contacts", contacts);
-                call.resolve(ret);
-                return;
-            }
-
-            java.util.HashMap<String, JSONObject> map = new java.util.HashMap<>();
-
-            while (cursor.moveToNext()) {
-                String contactId = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.CONTACT_ID));
-                String rawId = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID));
-                String mime = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.MIMETYPE));
-                String name = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.DISPLAY_NAME));
-                String accountType = cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE));
-                String accountName = cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME));
-
-                if (contactId == null) continue;
-
-                try {
-                    JSONObject entry = map.get(contactId);
-                    if (entry == null) {
-                        entry = new JSONObject();
-                        entry.put("contactId", contactId);
-                        entry.put("rawContactId", rawId == null ? "" : rawId);
-                        entry.put("name", name == null ? "" : name);
-                        entry.put("accountType", accountType == null ? JSONObject.NULL : accountType);
-                        entry.put("accountName", accountName == null ? JSONObject.NULL : accountName);
-                        entry.put("phone", "");
-                        entry.put("email", "");
-                        map.put(contactId, entry);
+            cc = cr.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                new String[] {
+                    ContactsContract.Contacts._ID,
+                    ContactsContract.Contacts.DISPLAY_NAME_PRIMARY,
+                    ContactsContract.Contacts.PHOTO_URI,
+                    ContactsContract.Contacts.STARRED
+                },
+                null, null, null
+            );
+            if (cc != null) {
+                int iId = cc.getColumnIndex(ContactsContract.Contacts._ID);
+                int iName = cc.getColumnIndex(ContactsContract.Contacts.DISPLAY_NAME_PRIMARY);
+                int iPhoto = cc.getColumnIndex(ContactsContract.Contacts.PHOTO_URI);
+                int iStar = cc.getColumnIndex(ContactsContract.Contacts.STARRED);
+                while (cc.moveToNext()) {
+                    String cid = cc.getString(iId);
+                    if (cid == null) continue;
+                    String name = cc.getString(iName);
+                    String photo = cc.getString(iPhoto);
+                    int starred = cc.getInt(iStar);
+                    try {
+                        JSONObject o = new JSONObject();
+                        o.put("contactId", cid);
+                        o.put("rawContactId", "");
+                        o.put("name", name == null ? "" : name);
+                        o.put("accountType", JSONObject.NULL);
+                        o.put("accountName", JSONObject.NULL);
+                        o.put("phone", "");
+                        o.put("email", "");
+                        o.put("photoUri", photo == null ? "" : photo);
+                        o.put("favorite", starred == 1);
+                        map.put(cid, o);
+                    } catch (JSONException je) {
+                        Log.w(TAG, "contact row parse failed", je);
                     }
-
-                    if (ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE.equals(mime)) {
-                        String num = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                        if (num != null && !num.isEmpty()) {
-                            String existing = entry.optString("phone", "");
-                            if (existing.isEmpty()) entry.put("phone", num);
-                        }
-                    } else if (ContactsContract.CommonDataKinds.Email.CONTENT_ITEM_TYPE.equals(mime)) {
-                        String addr = cursor.getString(cursor.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS));
-                        if (addr != null && !addr.isEmpty()) {
-                            String existing = entry.optString("email", "");
-                            if (existing.isEmpty()) entry.put("email", addr);
-                        }
-                    }
-                } catch (JSONException je) {
-                    Log.w(TAG, "row parse failed", je);
                 }
             }
-
-            for (JSONObject obj : map.values()) {
-                contacts.put(obj);
-            }
-        } catch (SecurityException se) {
-            call.reject("Permission denied: " + se.getMessage());
-            return;
         } catch (Exception e) {
-            Log.e(TAG, "getContactsWithSources failed", e);
-            call.reject("Load failed: " + e.getMessage());
-            return;
+            Log.e(TAG, "aggregated contact query failed", e);
         } finally {
-            if (cursor != null) cursor.close();
+            if (cc != null) cc.close();
+        }
+
+        // 2. Phones: prefer super-primary, then primary, then first.
+        Cursor pc = null;
+        try {
+            pc = cr.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                new String[] {
+                    ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.Phone.NUMBER,
+                    ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY,
+                    ContactsContract.CommonDataKinds.Phone.IS_PRIMARY
+                },
+                null, null, null
+            );
+            if (pc != null) {
+                int iCid = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.CONTACT_ID);
+                int iNum = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER);
+                int iSuper = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.IS_SUPER_PRIMARY);
+                int iPrim = pc.getColumnIndex(ContactsContract.CommonDataKinds.Phone.IS_PRIMARY);
+                while (pc.moveToNext()) {
+                    String cid = pc.getString(iCid);
+                    if (cid == null) continue;
+                    JSONObject o = map.get(cid);
+                    if (o == null) continue;
+                    String num = pc.getString(iNum);
+                    if (num == null || num.isEmpty()) continue;
+                    boolean superPrim = iSuper >= 0 && pc.getInt(iSuper) == 1;
+                    boolean prim = iPrim >= 0 && pc.getInt(iPrim) == 1;
+                    String existing = o.optString("phone", "");
+                    if (existing.isEmpty() || superPrim || (prim && !existing.equals(num))) {
+                        try { o.put("phone", num); } catch (JSONException ignore) {}
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "phone query failed", e);
+        } finally {
+            if (pc != null) pc.close();
+        }
+
+        // 3. Emails: prefer primary, then first.
+        Cursor ec = null;
+        try {
+            ec = cr.query(
+                ContactsContract.CommonDataKinds.Email.CONTENT_URI,
+                new String[] {
+                    ContactsContract.CommonDataKinds.Email.CONTACT_ID,
+                    ContactsContract.CommonDataKinds.Email.ADDRESS,
+                    ContactsContract.CommonDataKinds.Email.IS_PRIMARY
+                },
+                null, null, null
+            );
+            if (ec != null) {
+                int iCid = ec.getColumnIndex(ContactsContract.CommonDataKinds.Email.CONTACT_ID);
+                int iAddr = ec.getColumnIndex(ContactsContract.CommonDataKinds.Email.ADDRESS);
+                int iPrim = ec.getColumnIndex(ContactsContract.CommonDataKinds.Email.IS_PRIMARY);
+                while (ec.moveToNext()) {
+                    String cid = ec.getString(iCid);
+                    if (cid == null) continue;
+                    JSONObject o = map.get(cid);
+                    if (o == null) continue;
+                    String addr = ec.getString(iAddr);
+                    if (addr == null || addr.isEmpty()) continue;
+                    boolean prim = iPrim >= 0 && ec.getInt(iPrim) == 1;
+                    String existing = o.optString("email", "");
+                    if (existing.isEmpty() || prim) {
+                        try { o.put("email", addr); } catch (JSONException ignore) {}
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "email query failed", e);
+        } finally {
+            if (ec != null) ec.close();
+        }
+
+        // 4. Raw-contact account: pick the highest-priority source per
+        // aggregated contact (Google > Exchange > other > local > SIM).
+        Cursor rc = null;
+        try {
+            rc = cr.query(
+                ContactsContract.RawContacts.CONTENT_URI,
+                new String[] {
+                    ContactsContract.RawContacts._ID,
+                    ContactsContract.RawContacts.CONTACT_ID,
+                    ContactsContract.RawContacts.ACCOUNT_TYPE,
+                    ContactsContract.RawContacts.ACCOUNT_NAME
+                },
+                null, null, null
+            );
+            if (rc != null) {
+                int iRaw = rc.getColumnIndex(ContactsContract.RawContacts._ID);
+                int iCid = rc.getColumnIndex(ContactsContract.RawContacts.CONTACT_ID);
+                int iType = rc.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE);
+                int iName = rc.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME);
+                while (rc.moveToNext()) {
+                    String cid = rc.getString(iCid);
+                    if (cid == null) continue;
+                    JSONObject o = map.get(cid);
+                    if (o == null) continue;
+                    String rawId = rc.getString(iRaw);
+                    String at = rc.getString(iType);
+                    String an = rc.getString(iName);
+
+                    String existingType = null;
+                    try {
+                        existingType = o.isNull("accountType") ? null : o.optString("accountType", null);
+                    } catch (Exception ignore) {}
+
+                    if (accountPriority(at) > accountPriority(existingType)) {
+                        try {
+                            o.put("accountType", at == null ? JSONObject.NULL : at);
+                            o.put("accountName", an == null ? JSONObject.NULL : an);
+                            o.put("rawContactId", rawId == null ? "" : rawId);
+                        } catch (JSONException ignore) {}
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "raw contact query failed", e);
+        } finally {
+            if (rc != null) rc.close();
+        }
+
+        for (JSONObject obj : map.values()) {
+            contacts.put(obj);
         }
 
         JSObject ret = new JSObject();
         ret.put("contacts", contacts);
         call.resolve(ret);
+    }
+
+    // Priority of an account source. Higher wins when merging display info.
+    private static int accountPriority(String accountType) {
+        if (accountType == null) return 1;              // local/device
+        if ("com.google".equals(accountType)) return 5;  // Google
+        if (accountType.startsWith("com.android.exchange")) return 4;
+        if (accountType.startsWith("com.android.contacts.sim")) return 0; // SIM
+        return 2;                                        // other cloud/local
     }
 
     // -------- Helpers --------

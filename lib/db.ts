@@ -365,7 +365,25 @@ export async function saveContactsBulk(contacts: Contact[]): Promise<number> {
   const db = await getDB();
   if (!db) return 0;
   const tx = db.transaction('contacts', 'readwrite');
+  const incomingIds = new Set(contacts.map((c) => c.id));
   let written = 0;
+
+  // Full replace for device-synced entries (id prefix "cap-"). Any "cap-"
+  // row not present in this sync is stale (e.g. legacy cap-<phone> ids)
+  // and would otherwise show up as a duplicate.
+  let cursor = await tx.store.openCursor();
+  const stale: string[] = [];
+  while (cursor) {
+    const key = cursor.key as string;
+    if (typeof key === 'string' && key.startsWith('cap-') && !incomingIds.has(key)) {
+      stale.push(key);
+    }
+    cursor = await cursor.continue();
+  }
+  for (const id of stale) {
+    await tx.store.delete(id);
+  }
+
   for (const c of contacts) {
     await tx.store.put(c);
     written++;
