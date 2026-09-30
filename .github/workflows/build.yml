@@ -69,6 +69,7 @@ jobs:
         cp .github/native/SnoozeStore.java $TARGET/
         cp .github/native/NeuraContactsPlugin.java $TARGET/
         cp .github/native/NamePreferenceStore.java $TARGET/
+        cp .github/native/NameResolver.java $TARGET/
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/
         cp .github/native/CallNotifier.java $TARGET/

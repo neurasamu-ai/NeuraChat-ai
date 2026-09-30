@@ -462,28 +462,7 @@ public class CallService extends InCallService {
 
     // Look up a contact name for the given number.
     private String lookupName(String number) {
-        if (number == null || number.isEmpty()) return "";
-        Cursor c = null;
-        try {
-            Uri uri = Uri.withAppendedPath(
-                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-                Uri.encode(number)
-            );
-            c = getContentResolver().query(
-                uri,
-                new String[] { ContactsContract.PhoneLookup.DISPLAY_NAME },
-                null, null, null
-            );
-            if (c != null && c.moveToFirst()) {
-                String n = c.getString(0);
-                if (n != null) return n;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "lookupName failed", e);
-        } finally {
-            if (c != null) c.close();
-        }
-        return "";
+        return NameResolver.resolve(getApplicationContext(), number);
     }
 
     // Public wrapper so TelecomPlugin can call the protected platform method.
