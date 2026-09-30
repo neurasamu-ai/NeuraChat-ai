@@ -31,6 +31,32 @@ import com.getcapacitor.annotation.ActivityCallback;
 public class TelecomPlugin extends Plugin {
 
     private static final String TAG = "NeuraTelecom";
+
+    // Transient name hint set by the web layer when the user initiates a call
+    // from a specific contact variant (e.g. "Akira" @ Gmail1 vs "aka" @ Gmail2
+    // for the same number). Consumed by CallService.onCallAdded for the very
+    // next outgoing call, then cleared.
+    public static volatile String pendingNameHint = null;
+    public static volatile String pendingNameHintNumber = null;
+
+    public static synchronized void setPendingNameHint(String number, String name) {
+        pendingNameHint = (name == null || name.isEmpty()) ? null : name;
+        pendingNameHintNumber = number;
+    }
+
+    public static synchronized String consumePendingNameHint(String number) {
+        if (pendingNameHint == null) return null;
+        if (number == null || number.isEmpty() || pendingNameHintNumber == null) return null;
+        // Digits-only comparison so "+92...", "0092...", "92..." all match.
+        String a = number.replaceAll("[^0-9]", "");
+        String b = pendingNameHintNumber.replaceAll("[^0-9]", "");
+        if (a.isEmpty() || b.isEmpty()) return null;
+        if (!a.equals(b) && !a.endsWith(b) && !b.endsWith(a)) return null;
+        String out = pendingNameHint;
+        pendingNameHint = null;
+        pendingNameHintNumber = null;
+        return out;
+    }
     private static TelecomPlugin instance;
 
     @Override
@@ -312,7 +338,13 @@ public class TelecomPlugin extends Plugin {
         }
         String cleaned = number.replaceAll("[^+0-9*#]", "");
         String accountId = call.getString("accountId"); // optional
+        String nameHint = call.getString("nameHint");   // optional
         Context ctx = getContext();
+
+        if (nameHint != null && !nameHint.isEmpty()) {
+            setPendingNameHint(cleaned, nameHint);
+            Log.d(TAG, "nameHint stored for " + cleaned + " -> " + nameHint);
+        }
 
         // Attempt 1: TelecomManager.placeCall (with optional PhoneAccountHandle
         // for SIM selection; only honored when we hold the default dialer role).
