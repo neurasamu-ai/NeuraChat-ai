@@ -24,13 +24,12 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
-import { generateId, getCurrentTimestamp, getRandomCallDuration } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { normalizePhone, phonesMatch } from '@/lib/phone';
 import { useContacts } from '@/lib/use-contacts';
 import { useCallLogs } from '@/lib/use-call-logs';
-import { loadCallLogsFromDB, addCallLog, removeCallLog } from '@/lib/call-log-store';
+import { loadCallLogsFromDB, removeCallLog } from '@/lib/call-log-store';
 
 export default function CallsPage() {
   const router = useRouter();
@@ -210,18 +209,8 @@ export default function CallsPage() {
 
     triggerVibration();
     
-    // Save to IndexedDB Call Log
-    const callerName = resolvedContact ? resolvedContact.name : 'Unknown';
-    const newLog: CallLog = {
-      id: generateId('call'),
-      name: callerName,
-      phone: finalNumber,
-      type: 'outgoing',
-      timestamp: getCurrentTimestamp(),
-      duration: getRandomCallDuration()
-    };
-
-    await addCallLog(newLog);
+    // Call log is created by MissedCallBridge from the native "outgoingCall" event,
+    // which carries the exact name CallService resolved (incl. per-variant nameHint).
     setIsDialerOpen(false);
     setDialNumber('');
 
