@@ -302,7 +302,7 @@ function ProfileContent() {
   const handleCall = async () => {
     if (!editPhone) return;
     triggerVibration();
-    await simCall.startCall(editPhone);
+    await simCall.startCall(editPhone, editName || undefined);
   };
 
   const handleSms = () => {

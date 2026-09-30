@@ -62,6 +62,7 @@ export default function CallsPage() {
   const [isDialerOpen, setIsDialerOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState('');
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
+  const [pendingCallNameHint, setPendingCallNameHint] = useState<string | undefined>(undefined);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [pendingCallNumber, setPendingCallNumber] = useState<string>('');
   const [rememberCallSim, setRememberCallSim] = useState(false);
@@ -226,10 +227,11 @@ export default function CallsPage() {
 
     // Route to native call. With 2+ SIMs, show the SIM picker.
     try {
-      const result = await dispatchCall(finalNumber);
+      const result = await dispatchCall(finalNumber, resolvedContact?.name || undefined);
       if (result.action === 'pick') {
         setCallAccounts(result.accounts);
         setPendingCallNumber(finalNumber);
+        setPendingCallNameHint(resolvedContact?.name || undefined);
         setCallSimPickerOpen(true);
       } else if (!result.success) {
         console.error('Call failed:', result.error);
@@ -243,10 +245,12 @@ export default function CallsPage() {
     triggerVibration();
     if (rememberCallSim) setPreferredCallSimId(accountId);
     const number = pendingCallNumber;
+    const hint = pendingCallNameHint;
     setCallSimPickerOpen(false);
     setPendingCallNumber('');
+    setPendingCallNameHint(undefined);
     if (number) {
-      const res = await placeCall(number, accountId);
+      const res = await placeCall(number, accountId, hint);
       if (!res.success) {
         console.error('Call failed:', res.error);
       }

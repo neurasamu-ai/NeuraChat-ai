@@ -16,15 +16,17 @@ export function useSimCall() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [accounts, setAccounts] = useState<CallAccount[]>([]);
   const [pendingNumber, setPendingNumber] = useState('');
+  const [pendingNameHint, setNameHint] = useState<string | undefined>(undefined);
   const [remember, setRemember] = useState(false);
 
-  const startCall = useCallback(async (number: string) => {
+  const startCall = useCallback(async (number: string, nameHint?: string) => {
     if (!number) return;
     try {
-      const result = await dispatchCall(number);
+      const result = await dispatchCall(number, nameHint);
       if (result.action === 'pick') {
         setAccounts(result.accounts);
-        setPendingNumber(number);
+        setPendingNumber(result.number || number);
+        setNameHint(result.nameHint);
         setPickerOpen(true);
         return;
       }
@@ -43,15 +45,17 @@ export function useSimCall() {
       setPickerOpen(false);
       setPendingNumber('');
       if (!number) return;
-      const res = await placeCall(number, accountId);
+      const res = await placeCall(number, accountId, pendingNameHint);
+      setNameHint(undefined);
       if (!res.success) console.error('call failed', res.error);
     },
-    [remember, pendingNumber]
+    [remember, pendingNumber, pendingNameHint]
   );
 
   const cancel = useCallback(() => {
     setPickerOpen(false);
     setPendingNumber('');
+    setNameHint(undefined);
   }, []);
 
   return {

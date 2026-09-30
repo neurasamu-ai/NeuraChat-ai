@@ -32,7 +32,7 @@ export interface CallAccount {
 }
 
 export interface TelecomPluginType {
-  call(options: { number: string; accountId?: string }): Promise<{ success: boolean; method?: string; note?: string }>;
+  call(options: { number: string; accountId?: string; nameHint?: string }): Promise<{ success: boolean; method?: string; note?: string }>;
   getCallAccounts(): Promise<{ accounts: CallAccount[] }>;
   getCurrentCall(): Promise<CallState>;
   addListener(
@@ -105,7 +105,8 @@ export function isTelecomPluginAvailable(): boolean {
 
 export async function placeCall(
   number: string,
-  accountId?: string
+  accountId?: string,
+  nameHint?: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!number || !number.trim()) {
     return { success: false, error: 'Number is required' };
@@ -121,7 +122,7 @@ export async function placeCall(
   }
 
   try {
-    await TelecomPlugin.call({ number, accountId });
+    await TelecomPlugin.call({ number, accountId, nameHint });
     return { success: true };
   } catch (e: any) {
     console.error('[Telecom] call failed', e);
@@ -191,10 +192,11 @@ export async function isDefaultDialer(): Promise<boolean> {
 // Returns "dialed" if the call was placed directly, or "pick" if the caller
 // should show the SIM picker with `accounts` and call `placeCall` itself.
 export async function dispatchCall(
-  number: string
+  number: string,
+  nameHint?: string
 ): Promise<
   | { action: 'dialed'; success: boolean; error?: string }
-  | { action: 'pick'; accounts: CallAccount[] }
+  | { action: 'pick'; accounts: CallAccount[]; number: string; nameHint?: string }
 > {
   if (!number || !number.trim()) {
     return { action: 'dialed', success: false, error: 'Number is required' };
@@ -204,18 +206,18 @@ export async function dispatchCall(
 
   // 0 or 1 SIM: dial directly
   if (accounts.length <= 1) {
-    const res = await placeCall(number, accounts[0]?.id);
+    const res = await placeCall(number, accounts[0]?.id, nameHint);
     return { action: 'dialed', success: res.success, error: res.error };
   }
 
   // 2+ SIMs: check preference
   const remembered = getPreferredCallSimId();
   if (remembered && accounts.some((a) => a.id === remembered)) {
-    const res = await placeCall(number, remembered);
+    const res = await placeCall(number, remembered, nameHint);
     return { action: 'dialed', success: res.success, error: res.error };
   }
 
-  return { action: 'pick', accounts };
+  return { action: 'pick', accounts, number, nameHint };
 }
 
 

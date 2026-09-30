@@ -86,6 +86,7 @@ function ChatDetailContent() {
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [pendingCallNumber, setPendingCallNumber] = useState<string>('');
+  const [pendingCallNameHint, setPendingCallNameHint] = useState<string | undefined>(undefined);
   const [rememberCallSim, setRememberCallSim] = useState(false);
   const [rememberSim, setRememberSim] = useState(true);
   // Header SIM badge: which SIM is currently selected for this chat
@@ -587,10 +588,11 @@ function ChatDetailContent() {
       alertToast('No phone number for this contact', 'error');
       return;
     }
-    const result = await dispatchCall(phone);
+    const result = await dispatchCall(phone, name || undefined);
     if (result.action === 'pick') {
       setCallAccounts(result.accounts);
       setPendingCallNumber(phone);
+      setPendingCallNameHint(name || undefined);
       setCallSimPickerOpen(true);
       return;
     }
@@ -603,10 +605,12 @@ function ChatDetailContent() {
     triggerVibration();
     if (rememberCallSim) setPreferredCallSimId(accountId);
     const number = pendingCallNumber;
+    const hint = pendingCallNameHint;
     setCallSimPickerOpen(false);
     setPendingCallNumber('');
+    setPendingCallNameHint(undefined);
     if (number) {
-      const res = await placeCall(number, accountId);
+      const res = await placeCall(number, accountId, hint);
       if (!res.success) {
         alertToast('Call failed: ' + (res.error || 'unknown'), 'error');
       }
