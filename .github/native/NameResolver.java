@@ -41,6 +41,89 @@ public class NameResolver {
         return "";
     }
 
+    // Resolve name using a specific SIM / subscription. The per-event SIM is
+    // the one that actually received the call/SMS, so its account in the
+    // contacts DB is the correct source of truth for that event.
+    //
+    // Fallback chain: SIM account name -> system merged name -> "".
+    public static String resolveForSubscription(Context ctx, String number, int subscriptionId) {
+        if (ctx == null || number == null || number.isEmpty()) return "";
+        if (subscriptionId < 0) {
+            return resolve(ctx, number);
+        }
+        try {
+            String simAccountName = simAccountNameForSub(ctx, subscriptionId);
+            if (simAccountName != null && !simAccountName.isEmpty()) {
+                String bySim = lookupByAccount(ctx, number,
+                    "com.android.contacts.sim", simAccountName);
+                if (bySim != null && !bySim.isEmpty()) return bySim;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "sim lookup failed", e);
+        }
+        // Fallback: system merged name, then default resolve chain.
+        try {
+            String def = lookupDefault(ctx, number);
+            if (def != null && !def.isEmpty()) return def;
+        } catch (Exception e) {
+            Log.w(TAG, "fallback default failed", e);
+        }
+        return "";
+    }
+
+    // Best-effort mapping of a subscription id to the SIM's contact account
+    // name. Different ROMs label SIM contacts as "SIM", "SIM1", "SIM 1",
+    // the carrier name, or the user-set display name. We probe several
+    // candidates and let lookupByAccount return null if none match.
+    private static String simAccountNameForSub(Context ctx, int subscriptionId) {
+        try {
+            android.telephony.SubscriptionManager sm =
+                (android.telephony.SubscriptionManager)
+                    ctx.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (sm == null) return null;
+            android.telephony.SubscriptionInfo info =
+                sm.getActiveSubscriptionInfo(subscriptionId);
+            if (info == null) return null;
+            int slot = info.getSimSlotIndex();
+            CharSequence dispCs = info.getDisplayName();
+            String display = dispCs == null ? null : dispCs.toString();
+            // Try candidates in a stable order.
+            String[] candidates = new String[] {
+                display,
+                "SIM" + (slot + 1),
+                "SIM " + (slot + 1),
+                "SIM" + slot,
+                "SIM " + slot,
+            };
+            for (String cand : candidates) {
+                if (cand == null || cand.isEmpty()) continue;
+                // Verify that an account by this name actually holds SIM-type
+                // contacts; otherwise skip it.
+                if (simAccountExists(ctx, cand)) return cand;
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "simAccountNameForSub failed", e);
+        }
+        return null;
+    }
+
+    private static boolean simAccountExists(Context ctx, String accountName) {
+        Cursor c = null;
+        try {
+            c = ctx.getContentResolver().query(
+                RawContacts.CONTENT_URI,
+                new String[] { RawContacts._ID },
+                RawContacts.ACCOUNT_TYPE + "=? AND " + RawContacts.ACCOUNT_NAME + "=?",
+                new String[] { "com.android.contacts.sim", accountName },
+                null);
+            return c != null && c.moveToFirst();
+        } catch (Exception e) {
+            return false;
+        } finally {
+            if (c != null) c.close();
+        }
+    }
+
     // --- Default: system aggregated PhoneLookup (DISPLAY_NAME_PRIMARY path) ---
     private static String lookupDefault(Context ctx, String number) {
         Cursor c = null;
