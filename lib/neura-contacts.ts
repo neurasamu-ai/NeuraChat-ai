@@ -11,6 +11,18 @@ export interface WritableAccount {
   subscriptionId?: number;
 }
 
+export interface ContactAccount {
+  accountType: string | null;
+  accountName: string | null;
+  label: string;
+}
+
+export interface NameSourcePreference {
+  accountType: string | null;
+  accountName: string | null;
+  updatedAt: number;
+}
+
 export interface NativeContactRow {
   contactId: string;
   rawContactId: string;
@@ -25,6 +37,10 @@ export interface NativeContactRow {
 
 export interface NeuraContactsPluginType {
   getWritableAccounts(): Promise<{ accounts: WritableAccount[] }>;
+  getContactAccounts(): Promise<{ accounts: ContactAccount[] }>;
+  setNameSourcePreference(options: { accountType: string; accountName: string }): Promise<{ success: boolean }>;
+  getNameSourcePreference(): Promise<NameSourcePreference>;
+  clearNameSourcePreference(): Promise<{ success: boolean }>;
   getContactsWithSources(): Promise<{ contacts: NativeContactRow[] }>;
   saveContact(options: {
     name?: string;
