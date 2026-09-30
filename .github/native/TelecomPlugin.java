@@ -47,15 +47,33 @@ public class TelecomPlugin extends Plugin {
     public static synchronized String consumePendingNameHint(String number) {
         if (pendingNameHint == null) return null;
         if (number == null || number.isEmpty() || pendingNameHintNumber == null) return null;
-        // Digits-only comparison so "+92...", "0092...", "92..." all match.
-        String a = number.replaceAll("[^0-9]", "");
-        String b = pendingNameHintNumber.replaceAll("[^0-9]", "");
-        if (a.isEmpty() || b.isEmpty()) return null;
-        if (!a.equals(b) && !a.endsWith(b) && !b.endsWith(a)) return null;
+        if (!sameNumber(number, pendingNameHintNumber)) return null;
         String out = pendingNameHint;
         pendingNameHint = null;
         pendingNameHintNumber = null;
         return out;
+    }
+
+    // Loose number match: strip non-digits, drop leading "00", drop a single
+    // leading "0", and compare the last 10 digits. Handles "+92...", "0092...",
+    // "92..." and "0..." all resolving to the same local number.
+    private static boolean sameNumber(String a, String b) {
+        String na = normalizeForCompare(a);
+        String nb = normalizeForCompare(b);
+        if (na.isEmpty() || nb.isEmpty()) return false;
+        if (na.equals(nb)) return true;
+        // Fall back to last-10 comparison when both are long enough.
+        String la = na.length() > 10 ? na.substring(na.length() - 10) : na;
+        String lb = nb.length() > 10 ? nb.substring(nb.length() - 10) : nb;
+        return la.equals(lb);
+    }
+
+    private static String normalizeForCompare(String raw) {
+        if (raw == null) return "";
+        String d = raw.replaceAll("[^0-9]", "");
+        if (d.startsWith("00")) d = d.substring(2);
+        if (d.startsWith("0")) d = d.substring(1);
+        return d;
     }
     private static TelecomPlugin instance;
 
