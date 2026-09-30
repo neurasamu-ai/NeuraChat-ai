@@ -26,6 +26,15 @@ public class MainActivity extends BridgeActivity {
     public static MainActivity instance = null;
     private boolean permissionsRequested = false;
 
+    // Tracks whether the activity is currently visible to the user. Used by
+    // CallService to decide between the floating overlay (app background)
+    // and the full in-app call UI (app already on screen).
+    private static volatile boolean foreground = false;
+
+    public static boolean isForeground() {
+        return foreground && instance != null;
+    }
+
     // Pending navigation requested by a notification or system intent.
     // Read + cleared by SmsPlugin.getPendingNavigation().
     public static String pendingOpenChatWith = null;
@@ -56,6 +65,18 @@ public class MainActivity extends BridgeActivity {
         extractNavigationExtras(getIntent());
         applyCallWindowFlags(getIntent());
         requestAllPermissions();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        foreground = true;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        foreground = false;
     }
 
     // When launched by an incoming call, allow the window to show over the

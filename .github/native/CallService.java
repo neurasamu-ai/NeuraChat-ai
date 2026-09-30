@@ -160,8 +160,13 @@ public class CallService extends InCallService {
         // Incoming calls: prefer the floating overlay banner so the user
         // stays in whatever app (incl. camera). Falls back to launching
         // MainActivity when the overlay permission is missing.
+        boolean appInForeground = false;
+        try {
+            appInForeground = MainActivity.isForeground();
+        } catch (Exception ignore) {}
+
         boolean overlayShown = false;
-        if (pc.isIncoming && IncomingCallOverlay.canShow(getApplicationContext())) {
+        if (pc.isIncoming && !appInForeground && IncomingCallOverlay.canShow(getApplicationContext())) {
             try {
                 String ovNum = getNumber(call);
                 String ovName = lookupName(ovNum);
