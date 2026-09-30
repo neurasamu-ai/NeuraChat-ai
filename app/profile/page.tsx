@@ -64,9 +64,16 @@ function ProfileContent() {
     async function loadContact() {
       try {
         const all = await getContacts();
-        const match = urlPhone
-          ? all.find((c) => c.phone === urlPhone)
-          : all.find((c) => c.name === urlName);
+        // Same number may exist under multiple accounts with different
+        // names. Prefer the exact (phone + name) row so we open the variant
+        // the user actually tapped, not just any account that shares the
+        // number.
+        const exact = (urlPhone && urlName)
+          ? all.find((c) => c.phone === urlPhone && c.name === urlName)
+          : undefined;
+        const byPhone = urlPhone ? all.find((c) => c.phone === urlPhone) : undefined;
+        const byName = urlName ? all.find((c) => c.name === urlName) : undefined;
+        const match = exact || byPhone || byName;
         if (match) {
           setContact(match);
           setEditName(match.name);
