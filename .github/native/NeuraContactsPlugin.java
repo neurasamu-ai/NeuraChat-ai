@@ -442,6 +442,28 @@ public class NeuraContactsPlugin extends Plugin {
             if (rc != null) rc.close();
         }
 
+        // If the user has picked a preferred contact account, override the
+        // DISPLAY_NAME_PRIMARY with that account's name for each contact that
+        // has a raw_contact under it. One bulk query, no per-contact hits.
+        try {
+            String prefType = NamePreferenceStore.getType(getContext());
+            if (prefType != null && !prefType.isEmpty()) {
+                String prefName = NamePreferenceStore.getName(getContext());
+                java.util.HashMap<String, String> overrideByCid =
+                    loadPreferredNames(cr, prefType, prefName);
+                if (!overrideByCid.isEmpty()) {
+                    for (java.util.Map.Entry<String, String> e : overrideByCid.entrySet()) {
+                        JSONObject o = map.get(e.getKey());
+                        if (o != null && e.getValue() != null && !e.getValue().isEmpty()) {
+                            try { o.put("name", e.getValue()); } catch (JSONException ignore) {}
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "preferred name override failed", e);
+        }
+
         for (JSONObject obj : map.values()) {
             contacts.put(obj);
         }
@@ -449,6 +471,83 @@ public class NeuraContactsPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("contacts", contacts);
         call.resolve(ret);
+    }
+
+    // Build contactId -> preferred-name using a single pass over RawContacts
+    // + Data filtered by the preferred account. Returns an empty map if the
+    // account holds no contacts or the query fails.
+    private java.util.HashMap<String, String> loadPreferredNames(
+            ContentResolver cr, String accountType, String accountName) {
+        java.util.HashMap<String, String> out = new java.util.HashMap<>();
+        // 1. rawContactId -> contactId for the preferred account.
+        java.util.HashMap<String, String> rawToContact = new java.util.HashMap<>();
+        Cursor rc = null;
+        try {
+            StringBuilder sel = new StringBuilder();
+            sel.append(ContactsContract.RawContacts.DELETED).append("=0");
+            java.util.List<String> args = new java.util.ArrayList<>();
+            if (accountType != null && !accountType.isEmpty()) {
+                sel.append(" AND ").append(ContactsContract.RawContacts.ACCOUNT_TYPE).append("=?");
+                args.add(accountType);
+            }
+            if (accountName != null && !accountName.isEmpty()) {
+                sel.append(" AND ").append(ContactsContract.RawContacts.ACCOUNT_NAME).append("=?");
+                args.add(accountName);
+            }
+            rc = cr.query(
+                ContactsContract.RawContacts.CONTENT_URI,
+                new String[] {
+                    ContactsContract.RawContacts._ID,
+                    ContactsContract.RawContacts.CONTACT_ID
+                },
+                sel.toString(), args.toArray(new String[0]), null);
+            if (rc != null) {
+                int iId = rc.getColumnIndex(ContactsContract.RawContacts._ID);
+                int iCid = rc.getColumnIndex(ContactsContract.RawContacts.CONTACT_ID);
+                while (rc.moveToNext()) {
+                    String rid = rc.getString(iId);
+                    String cid = rc.getString(iCid);
+                    if (rid != null && cid != null) rawToContact.put(rid, cid);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "loadPreferredNames raw query failed", e);
+        } finally {
+            if (rc != null) rc.close();
+        }
+        if (rawToContact.isEmpty()) return out;
+
+        // 2. StructuredName per rawContactId.
+        Cursor dc = null;
+        try {
+            dc = cr.query(
+                ContactsContract.Data.CONTENT_URI,
+                new String[] {
+                    ContactsContract.Data.RAW_CONTACT_ID,
+                    android.provider.ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME
+                },
+                ContactsContract.Data.MIMETYPE + "=?",
+                new String[] { android.provider.ContactsContract.CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE },
+                null);
+            if (dc != null) {
+                int iRid = dc.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID);
+                int iName = dc.getColumnIndex(
+                    android.provider.ContactsContract.CommonDataKinds.StructuredName.DISPLAY_NAME);
+                while (dc.moveToNext()) {
+                    String rid = dc.getString(iRid);
+                    if (rid == null) continue;
+                    String cid = rawToContact.get(rid);
+                    if (cid == null) continue;
+                    String nm = dc.getString(iName);
+                    if (nm != null && !nm.isEmpty()) out.put(cid, nm);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "loadPreferredNames data query failed", e);
+        } finally {
+            if (dc != null) dc.close();
+        }
+        return out;
     }
 
     // Priority of an account source. Higher wins when merging display info.
