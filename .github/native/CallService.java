@@ -466,16 +466,24 @@ public class CallService extends InCallService {
     }
 
     // Subscription id for the SIM that owns this call, or -1 if unknown.
+    // TelecomManager.getSubscriptionId(PhoneAccountHandle) is not public API;
+    // for SIM-backed accounts the PhoneAccountHandle id is typically the
+    // subscription id as a string ("0", "1", ...). We parse it defensively
+    // and fall back to -1 (default resolver) if it does not look numeric.
     private int subIdForCall(Call call) {
         try {
             if (call == null || call.getDetails() == null) return -1;
             android.telecom.PhoneAccountHandle handle = call.getDetails().getAccountHandle();
             if (handle == null) return -1;
-            android.telecom.TelecomManager tm =
-                (android.telecom.TelecomManager) getSystemService(TELECOM_SERVICE);
-            if (tm == null) return -1;
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                return tm.getSubscriptionId(handle);
+            String id = handle.getId();
+            if (id == null || id.isEmpty()) return -1;
+            // Common formats: "1", "0", "SIM1", "subscription:1"
+            java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("(\\d+)").matcher(id);
+            if (m.find()) {
+                try {
+                    return Integer.parseInt(m.group(1));
+                } catch (Exception ignore) {}
             }
         } catch (Exception e) {
             Log.w(TAG, "subIdForCall failed", e);

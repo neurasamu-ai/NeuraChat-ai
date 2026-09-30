@@ -64,13 +64,6 @@ public class SmsReceiver extends BroadcastReceiver {
                     subId = intent.getIntExtra("subscription_id", -1);
                 } catch (Exception ignore) {}
             }
-            if (subId < 0) {
-                try {
-                    if (messages.length > 0 && messages[0] != null) {
-                        subId = messages[0].getSubscriptionId();
-                    }
-                } catch (Exception ignore) {}
-            }
 
             // Persist + queue for the app inbox and notify.
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
