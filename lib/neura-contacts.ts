@@ -11,18 +11,6 @@ export interface WritableAccount {
   subscriptionId?: number;
 }
 
-export interface ContactAccount {
-  accountType: string | null;
-  accountName: string | null;
-  label: string;
-}
-
-export interface NameSourcePreference {
-  accountType: string | null;
-  accountName: string | null;
-  updatedAt: number;
-}
-
 export interface NativeContactRow {
   contactId: string;
   rawContactId: string;
@@ -37,10 +25,6 @@ export interface NativeContactRow {
 
 export interface NeuraContactsPluginType {
   getWritableAccounts(): Promise<{ accounts: WritableAccount[] }>;
-  getContactAccounts(): Promise<{ accounts: ContactAccount[] }>;
-  setNameSourcePreference(options: { accountType: string; accountName: string }): Promise<{ success: boolean }>;
-  getNameSourcePreference(): Promise<NameSourcePreference>;
-  clearNameSourcePreference(): Promise<{ success: boolean }>;
   getContactsWithSources(): Promise<{ contacts: NativeContactRow[] }>;
   saveContact(options: {
     name?: string;
@@ -230,52 +214,3 @@ export async function updateContactNative(opts: {
     return { success: false, error: e?.message || String(e) };
   }
 }
-
-// ---- Name-source preference ----
-
-export async function getContactAccounts(): Promise<ContactAccount[]> {
-  if (!isContactsPluginAvailable()) return [];
-  try {
-    const r = await NeuraContacts.getContactAccounts();
-    return r.accounts || [];
-  } catch (e) {
-    console.error('[NeuraContacts] getContactAccounts failed', e);
-    return [];
-  }
-}
-
-export async function setNameSourcePreferenceNative(
-  accountType: string,
-  accountName: string,
-): Promise<boolean> {
-  if (!isContactsPluginAvailable()) return false;
-  try {
-    const r = await NeuraContacts.setNameSourcePreference({ accountType, accountName });
-    return !!r?.success;
-  } catch (e) {
-    console.error('[NeuraContacts] setNameSourcePreference failed', e);
-    return false;
-  }
-}
-
-export async function getNameSourcePreferenceNative(): Promise<NameSourcePreference | null> {
-  if (!isContactsPluginAvailable()) return null;
-  try {
-    return await NeuraContacts.getNameSourcePreference();
-  } catch (e) {
-    console.error('[NeuraContacts] getNameSourcePreference failed', e);
-    return null;
-  }
-}
-
-export async function clearNameSourcePreferenceNative(): Promise<boolean> {
-  if (!isContactsPluginAvailable()) return false;
-  try {
-    const r = await NeuraContacts.clearNameSourcePreference();
-    return !!r?.success;
-  } catch (e) {
-    console.error('[NeuraContacts] clearNameSourcePreference failed', e);
-    return false;
-  }
-}
-

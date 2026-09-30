@@ -23,16 +23,6 @@ public class NameResolver {
     public static String resolve(Context ctx, String number) {
         if (ctx == null || number == null || number.isEmpty()) return "";
         try {
-            if (NamePreferenceStore.hasPreference(ctx)) {
-                String type = NamePreferenceStore.getType(ctx);
-                String name = NamePreferenceStore.getName(ctx);
-                String pref = lookupByAccount(ctx, number, type, name);
-                if (pref != null && !pref.isEmpty()) return pref;
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "preference lookup failed", e);
-        }
-        try {
             String def = lookupDefault(ctx, number);
             if (def != null && !def.isEmpty()) return def;
         } catch (Exception e) {

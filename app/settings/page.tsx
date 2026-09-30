@@ -19,8 +19,7 @@ import {
   Database,
   Palette,
   Sparkles,
-  Trash2,
-  Users
+  Trash2
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -42,12 +41,6 @@ import {
   isDefaultDialer, requestDefaultDialer, CallAccount,
 } from '@/lib/telecom-plugin';
 import {
-  getContactAccounts, setNameSourcePreferenceNative,
-  getNameSourcePreferenceNative, clearNameSourcePreferenceNative,
-  ContactAccount, NameSourcePreference,
-} from '@/lib/neura-contacts';
-import { forceSyncContacts } from '@/lib/contacts-store';
-import {
   getActiveSubscriptions, getPreferredSimId, setPreferredSimId,
   isDefaultSmsApp, requestDefaultSmsRole, Subscription,
 } from '@/lib/sms-plugin';
@@ -65,10 +58,6 @@ export default function SettingsPage() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isCommsOpen, setIsCommsOpen] = useState(false);
-  const [isContactsOpen, setIsContactsOpen] = useState(false);
-  const [contactAccounts, setContactAccounts] = useState<ContactAccount[]>([]);
-  const [namePref, setNamePref] = useState<NameSourcePreference | null>(null);
-  const [loadingContactAccounts, setLoadingContactAccounts] = useState(false);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
   const [callSimId, setCallSimId] = useState<string | null>(null);
   const [smsSubs, setSmsSubs] = useState<Subscription[]>([]);
@@ -194,32 +183,7 @@ export default function SettingsPage() {
   // ---- Back-button integration ----
   useBackHandler(isAboutOpen, () => setIsAboutOpen(false));
   useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
-  useBackHandler(isContactsOpen, () => setIsContactsOpen(false));
 
-  // Load contact accounts + current preference when the Contacts settings
-  // modal is opened.
-  useEffect(() => {
-    if (!isContactsOpen) return;
-    let cancelled = false;
-    (async () => {
-      setLoadingContactAccounts(true);
-      try {
-        const [accounts, pref] = await Promise.all([
-          getContactAccounts(),
-          getNameSourcePreferenceNative(),
-        ]);
-        if (!cancelled) {
-          setContactAccounts(accounts || []);
-          setNamePref(pref || null);
-        }
-      } catch (e) {
-        console.error('[settings] load contact accounts', e);
-      } finally {
-        if (!cancelled) setLoadingContactAccounts(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isContactsOpen]);
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
   useBackHandler(isBackupOpen, () => setIsBackupOpen(false));
   useBackHandler(isCallThemeOpen, () => setIsCallThemeOpen(false));
@@ -481,21 +445,6 @@ export default function SettingsPage() {
             <div className="flex items-center gap-3">
               <ShieldIcon className="h-4 w-4 text-purple-400" />
               <span className="text-xs font-medium text-zinc-200">Permissions</span>
-            </div>
-            <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-          </div>
-
-          {/* Contacts (name source for duplicates) */}
-          <div
-            onClick={() => {
-              triggerVibration();
-              setIsContactsOpen(true);
-            }}
-            className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
-          >
-            <div className="flex items-center gap-3">
-              <Users className="h-4 w-4 text-[#00D4FF]" />
-              <span className="text-xs font-medium text-zinc-200">Contacts</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -1333,121 +1282,6 @@ export default function SettingsPage() {
 
         {/* ========== ABOUT MODAL ========== */}
         <AnimatePresence>
-          {isContactsOpen && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
-              >
-                <button
-                  onClick={() => setIsContactsOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-white cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <h3 className="text-base font-bold text-white mb-1">Contacts</h3>
-                <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
-                  Agar ek number ke liye multiple accounts (Gmail, SIM, Device)
-                  me different names hain, to yahan choose karo kaunsa naam har
-                  jagah dikhe — calls, SMS, notifications aur history.
-                </p>
-
-                {/* Current selection summary */}
-                <div className="mb-4 p-3 rounded-xl bg-zinc-900/60 border border-zinc-800">
-                  <p className="text-[10px] uppercase tracking-widest text-zinc-500 mb-1">
-                    Current
-                  </p>
-                  <p className="text-xs text-zinc-200 font-medium">
-                    {namePref && namePref.accountType
-                      ? (contactAccounts.find(a =>
-                          a.accountType === namePref.accountType &&
-                          a.accountName === namePref.accountName
-                        )?.label
-                        || `${namePref.accountType}${namePref.accountName ? ' · ' + namePref.accountName : ''}`)
-                      : 'System default (auto)'}
-                  </p>
-                </div>
-
-                {/* Options */}
-                <div className="max-h-72 overflow-y-auto space-y-1.5">
-                  <button
-                    onClick={async () => {
-                      await clearNameSourcePreferenceNative();
-                      setNamePref(null);
-                      try { await forceSyncContacts(); } catch (e) { console.error(e); }
-                    }}
-                    className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-colors cursor-pointer ${
-                      !namePref || !namePref.accountType
-                        ? 'bg-[#00D4FF]/10 border-[#00D4FF]/50 text-white'
-                        : 'bg-zinc-900/40 border-zinc-800 text-zinc-300 hover:bg-zinc-900'
-                    }`}
-                  >
-                    <div className="font-semibold">System default (auto)</div>
-                    <div className="text-[10px] text-zinc-500 mt-0.5">
-                      Android ka merged naam use karega
-                    </div>
-                  </button>
-
-                  {loadingContactAccounts && (
-                    <p className="text-center text-[11px] text-zinc-500 py-4">Loading…</p>
-                  )}
-
-                  {!loadingContactAccounts && contactAccounts.length === 0 && (
-                    <p className="text-center text-[11px] text-zinc-500 py-4">
-                      Koi contact account nahi mila
-                    </p>
-                  )}
-
-                  {contactAccounts.map((a, i) => {
-                    const active =
-                      namePref?.accountType === a.accountType &&
-                      namePref?.accountName === a.accountName;
-                    return (
-                      <button
-                        key={`${a.accountType || 'local'}-${a.accountName || ''}-${i}`}
-                        onClick={async () => {
-                          const t = a.accountType || '';
-                          const n = a.accountName || '';
-                          const ok = await setNameSourcePreferenceNative(t, n);
-                          if (ok) {
-                            setNamePref({
-                              accountType: t,
-                              accountName: n,
-                              updatedAt: Date.now(),
-                            });
-                            try { await forceSyncContacts(); } catch (e) { console.error(e); }
-                          }
-                        }}
-                        className={`w-full text-left px-3 py-2.5 rounded-xl border text-xs transition-colors cursor-pointer ${
-                          active
-                            ? 'bg-[#00D4FF]/10 border-[#00D4FF]/50 text-white'
-                            : 'bg-zinc-900/40 border-zinc-800 text-zinc-300 hover:bg-zinc-900'
-                        }`}
-                      >
-                        <div className="font-semibold">{a.label}</div>
-                        {a.accountName && (
-                          <div className="text-[10px] text-zinc-500 mt-0.5">
-                            {a.accountName}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={() => setIsContactsOpen(false)}
-                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
-                >
-                  Done
-                </button>
-              </motion.div>
-            </div>
-          )}
-
           {isAboutOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
               <motion.div
