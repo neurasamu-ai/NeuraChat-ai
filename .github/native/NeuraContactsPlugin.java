@@ -460,6 +460,103 @@ public class NeuraContactsPlugin extends Plugin {
         return 2;                                        // other cloud/local
     }
 
+    // -------- Name-source preference --------
+
+    @PluginMethod
+    public void setNameSourcePreference(PluginCall call) {
+        String accountType = call.getString("accountType", "");
+        String accountName = call.getString("accountName", "");
+        NamePreferenceStore.set(getContext(), accountType, accountName);
+        JSObject ret = new JSObject();
+        ret.put("success", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getNameSourcePreference(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("accountType", NamePreferenceStore.getType(getContext()));
+        ret.put("accountName", NamePreferenceStore.getName(getContext()));
+        ret.put("updatedAt", NamePreferenceStore.getUpdatedAt(getContext()));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void clearNameSourcePreference(PluginCall call) {
+        NamePreferenceStore.clear(getContext());
+        JSObject ret = new JSObject();
+        ret.put("success", true);
+        call.resolve(ret);
+    }
+
+    // List all accounts that actually hold at least one contact. Used to
+    // populate the preferred-name-source dropdown.
+    @PluginMethod
+    public void getContactAccounts(PluginCall call) {
+        if (!hasReadContacts()) {
+            call.reject("READ_CONTACTS permission not granted");
+            return;
+        }
+        JSArray arr = new JSArray();
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        Cursor c = null;
+        try {
+            c = getContext().getContentResolver().query(
+                ContactsContract.RawContacts.CONTENT_URI,
+                new String[] {
+                    ContactsContract.RawContacts.ACCOUNT_TYPE,
+                    ContactsContract.RawContacts.ACCOUNT_NAME
+                },
+                ContactsContract.RawContacts.DELETED + " = 0",
+                null, null
+            );
+            if (c != null) {
+                int iT = c.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE);
+                int iN = c.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME);
+                while (c.moveToNext()) {
+                    String type = c.getString(iT);
+                    String name = c.getString(iN);
+                    String key = (type == null ? "" : type) + "|" + (name == null ? "" : name);
+                    if (seen.contains(key)) continue;
+                    seen.add(key);
+
+                    JSObject o = new JSObject();
+                    o.put("accountType", type);
+                    o.put("accountName", name);
+                    o.put("label", labelFor(type, name));
+                    arr.put(o);
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "getContactAccounts failed", e);
+        } finally {
+            if (c != null) c.close();
+        }
+        JSObject ret = new JSObject();
+        ret.put("accounts", arr);
+        call.resolve(ret);
+    }
+
+    private static String labelFor(String accountType, String accountName) {
+        if (accountType == null || accountType.isEmpty()) {
+            return "Device (local)";
+        }
+        if ("com.google".equals(accountType)) {
+            return (accountName == null || accountName.isEmpty())
+                ? "Google"
+                : "Google · " + accountName;
+        }
+        if (accountType.startsWith("com.android.exchange")) {
+            return (accountName == null || accountName.isEmpty())
+                ? "Exchange"
+                : "Exchange · " + accountName;
+        }
+        if (accountType.startsWith("com.android.contacts.sim")) {
+            return (accountName == null || accountName.isEmpty()) ? "SIM" : accountName;
+        }
+        return (accountName == null || accountName.isEmpty()) ? accountType : accountType + " · " + accountName;
+    }
+
     // -------- Helpers --------
 
     private boolean hasReadContacts() {
