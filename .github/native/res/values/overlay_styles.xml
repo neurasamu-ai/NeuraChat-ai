@@ -12,4 +12,17 @@
         <item name="android:textSize">13sp</item>
         <item name="android:textStyle">bold</item>
     </style>
+    <style name="CallNumpadKey">
+        <item name="android:layout_width">68dp</item>
+        <item name="android:layout_height">68dp</item>
+        <item name="android:layout_marginStart">6dp</item>
+        <item name="android:layout_marginEnd">6dp</item>
+        <item name="android:background">@drawable/bg_numpad_key</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
 </resources>

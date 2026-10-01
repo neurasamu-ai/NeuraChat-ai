@@ -42,6 +42,7 @@ public class CallActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable ticker;
     private long startedAt = 0L;
+    private final StringBuilder numpadText = new StringBuilder();
 
     private static CallActivity instance = null;
 
@@ -115,14 +116,15 @@ public class CallActivity extends Activity {
     }
 
     private void wireButtons() {
-        TextView attend = findViewById(R.id.call_btn_attend);
-        TextView dismiss = findViewById(R.id.call_btn_dismiss);
-        TextView snooze = findViewById(R.id.call_btn_snooze);
-        TextView end = findViewById(R.id.call_btn_end);
-        TextView mute = findViewById(R.id.call_btn_mute);
-        TextView speaker = findViewById(R.id.call_btn_speaker);
-        TextView hold = findViewById(R.id.call_btn_hold);
-        TextView record = findViewById(R.id.call_btn_record);
+        View attend = findViewById(R.id.call_btn_attend);
+        View dismiss = findViewById(R.id.call_btn_dismiss);
+        View snooze = findViewById(R.id.call_btn_snooze);
+        View end = findViewById(R.id.call_btn_end);
+        View mute = findViewById(R.id.call_btn_mute);
+        View speaker = findViewById(R.id.call_btn_speaker);
+        View hold = findViewById(R.id.call_btn_hold);
+        View record = findViewById(R.id.call_btn_record);
+        View keypad = findViewById(R.id.call_btn_keypad);
 
         if (attend != null) attend.setOnClickListener(v -> doAnswer());
         if (dismiss != null) dismiss.setOnClickListener(v -> doReject());
@@ -132,6 +134,73 @@ public class CallActivity extends Activity {
         if (speaker != null) speaker.setOnClickListener(v -> doToggleSpeaker());
         if (hold != null) hold.setOnClickListener(v -> doToggleHold());
         if (record != null) record.setOnClickListener(v -> doToggleRecord());
+        if (keypad != null) keypad.setOnClickListener(v -> openNumpad());
+
+        // Numpad keys 0-9 * #
+        int[] ids = { R.id.np_0, R.id.np_1, R.id.np_2, R.id.np_3, R.id.np_4,
+                      R.id.np_5, R.id.np_6, R.id.np_7, R.id.np_8, R.id.np_9,
+                      R.id.np_star, R.id.np_hash };
+        for (int id : ids) {
+            View k = findViewById(id);
+            if (k instanceof TextView) {
+                TextView tv = (TextView) k;
+                final String ch = tv.getText().toString();
+                k.setOnClickListener(v -> onNumpadKey(ch));
+            }
+        }
+
+        View backspace = findViewById(R.id.call_numpad_backspace);
+        if (backspace != null) backspace.setOnClickListener(v -> onNumpadBackspace());
+        View numpadBack = findViewById(R.id.call_numpad_back);
+        if (numpadBack != null) numpadBack.setOnClickListener(v -> closeNumpad());
+    }
+
+    private void openNumpad() {
+        View main = findViewById(R.id.call_main);
+        View pad = findViewById(R.id.call_numpad);
+        if (main != null) main.setVisibility(View.GONE);
+        if (pad != null) pad.setVisibility(View.VISIBLE);
+        TextView nm = findViewById(R.id.call_numpad_name);
+        if (nm != null) nm.setText(name == null ? number : name);
+        renderNumpad();
+    }
+
+    private void closeNumpad() {
+        View main = findViewById(R.id.call_main);
+        View pad = findViewById(R.id.call_numpad);
+        if (pad != null) pad.setVisibility(View.GONE);
+        if (main != null) main.setVisibility(View.VISIBLE);
+    }
+
+    private void onNumpadKey(String ch) {
+        if (ch == null || ch.isEmpty()) return;
+        numpadText.append(ch);
+        renderNumpad();
+        // Send DTMF tone through the active call, if any.
+        try {
+            android.telecom.Call c = CallService.activeCall;
+            if (c != null) c.playDtmfTone(ch.charAt(0));
+            android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+            h.postDelayed(() -> {
+                try {
+                    android.telecom.Call cc = CallService.activeCall;
+                    if (cc != null) cc.stopDtmfTone();
+                } catch (Exception ignore) {}
+            }, 180);
+        } catch (Exception e) {
+            Log.w(TAG, "DTMF play failed", e);
+        }
+    }
+
+    private void onNumpadBackspace() {
+        if (numpadText.length() == 0) return;
+        numpadText.deleteCharAt(numpadText.length() - 1);
+        renderNumpad();
+    }
+
+    private void renderNumpad() {
+        TextView d = findViewById(R.id.call_numpad_display);
+        if (d != null) d.setText(numpadText.toString());
     }
 
     private void doToggleMute() {
@@ -205,12 +274,25 @@ public class CallActivity extends Activity {
 
     private void updateCtrlHighlight(int viewId, boolean active) {
         try {
-            TextView v = findViewById(viewId);
+            View v = findViewById(viewId);
             if (v == null) return;
-            v.setBackgroundResource(active
-                ? R.drawable.bg_call_ctrl_active
-                : R.drawable.bg_call_ctrl);
-            v.setTextColor(active ? 0xFF00D4FF : 0xFFE4E4E7);
+            int color = active ? 0xFF00D4FF : 0xFFE4E4E7;
+            if (v instanceof android.view.ViewGroup) {
+                android.view.ViewGroup g = (android.view.ViewGroup) v;
+                for (int i = 0; i < g.getChildCount(); i++) {
+                    View child = g.getChildAt(i);
+                    if (child instanceof ImageView) {
+                        ((ImageView) child).setColorFilter(color);
+                    } else if (child instanceof TextView) {
+                        ((TextView) child).setTextColor(color);
+                    }
+                }
+            }
+            if (active) {
+                v.setBackgroundResource(R.drawable.bg_call_ctrl_active);
+            } else {
+                v.setBackgroundResource(0);
+            }
         } catch (Exception ignore) {}
     }
 
@@ -350,6 +432,16 @@ public class CallActivity extends Activity {
             Log.w(TAG, "end failed", e);
         }
         finishSoon();
+    }
+
+    @Override
+    public void onBackPressed() {
+        View pad = findViewById(R.id.call_numpad);
+        if (pad != null && pad.getVisibility() == View.VISIBLE) {
+            closeNumpad();
+            return;
+        }
+        super.onBackPressed();
     }
 
     public void finishSoon() {
