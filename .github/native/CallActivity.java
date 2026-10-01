@@ -465,11 +465,30 @@ public class CallActivity extends Activity {
             if (c != null && c.moveToFirst()) {
                 String photo = c.getString(0);
                 if (photo != null && !photo.isEmpty()) {
-                    InputStream is = getContentResolver().openInputStream(Uri.parse(photo));
-                    if (is != null) {
-                        Bitmap b = BitmapFactory.decodeStream(is);
-                        try { is.close(); } catch (Exception ignore) {}
-                        return b;
+                    // Two-pass decode: read bounds, compute inSampleSize for
+                    // a target size ~2x display (300px), then decode scaled.
+                    BitmapFactory.Options opts = new BitmapFactory.Options();
+                    opts.inJustDecodeBounds = true;
+                    try (InputStream is1 = getContentResolver().openInputStream(Uri.parse(photo))) {
+                        if (is1 != null) BitmapFactory.decodeStream(is1, null, opts);
+                    } catch (Exception ignore) {}
+                    int target = 300;
+                    int sample = 1;
+                    int w = opts.outWidth, h = opts.outHeight;
+                    while (w / sample > target * 2 && h / sample > target * 2) {
+                        sample *= 2;
+                    }
+                    BitmapFactory.Options opts2 = new BitmapFactory.Options();
+                    opts2.inSampleSize = sample;
+                    opts2.inPreferredConfig = Bitmap.Config.ARGB_8888;
+                    Bitmap b = null;
+                    try (InputStream is2 = getContentResolver().openInputStream(Uri.parse(photo))) {
+                        if (is2 != null) b = BitmapFactory.decodeStream(is2, null, opts2);
+                    } catch (Exception e) {
+                        Log.w(TAG, "photo decode failed", e);
+                    }
+                    if (b != null) {
+                        return circleCrop(b);
                     }
                 }
             }
@@ -479,5 +498,30 @@ public class CallActivity extends Activity {
             if (c != null) c.close();
         }
         return null;
+    }
+
+    // Center-crop to a square then mask to a circle. Result is square with
+    // diameter == min(width, height) of the original.
+    private Bitmap circleCrop(Bitmap src) {
+        try {
+            int size = Math.min(src.getWidth(), src.getHeight());
+            int x = (src.getWidth() - size) / 2;
+            int y = (src.getHeight() - size) / 2;
+            Bitmap squared = Bitmap.createBitmap(src, x, y, size, size);
+            if (squared != src) {
+                // keep squared, recycle original later by GC
+            }
+            Bitmap output = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            android.graphics.Canvas canvas = new android.graphics.Canvas(output);
+            android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            paint.setShader(new android.graphics.BitmapShader(
+                squared, android.graphics.Shader.TileMode.CLAMP, android.graphics.Shader.TileMode.CLAMP));
+            float r = size / 2f;
+            canvas.drawCircle(r, r, r, paint);
+            return output;
+        } catch (Exception e) {
+            Log.w(TAG, "circleCrop failed", e);
+            return src;
+        }
     }
 }
