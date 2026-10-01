@@ -197,16 +197,15 @@ public class CallService extends InCallService {
                 if (pm != null) screenOff = !pm.isInteractive();
             } catch (Exception ignore) {}
 
-            // Always post the CallStyle notification so the user has a
-            // durable Answer/Decline entry point.
-            try {
-                CallNotifier.showIncoming(getApplicationContext(), num, nm);
-            } catch (Exception e) {
-                Log.w(TAG, "showIncoming failed", e);
-            }
-
             if (screenLocked || screenOff) {
-                // Path 1: full native call screen over the lock screen.
+                // Path 1: lock screen / screen off. Full native UI over the
+                // keyguard, driven by a CallStyle notification with a
+                // fullScreenIntent.
+                try {
+                    CallNotifier.showIncoming(getApplicationContext(), num, nm);
+                } catch (Exception e) {
+                    Log.w(TAG, "showIncoming failed", e);
+                }
                 try {
                     Intent ca = new Intent(this, CallActivity.class);
                     ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
@@ -223,14 +222,27 @@ public class CallService extends InCallService {
                     Log.w(TAG, "CallActivity launch failed", e);
                 }
             } else if (!appInForeground) {
-                // Path 3: overlay banner only when unlocked and app not visible.
+                // Path 3: unlocked + app in background. Prefer the floating
+                // overlay banner (compact, non-interrupting). Only fall back
+                // to notification + CallActivity when the overlay permission
+                // is missing.
+                boolean overlayShown = false;
                 try {
                     if (IncomingCallOverlay.canShow(getApplicationContext())) {
                         IncomingCallOverlay.show(getApplicationContext(), num, nm);
+                        overlayShown = true;
                         Log.d(TAG, "overlay shown for incoming call " + num);
-                    } else {
-                        // No overlay permission: still show CallActivity so the
-                        // user sees the call. This is the last-resort path.
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "overlay show failed", e);
+                }
+                if (!overlayShown) {
+                    try {
+                        CallNotifier.showIncoming(getApplicationContext(), num, nm);
+                    } catch (Exception e) {
+                        Log.w(TAG, "showIncoming failed", e);
+                    }
+                    try {
                         Intent ca = new Intent(this, CallActivity.class);
                         ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                             | Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -242,9 +254,9 @@ public class CallService extends InCallService {
                         ca.putExtra(CallActivity.EXTRA_INCOMING, true);
                         startActivity(ca);
                         Log.d(TAG, "CallActivity launched (no overlay perm) for " + num);
+                    } catch (Exception e) {
+                        Log.w(TAG, "CallActivity launch failed", e);
                     }
-                } catch (Exception e) {
-                    Log.w(TAG, "overlay / fallback failed", e);
                 }
             } else {
                 // Path 2: app is in foreground - web UI handles it.

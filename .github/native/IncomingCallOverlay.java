@@ -293,12 +293,19 @@ public class IncomingCallOverlay extends Service {
     }
 
     private void openFullUi() {
-        // Remove the overlay first so it does not sit above the full UI.
+        // Remove the overlay, then open the native call screen — never
+        // MainActivity, so the WebView app is not brought forward by a call.
         hide(getApplicationContext());
         try {
-            Intent i = new Intent(this, MainActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            i.putExtra("call_state", "RINGING");
+            Intent i = new Intent(this, CallActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+            i.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_INCOMING);
+            i.putExtra(CallActivity.EXTRA_NUMBER, number == null ? "" : number);
+            i.putExtra(CallActivity.EXTRA_NAME, displayName == null ? "" : displayName);
+            i.putExtra(CallActivity.EXTRA_INCOMING, true);
             startActivity(i);
         } catch (Exception e) {
             Log.w(TAG, "openFullUi failed", e);

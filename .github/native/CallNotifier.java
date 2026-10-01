@@ -12,7 +12,6 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
-import androidx.core.graphics.drawable.IconCompat;
 
 public class CallNotifier {
 
@@ -278,16 +277,13 @@ public class CallNotifier {
                 androidx.core.app.Person caller = new androidx.core.app.Person.Builder()
                     .setName(title)
                     .build();
+                // CallStyle.forIncomingCall already wires Decline + Answer
+                // actions, so we do NOT add them again (that showed up as
+                // duplicate "Answer Answer" buttons on some ROMs).
                 NotificationCompat.CallStyle callStyle =
                     NotificationCompat.CallStyle.forIncomingCall(
                         caller, declinePending, answerPending);
                 builder.setStyle(callStyle);
-                builder.addAction(new NotificationCompat.Action.Builder(
-                    IconCompat.createWithResource(context, R.drawable.ic_stat_call),
-                    "Answer", answerPending).build());
-                builder.addAction(new NotificationCompat.Action.Builder(
-                    IconCompat.createWithResource(context, R.drawable.ic_stat_call),
-                    "Decline", declinePending).build());
             } catch (Throwable t) {
                 Log.w(TAG, "CallStyle unavailable, falling back", t);
                 builder.addAction(R.drawable.ic_stat_call, "Answer", answerPending);
