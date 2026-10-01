@@ -625,6 +625,50 @@ public class TelecomPlugin extends Plugin {
     // ---- Call recording (MIC source only; caller audio is not captured on
     //      Android 10+ for non-system apps) ----
     private static MediaRecorder recorder = null;
+
+    // Static helpers used by the native call screen (CallActivity) so it can
+    // toggle recording without going through a PluginCall.
+    public static boolean startQuickRecording(Context ctx) {
+        if (recorder != null) return true;
+        if (ctx == null) return false;
+        try {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(
+                    ctx, android.Manifest.permission.RECORD_AUDIO)
+                    != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+            java.io.File dir = new java.io.File(
+                ctx.getExternalFilesDir(android.os.Environment.DIRECTORY_MUSIC), "Recordings");
+            if (!dir.exists() && !dir.mkdirs()) return false;
+            java.io.File out = new java.io.File(
+                dir, "call_" + System.currentTimeMillis() + ".m4a");
+            MediaRecorder r = new MediaRecorder();
+            r.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION);
+            r.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
+            r.setAudioEncoder(MediaRecorder.AudioEncoder.AAC);
+            r.setOutputFile(out.getAbsolutePath());
+            r.prepare();
+            r.start();
+            recorder = r;
+            lastRecordingPath = out.getAbsolutePath();
+            return true;
+        } catch (Exception e) {
+            android.util.Log.w("NeuraTelecom", "startQuickRecording failed", e);
+            try { if (recorder != null) { recorder.release(); } } catch (Exception ignore) {}
+            recorder = null;
+            return false;
+        }
+    }
+
+    public static void stopQuickRecording() {
+        try {
+            if (recorder != null) {
+                recorder.stop();
+                recorder.release();
+            }
+        } catch (Exception ignore) {}
+        recorder = null;
+    }
     private static String lastRecordingPath = null;
     private static Uri recorderUri = null;
 

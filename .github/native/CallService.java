@@ -27,6 +27,7 @@ public class CallService extends InCallService {
     public static boolean isMuted = false;
     public static boolean isSpeakerOn = false;
     public static boolean isHeld = false;
+    public static boolean isRecording = false;
     public static long callStartedAt = 0L;
 
     // Proximity wake lock: turns the screen off while the phone is at the ear
@@ -608,6 +609,27 @@ public class CallService extends InCallService {
     }
 
     // Public wrapper so TelecomPlugin can call the protected platform method.
+    // Called by CallActivity to toggle call recording without going through
+    // the JS plugin bridge.
+    public void startNativeRecording() {
+        try {
+            boolean ok = TelecomPlugin.startQuickRecording(getApplicationContext());
+            isRecording = ok;
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "startNativeRecording failed", e);
+            isRecording = false;
+        }
+    }
+
+    public void stopNativeRecording() {
+        try {
+            TelecomPlugin.stopQuickRecording();
+        } catch (Exception e) {
+            android.util.Log.w(TAG, "stopNativeRecording failed", e);
+        }
+        isRecording = false;
+    }
+
     public void applyAudioRoute(int route) {
         try {
             setAudioRoute(route);

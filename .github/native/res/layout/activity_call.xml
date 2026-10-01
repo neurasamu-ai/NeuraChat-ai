@@ -140,22 +140,83 @@
             android:textStyle="bold"
             android:visibility="visible" />
 
-        <!-- ACTIVE row: End call -->
+        <!-- ACTIVE controls: Mute / Speaker / Hold / Record + End call -->
         <LinearLayout
             android:id="@+id/call_active_row"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:gravity="center"
             android:visibility="gone">
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:layout_marginBottom="20dp">
+
+                <TextView
+                    android:id="@+id/call_btn_mute"
+                    android:layout_width="0dp"
+                    android:layout_height="72dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:background="@drawable/bg_call_ctrl"
+                    android:gravity="center"
+                    android:text="Mute"
+                    android:textColor="#E4E4E7"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/call_btn_speaker"
+                    android:layout_width="0dp"
+                    android:layout_height="72dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:background="@drawable/bg_call_ctrl"
+                    android:gravity="center"
+                    android:text="Speaker"
+                    android:textColor="#E4E4E7"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/call_btn_hold"
+                    android:layout_width="0dp"
+                    android:layout_height="72dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:background="@drawable/bg_call_ctrl"
+                    android:gravity="center"
+                    android:text="Hold"
+                    android:textColor="#E4E4E7"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/call_btn_record"
+                    android:layout_width="0dp"
+                    android:layout_height="72dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="3dp"
+                    android:layout_marginEnd="3dp"
+                    android:background="@drawable/bg_call_ctrl"
+                    android:gravity="center"
+                    android:text="Record"
+                    android:textColor="#E4E4E7"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
             <TextView
                 android:id="@+id/call_btn_end"
-                android:layout_width="0dp"
+                android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:layout_weight="1"
-                android:layout_marginStart="0dp"
-                android:layout_marginEnd="0dp"
                 android:background="@drawable/bg_call_btn_dismiss"
                 android:gravity="center"
                 android:text="End call"
