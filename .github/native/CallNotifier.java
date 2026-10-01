@@ -12,6 +12,7 @@ import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
+import androidx.core.graphics.drawable.IconCompat;
 
 public class CallNotifier {
 
@@ -212,6 +213,128 @@ public class CallNotifier {
         NotificationChannel channel = new NotificationChannel(
             DL_CHANNEL_ID, DL_CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW);
         channel.setDescription("NeuraChat downloads");
+        nm.createNotificationChannel(channel);
+    }
+
+    // ---- Incoming call: CallStyle notification (Android 12+) --------
+    // Presents the system call UI (Answer / Decline) plus a
+    // fullScreenIntent pointing at CallActivity. On lock screen or screen
+    // off, Android launches CallActivity directly via the full-screen
+    // intent, so the user sees the call screen immediately.
+
+    private static final String INCOMING_CHANNEL_ID = "neura_call_incoming_v1";
+    private static final String INCOMING_CHANNEL_NAME = "Incoming Calls";
+    private static final int INCOMING_NOTIFICATION_ID = 9100;
+
+    public static void showIncoming(Context context, String number, String name) {
+        if (context == null) return;
+        try {
+            ensureIncomingChannel(context);
+
+            String title = (name != null && !name.isEmpty())
+                ? name
+                : (number == null || number.isEmpty() ? "Unknown" : number);
+
+            Intent fullIntent = new Intent(context, CallActivity.class);
+            fullIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            fullIntent.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_INCOMING);
+            fullIntent.putExtra(CallActivity.EXTRA_NUMBER, number == null ? "" : number);
+            fullIntent.putExtra(CallActivity.EXTRA_NAME, name == null ? "" : name);
+            fullIntent.putExtra(CallActivity.EXTRA_INCOMING, true);
+
+            PendingIntent fullPending = PendingIntent.getActivity(
+                context, 5001, fullIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent answerIntent = new Intent(context, SmsReplyReceiver.class);
+            answerIntent.setAction(SmsReplyReceiver.ACTION_ANSWER_CALL);
+            PendingIntent answerPending = PendingIntent.getBroadcast(
+                context, 5002, answerIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            Intent declineIntent = new Intent(context, SmsReplyReceiver.class);
+            declineIntent.setAction(SmsReplyReceiver.ACTION_END_CALL);
+            PendingIntent declinePending = PendingIntent.getBroadcast(
+                context, 5003, declineIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            NotificationCompat.Builder builder = new NotificationCompat.Builder(
+                context, INCOMING_CHANNEL_ID)
+                .setSmallIcon(R.drawable.ic_stat_call)
+                .setContentTitle(title)
+                .setContentText("Incoming call")
+                .setPriority(NotificationCompat.PRIORITY_MAX)
+                .setCategory(NotificationCompat.CATEGORY_CALL)
+                .setOngoing(true)
+                .setAutoCancel(false)
+                .setShowWhen(false)
+                .setContentIntent(fullPending)
+                .setFullScreenIntent(fullPending, true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC);
+
+            try {
+                androidx.core.app.Person caller = new androidx.core.app.Person.Builder()
+                    .setName(title)
+                    .build();
+                NotificationCompat.CallStyle callStyle =
+                    NotificationCompat.CallStyle.forIncomingCall(
+                        caller, declinePending, answerPending);
+                builder.setStyle(callStyle);
+                builder.addAction(new NotificationCompat.Action.Builder(
+                    IconCompat.createWithResource(context, R.drawable.ic_stat_call),
+                    "Answer", answerPending).build());
+                builder.addAction(new NotificationCompat.Action.Builder(
+                    IconCompat.createWithResource(context, R.drawable.ic_stat_call),
+                    "Decline", declinePending).build());
+            } catch (Throwable t) {
+                Log.w(TAG, "CallStyle unavailable, falling back", t);
+                builder.addAction(R.drawable.ic_stat_call, "Answer", answerPending);
+                builder.addAction(R.drawable.ic_stat_call, "Decline", declinePending);
+            }
+
+            try {
+                NotificationManagerCompat.from(context).notify(
+                    INCOMING_NOTIFICATION_ID, builder.build());
+                Log.d(TAG, "incoming call notification posted for " + number);
+            } catch (SecurityException se) {
+                Log.w(TAG, "notify denied", se);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "showIncoming failed", e);
+        }
+    }
+
+    public static void cancelIncoming(Context context) {
+        if (context == null) return;
+        try {
+            NotificationManagerCompat.from(context).cancel(INCOMING_NOTIFICATION_ID);
+        } catch (Exception e) {
+            Log.w(TAG, "cancelIncoming failed", e);
+        }
+    }
+
+    private static void ensureIncomingChannel(Context context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm == null) return;
+        if (nm.getNotificationChannel(INCOMING_CHANNEL_ID) != null) return;
+        NotificationChannel channel = new NotificationChannel(
+            INCOMING_CHANNEL_ID, INCOMING_CHANNEL_NAME,
+            NotificationManager.IMPORTANCE_HIGH);
+        channel.setDescription("Incoming call notifications");
+        channel.enableVibration(true);
+        channel.setShowBadge(false);
+        try {
+            channel.setSound(
+                android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE),
+                new android.media.AudioAttributes.Builder()
+                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                    .build()
+            );
+        } catch (Exception ignore) {}
         nm.createNotificationChannel(channel);
     }
 }

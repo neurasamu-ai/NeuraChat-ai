@@ -56,6 +56,7 @@ jobs:
         cp .github/native/SmsPlugin.java $TARGET/
         cp .github/native/TelecomPlugin.java $TARGET/
         cp .github/native/CallService.java $TARGET/
+        cp .github/native/CallActivity.java $TARGET/
         cp .github/native/CallIntentProcessor.java $TARGET/
         cp .github/native/SmsReceiver.java $TARGET/
         cp .github/native/MmsReceiver.java $TARGET/
@@ -78,7 +79,9 @@ jobs:
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/ic_stat_call.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/bg_overlay_*.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/bg_call_*.xml android/app/src/main/res/drawable/
         cp .github/native/res/layout/overlay_incoming_call.xml android/app/src/main/res/layout/
+        cp .github/native/res/layout/activity_call.xml android/app/src/main/res/layout/
         cp .github/native/res/values/overlay_styles.xml android/app/src/main/res/values/
         cp .github/native/IncomingCallOverlay.java $TARGET/
 

@@ -1,5 +1,6 @@
 package com.neurasamu.build.chat;
 
+import android.app.KeyguardManager;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
@@ -171,43 +172,83 @@ public class CallService extends InCallService {
 
         updateState(call, call.getState());
 
-        // Incoming calls: prefer the floating overlay banner so the user
-        // stays in whatever app (incl. camera). Falls back to launching
-        // MainActivity when the overlay permission is missing.
-        boolean appInForeground = false;
-        try {
-            appInForeground = MainActivity.isForeground();
-        } catch (Exception ignore) {}
+        // Incoming call presentation. Three mutually exclusive paths:
+        //   1. Screen locked or off  -> CallActivity (full native UI over keyguard)
+        //   2. App in foreground    -> nothing (web ActiveCallScreen renders)
+        //   3. App backgrounded     -> floating overlay banner
+        // MainActivity is never launched here, so a call never boots the WebView.
+        if (pc.isIncoming) {
+            String num = getNumber(call);
+            String nm = lookupNameForCall(num, call);
+            pc.number = num;
+            pc.name = nm;
 
-        boolean overlayShown = false;
-        if (pc.isIncoming && !appInForeground && IncomingCallOverlay.canShow(getApplicationContext())) {
+            boolean appInForeground = false;
+            try { appInForeground = MainActivity.isForeground(); } catch (Exception ignore) {}
+
+            boolean screenLocked = false;
+            boolean screenOff = false;
             try {
-                String ovNum = getNumber(call);
-                String ovName = lookupNameForCall(ovNum, call);
-                pc.number = ovNum;
-                pc.name = ovName;
-                IncomingCallOverlay.show(getApplicationContext(), ovNum, ovName);
-                overlayShown = true;
-                Log.d(TAG, "overlay shown for incoming call " + ovNum);
+                KeyguardManager km = (KeyguardManager) getSystemService(KEYGUARD_SERVICE);
+                if (km != null) screenLocked = km.isKeyguardLocked();
+            } catch (Exception ignore) {}
+            try {
+                android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null) screenOff = !pm.isInteractive();
+            } catch (Exception ignore) {}
+
+            // Always post the CallStyle notification so the user has a
+            // durable Answer/Decline entry point.
+            try {
+                CallNotifier.showIncoming(getApplicationContext(), num, nm);
             } catch (Exception e) {
-                Log.w(TAG, "overlay show failed", e);
-                overlayShown = false;
+                Log.w(TAG, "showIncoming failed", e);
             }
-        }
 
-        if (!overlayShown) {
-            // Fallback: bring MainActivity up so the in-call UI can render.
-            Intent intent = new Intent(this, MainActivity.class);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            intent.putExtra("call_state", currentState);
-            startActivity(intent);
-
-            try {
-                if (MainActivity.instance != null) {
-                    MainActivity.instance.enableCallOverLockScreen();
+            if (screenLocked || screenOff) {
+                // Path 1: full native call screen over the lock screen.
+                try {
+                    Intent ca = new Intent(this, CallActivity.class);
+                    ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_INCOMING);
+                    ca.putExtra(CallActivity.EXTRA_NUMBER, num);
+                    ca.putExtra(CallActivity.EXTRA_NAME, nm);
+                    ca.putExtra(CallActivity.EXTRA_INCOMING, true);
+                    startActivity(ca);
+                    Log.d(TAG, "CallActivity launched (locked/off) for " + num);
+                } catch (Exception e) {
+                    Log.w(TAG, "CallActivity launch failed", e);
                 }
-            } catch (Exception e) {
-                Log.w(TAG, "enableCallOverLockScreen failed", e);
+            } else if (!appInForeground) {
+                // Path 3: overlay banner only when unlocked and app not visible.
+                try {
+                    if (IncomingCallOverlay.canShow(getApplicationContext())) {
+                        IncomingCallOverlay.show(getApplicationContext(), num, nm);
+                        Log.d(TAG, "overlay shown for incoming call " + num);
+                    } else {
+                        // No overlay permission: still show CallActivity so the
+                        // user sees the call. This is the last-resort path.
+                        Intent ca = new Intent(this, CallActivity.class);
+                        ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                            | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+                        ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_INCOMING);
+                        ca.putExtra(CallActivity.EXTRA_NUMBER, num);
+                        ca.putExtra(CallActivity.EXTRA_NAME, nm);
+                        ca.putExtra(CallActivity.EXTRA_INCOMING, true);
+                        startActivity(ca);
+                        Log.d(TAG, "CallActivity launched (no overlay perm) for " + num);
+                    }
+                } catch (Exception e) {
+                    Log.w(TAG, "overlay / fallback failed", e);
+                }
+            } else {
+                // Path 2: app is in foreground - web UI handles it.
+                Log.d(TAG, "app foreground, web ActiveCallScreen handles " + num);
             }
         }
 
@@ -446,6 +487,39 @@ public class CallService extends InCallService {
             }
         } catch (Exception e) {
             Log.w(TAG, "overlay hide failed", e);
+        }
+
+        // Native call screen sync + incoming notification cleanup.
+        try {
+            if (stateStr.equals("ACTIVE")) {
+                CallNotifier.cancelIncoming(getApplicationContext());
+                if (CallActivity.isVisible()) {
+                    CallActivity.updateIfVisible(
+                        CallActivity.STATE_ACTIVE, currentNumber, currentName, false);
+                } else {
+                    // No visible native UI: launch it in ACTIVE state so the
+                    // user has End-call controls even when they answered from
+                    // the notification while the app was never opened.
+                    Intent ca = new Intent(this, CallActivity.class);
+                    ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_ACTIVE);
+                    ca.putExtra(CallActivity.EXTRA_NUMBER, currentNumber);
+                    ca.putExtra(CallActivity.EXTRA_NAME, currentName);
+                    ca.putExtra(CallActivity.EXTRA_INCOMING, false);
+                    try { startActivity(ca); } catch (Exception ignore) {}
+                }
+            } else if (stateStr.equals("DISCONNECTED") || stateStr.equals("IDLE")) {
+                CallNotifier.cancelIncoming(getApplicationContext());
+                android.os.Handler h = new android.os.Handler(android.os.Looper.getMainLooper());
+                h.postDelayed(() -> {
+                    try { CallActivity.closeIfVisible(); } catch (Exception ignore) {}
+                }, 800);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "CallActivity sync failed", e);
         }
 
         // Ongoing-call notification: shows while a call is live, tap to
