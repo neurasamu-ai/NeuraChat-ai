@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Loader2 } from 'lucide-react';
 import { Message } from '@/lib/db';
 
 interface MessageBubbleProps {
@@ -81,7 +81,9 @@ function MessageBubbleInner({
 
         {isUser && (
           <div className="flex justify-end mt-0.5">
-            {msg.status === 'failed' ? (
+            {msg.status === 'sending' ? (
+              <Loader2 className="h-3 w-3 text-zinc-800 opacity-80 animate-spin" />
+            ) : msg.status === 'failed' ? (
               <button
                 onClick={(e) => {
                   e.stopPropagation();

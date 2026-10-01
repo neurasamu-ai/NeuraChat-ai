@@ -361,9 +361,25 @@ function ChatDetailContent() {
   };
 
   // Actually send the SMS with tracked status. clientId == message id in DB.
+  // Helper: mark a message as failed in DB + reload UI.
+  const markMessageFailed = async (clientId: string) => {
+    try {
+      const { getMessages: fetchMsgs } = await import('@/lib/db');
+      const list = await fetchMsgs(chatId);
+      const m = list.find((x) => x.id === clientId);
+      if (!m) return;
+      m.status = 'failed';
+      await saveMessage(m);
+      await loadMessages();
+    } catch (e) {
+      console.error('markMessageFailed', e);
+    }
+  };
+
   const performSmsSend = async (text: string, subscriptionId: number | undefined, clientId: string) => {
     if (!isSmsPluginAvailable()) {
       alertToast('Native SMS unavailable — opening system messenger', 'error');
+      await markMessageFailed(clientId);
       const smsBody = encodeURIComponent(text);
       window.location.href = `sms:${phone}?body=${smsBody}`;
       return;
@@ -376,9 +392,12 @@ function ChatDetailContent() {
     try {
       await sendSmsTracked(phone, text, clientId, subscriptionId);
       console.log('SMS queued, clientId=', clientId);
+      // Success here only means "queued with the OS". The real terminal
+      // status arrives via SmsStatusBridge ('sent' / 'delivered' / 'failed').
     } catch (err: any) {
       console.error('sendSmsTracked failed:', err);
       alertToast('Send failed: ' + (err?.message || 'unknown error'), 'error');
+      await markMessageFailed(clientId);
     }
   };
 
@@ -436,7 +455,7 @@ function ChatDetailContent() {
       image: selectedImage || undefined,
       sender: 'user',
       timestamp: getCurrentTimestamp(),
-      status: 'sent'
+      status: 'sending'
     };
 
     // 2. Ensure chat entry exists before saving the first message
@@ -462,7 +481,7 @@ function ChatDetailContent() {
   const handleRetryMessage = async (msg: Message) => {
     triggerVibration();
     try {
-      msg.status = 'sent';
+      msg.status = 'sending';
       await saveMessage(msg);
       await loadMessages();
       // Determine which SIM to use (same rules as a fresh send).
