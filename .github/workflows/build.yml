@@ -78,8 +78,10 @@ jobs:
         mkdir -p android/app/src/main/res/values
         cp .github/native/res/drawable/ic_stat_sms.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/ic_stat_call.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/ic_call_*.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/bg_overlay_*.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/bg_call_*.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/bg_numpad_key.xml android/app/src/main/res/drawable/
         cp .github/native/res/layout/overlay_incoming_call.xml android/app/src/main/res/layout/
         cp .github/native/res/layout/activity_call.xml android/app/src/main/res/layout/
         cp .github/native/res/values/overlay_styles.xml android/app/src/main/res/values/
