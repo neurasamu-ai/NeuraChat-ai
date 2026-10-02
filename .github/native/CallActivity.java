@@ -124,7 +124,6 @@ public class CallActivity extends Activity {
         View mute = findViewById(R.id.call_btn_mute);
         View speaker = findViewById(R.id.call_btn_speaker);
         View hold = findViewById(R.id.call_btn_hold);
-        View record = findViewById(R.id.call_btn_record);
         View keypad = findViewById(R.id.call_btn_keypad);
 
         if (attend != null) attend.setOnClickListener(v -> doAnswer());
@@ -134,7 +133,6 @@ public class CallActivity extends Activity {
         if (mute != null) mute.setOnClickListener(v -> doToggleMute());
         if (speaker != null) speaker.setOnClickListener(v -> doToggleSpeaker());
         if (hold != null) hold.setOnClickListener(v -> doToggleHold());
-        if (record != null) record.setOnClickListener(v -> doToggleRecord());
         if (keypad != null) keypad.setOnClickListener(v -> openNumpad());
 
         // Numpad keys 0-9 * #
@@ -254,25 +252,6 @@ public class CallActivity extends Activity {
         }
     }
 
-    private void doToggleRecord() {
-        try {
-            boolean rec = !CallService.isRecording;
-            if (rec) {
-                if (CallService.instance != null) {
-                    CallService.instance.startNativeRecording();
-                }
-            } else {
-                if (CallService.instance != null) {
-                    CallService.instance.stopNativeRecording();
-                }
-            }
-            CallService.isRecording = rec;
-            updateCtrlHighlight(R.id.call_btn_record, rec);
-        } catch (Exception e) {
-            Log.w(TAG, "toggleRecord failed", e);
-        }
-    }
-
     private void updateCtrlHighlight(int viewId, boolean active) {
         try {
             View v = findViewById(viewId);
@@ -361,7 +340,6 @@ public class CallActivity extends Activity {
             updateCtrlHighlight(R.id.call_btn_mute, CallService.isMuted);
             updateCtrlHighlight(R.id.call_btn_speaker, CallService.isSpeakerOn);
             updateCtrlHighlight(R.id.call_btn_hold, CallService.isHeld);
-            updateCtrlHighlight(R.id.call_btn_record, CallService.isRecording);
             if (isDialing) {
                 stopTicker();
                 startedAt = 0L;
