@@ -51,6 +51,10 @@ export interface TelecomPluginType {
     eventName: 'outgoingCall',
     listener: (data: { number: string; name: string; timestamp: number }) => void
   ): Promise<{ remove: () => void }>;
+  addListener(
+    eventName: 'callEnded',
+    listener: (data: { number: string; duration: number }) => void
+  ): Promise<{ remove: () => void }>;
   drainCallLog(): Promise<{ entries: string }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
@@ -434,6 +438,18 @@ export async function drainCallLogNative(): Promise<PendingCallLogEntry[]> {
   } catch (e) {
     console.error('[Telecom] drainCallLog failed', e);
     return [];
+  }
+}
+
+export async function addCallEndedListener(
+  cb: (d: { number: string; duration: number }) => void
+): Promise<{ remove: () => void } | null> {
+  if (!isTelecomPluginAvailable()) return null;
+  try {
+    return await TelecomPlugin.addListener('callEnded', cb);
+  } catch (e) {
+    console.error('[Telecom] addCallEndedListener failed', e);
+    return null;
   }
 }
 

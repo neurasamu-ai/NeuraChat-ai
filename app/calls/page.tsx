@@ -252,11 +252,15 @@ export default function CallsPage() {
     await removeCallLog(id);
   };
 
-  // Safe duration formatter
+  // Safe duration formatter: hours / minutes / seconds.
   const formatDuration = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    const total = Math.max(0, Math.floor(seconds || 0));
+    const hrs = Math.floor(total / 3600);
+    const mins = Math.floor((total % 3600) / 60);
+    const secs = total % 60;
+    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
   };
 
   const formatTime = (ts: number) => {

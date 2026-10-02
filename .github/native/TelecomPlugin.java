@@ -147,6 +147,15 @@ public class TelecomPlugin extends Plugin {
         }
     }
 
+    public static void dispatchCallEnded(String number, long duration) {
+        if (instance != null) {
+            JSObject data = new JSObject();
+            data.put("number", number == null ? "" : number);
+            data.put("duration", duration);
+            instance.notifyListeners("callEnded", data);
+        }
+    }
+
     public static void dispatchCallsChanged(com.getcapacitor.JSArray calls) {
         if (instance != null) {
             JSObject data = new JSObject();

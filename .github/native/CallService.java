@@ -41,6 +41,8 @@ public class CallService extends InCallService {
         boolean wasRinging;
         boolean wasAnswered;
         boolean wasLogged;
+        long activeAt = 0L;   // when the call first reached STATE_ACTIVE
+        long answerAt = 0L;   // wall-clock timestamp of the same moment
         String number = "";
         String name = "";
     }
@@ -510,6 +512,10 @@ public class CallService extends InCallService {
         }
 
         if (state == Call.STATE_ACTIVE && pc != null) {
+            if (pc.activeAt == 0L) {
+                pc.activeAt = System.currentTimeMillis();
+                pc.answerAt = pc.activeAt;
+            }
             pc.wasAnswered = true;
             if (pc.isIncoming && !pc.wasLogged) {
                 pc.wasLogged = true;
@@ -521,7 +527,33 @@ public class CallService extends InCallService {
             }
         }
         if (state == Call.STATE_DISCONNECTED) {
+            // Compute duration of the just-ended call and update the queued
+            // entry + fire a live event so the web layer can fix the log.
+            long durationSec = 0L;
+            String endedNumber = "";
+            try {
+                if (pc != null && pc.activeAt > 0L) {
+                    durationSec = Math.max(0L, (System.currentTimeMillis() - pc.activeAt) / 1000L);
+                    endedNumber = pc.number == null ? "" : pc.number;
+                    android.content.Context qctx = getApplicationContext();
+                    if (qctx != null && !endedNumber.isEmpty()) {
+                        try {
+                            PendingCallLogStore.updateLastDuration(qctx, endedNumber, durationSec);
+                        } catch (Exception ignore) {}
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "duration compute failed", e);
+            }
             callStartedAt = 0L;
+
+            try {
+                if (!endedNumber.isEmpty()) {
+                    TelecomPlugin.dispatchCallEnded(endedNumber, durationSec);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "dispatchCallEnded failed", e);
+            }
         }
 
         Log.d(TAG, "state=" + stateStr + " number=" + currentNumber + " name=" + currentName);

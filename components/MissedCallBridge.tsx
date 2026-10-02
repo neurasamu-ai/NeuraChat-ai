@@ -5,6 +5,7 @@ import {
   addMissedCallListener,
   addAnsweredCallListener,
   addOutgoingCallListener,
+  addCallEndedListener,
   drainCallLogNative,
   isTelecomPluginAvailable,
 } from '@/lib/telecom-plugin';
@@ -90,6 +91,26 @@ export default function MissedCallBridge() {
         push(d.number, d.name, d.timestamp, 'outgoing')
       );
       if (outgoing) handles.push(outgoing);
+
+      // When a call ends we get its real duration. Patch the most recent
+      // log entry for that number so history shows the actual talk time.
+      const ended = await addCallEndedListener(async (d) => {
+        try {
+          const { getCallLogs, saveCallLog } = await import('@/lib/db');
+          const logs = await getCallLogs();
+          const clean = (d.number || '').replace(/\s+/g, '');
+          const match = logs.find(
+            (l) => (l.phone || '').replace(/\s+/g, '') === clean
+          );
+          if (!match) return;
+          match.duration = d.duration || 0;
+          await saveCallLog(match);
+          await loadCallLogsFromDB();
+        } catch (e) {
+          console.error('[CallBridge] callEnded update failed', e);
+        }
+      });
+      if (ended) handles.push(ended);
 
       console.log('[CallBridge] listeners attached');
     };

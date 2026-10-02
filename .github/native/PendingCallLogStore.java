@@ -80,6 +80,39 @@ public class PendingCallLogStore {
         }
     }
 
+    // Update the duration of the most recent entry matching this number.
+    // Called when a call disconnects so the entry queued at answer / dial
+    // time carries the real duration.
+    public static synchronized void updateLastDuration(
+            Context ctx,
+            String number,
+            long duration
+    ) {
+        if (ctx == null || number == null) return;
+        try {
+            SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            String raw = sp.getString(KEY, "[]");
+            JSONArray arr;
+            try { arr = new JSONArray(raw); }
+            catch (Exception e) { return; }
+
+            for (int i = arr.length() - 1; i >= 0; i--) {
+                try {
+                    JSONObject o = arr.getJSONObject(i);
+                    String n = o.optString("number", "");
+                    if (n.equals(number)) {
+                        o.put("duration", duration);
+                        sp.edit().putString(KEY, arr.toString()).apply();
+                        Log.d(TAG, "duration updated " + number + " -> " + duration);
+                        return;
+                    }
+                } catch (Exception ignore) {}
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "updateLastDuration failed", e);
+        }
+    }
+
     // Peek without clearing — useful for debugging / future UI.
     public static synchronized int size(Context ctx) {
         if (ctx == null) return 0;
