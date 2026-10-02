@@ -503,16 +503,19 @@ public class CallService extends InCallService {
         }
 
         // Native call screen sync + incoming notification cleanup.
+        // In ACTIVE state, ONLY launch the native call screen when the app
+        // is not visible — otherwise the web ActiveCallScreen already owns
+        // the UI and launching CallActivity would show both at once.
         try {
             if (stateStr.equals("ACTIVE")) {
                 CallNotifier.cancelIncoming(getApplicationContext());
+                boolean appInForeground = false;
+                try { appInForeground = MainActivity.isForeground(); } catch (Exception ignore) {}
+
                 if (CallActivity.isVisible()) {
                     CallActivity.updateIfVisible(
                         CallActivity.STATE_ACTIVE, currentNumber, currentName, false);
-                } else {
-                    // No visible native UI: launch it in ACTIVE state so the
-                    // user has End-call controls even when they answered from
-                    // the notification while the app was never opened.
+                } else if (!appInForeground) {
                     Intent ca = new Intent(this, CallActivity.class);
                     ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
                         | Intent.FLAG_ACTIVITY_CLEAR_TOP
@@ -523,6 +526,8 @@ public class CallService extends InCallService {
                     ca.putExtra(CallActivity.EXTRA_NAME, currentName);
                     ca.putExtra(CallActivity.EXTRA_INCOMING, false);
                     try { startActivity(ca); } catch (Exception ignore) {}
+                } else {
+                    Log.d(TAG, "ACTIVE: app foreground, web UI handles call");
                 }
             } else if (stateStr.equals("DISCONNECTED") || stateStr.equals("IDLE")) {
                 CallNotifier.cancelIncoming(getApplicationContext());
