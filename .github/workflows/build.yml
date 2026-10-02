@@ -65,7 +65,6 @@ jobs:
         cp .github/native/SettingsPlugin.java $TARGET/
         cp .github/native/AiWebViewPlugin.java $TARGET/
         cp .github/native/AiWebViewActivity.java $TARGET/
-        cp .github/native/BackupPlugin.java $TARGET/
         cp .github/native/BlockedStore.java $TARGET/
         cp .github/native/SnoozeStore.java $TARGET/
         cp .github/native/NeuraContactsPlugin.java $TARGET/

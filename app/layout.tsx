@@ -12,7 +12,6 @@ import MissedCallBridge from '@/components/MissedCallBridge';
 import SmsStatusBridge from '@/components/SmsStatusBridge';
 import ContactsSyncToast from '@/components/ContactsSyncToast';
 import ContactsBootstrap from '@/components/ContactsBootstrap';
-import BackupManager from '@/components/BackupManager';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -46,7 +45,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SmsStatusBridge />
         <ContactsSyncToast />
         <ContactsBootstrap />
-        <BackupManager />
         <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 min-h-0">
           <DefaultSmsBanner />
           <DefaultDialerBanner />
