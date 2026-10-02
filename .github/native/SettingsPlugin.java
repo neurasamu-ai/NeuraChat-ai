@@ -23,7 +23,6 @@ import com.getcapacitor.PermissionState;
     name = "SettingsPlugin",
     permissions = {
         @Permission(alias = "camera", strings = { android.Manifest.permission.CAMERA }),
-        @Permission(alias = "microphone", strings = { android.Manifest.permission.RECORD_AUDIO }),
         @Permission(alias = "contacts", strings = { android.Manifest.permission.READ_CONTACTS }),
         @Permission(alias = "sms", strings = {
             android.Manifest.permission.READ_SMS,
@@ -44,7 +43,7 @@ public class SettingsPlugin extends Plugin {
     private static final String TAG = "NeuraSettings";
 
     private static final String[] ALL_ALIASES = {
-        "sms", "phone", "contacts", "camera", "microphone", "notifications"
+        "sms", "phone", "contacts", "camera", "notifications"
     };
 
     @PluginMethod
@@ -98,7 +97,6 @@ public class SettingsPlugin extends Plugin {
         JSObject ret = new JSObject();
 
         ret.put("camera", ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED);
-        ret.put("microphone", ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED);
         ret.put("contacts", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED);
         ret.put("sms", ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
                 && ContextCompat.checkSelfPermission(context, android.Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED

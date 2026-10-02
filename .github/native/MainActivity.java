@@ -186,7 +186,6 @@ public class MainActivity extends BridgeActivity {
         perms.add(Manifest.permission.READ_CALL_LOG);
         perms.add(Manifest.permission.WRITE_CALL_LOG);
         perms.add(Manifest.permission.CAMERA);
-        perms.add(Manifest.permission.RECORD_AUDIO);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             perms.add(Manifest.permission.POST_NOTIFICATIONS);
         }

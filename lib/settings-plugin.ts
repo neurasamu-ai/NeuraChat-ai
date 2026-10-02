@@ -4,7 +4,6 @@ import { registerPlugin, Capacitor } from '@capacitor/core';
 
 export interface AllPermissions {
   camera: boolean;
-  microphone: boolean;
   contacts: boolean;
   sms: boolean;
   phone: boolean;
@@ -52,7 +51,6 @@ export async function checkAllPermissions(): Promise<AllPermissions> {
   }
   return {
     camera: false,
-    microphone: false,
     contacts: false,
     sms: false,
     phone: false,
