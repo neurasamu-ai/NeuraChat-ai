@@ -51,6 +51,7 @@ export interface TelecomPluginType {
     eventName: 'outgoingCall',
     listener: (data: { number: string; name: string; timestamp: number }) => void
   ): Promise<{ remove: () => void }>;
+  drainCallLog(): Promise<{ entries: string }>;
   requestDefaultDialer(): Promise<{ isDefault: boolean }>;
   checkDefaultDialer(): Promise<{ isDefault: boolean }>;
   acceptCall(): Promise<void>;
@@ -411,3 +412,28 @@ export async function addOutgoingCallListener(
     return null;
   }
 }
+
+// ---- Pending call log queue ----
+
+export interface PendingCallLogEntry {
+  type: 'incoming' | 'missed' | 'outgoing';
+  number: string;
+  name: string;
+  timestamp: number;
+  duration: number;
+}
+
+export async function drainCallLogNative(): Promise<PendingCallLogEntry[]> {
+  if (!isTelecomPluginAvailable()) return [];
+  try {
+    const r = await TelecomPlugin.drainCallLog();
+    const raw = r?.entries || '[]';
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((e: any) => e && typeof e === 'object') as PendingCallLogEntry[];
+  } catch (e) {
+    console.error('[Telecom] drainCallLog failed', e);
+    return [];
+  }
+}
+

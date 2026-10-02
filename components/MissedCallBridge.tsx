@@ -5,6 +5,7 @@ import {
   addMissedCallListener,
   addAnsweredCallListener,
   addOutgoingCallListener,
+  drainCallLogNative,
   isTelecomPluginAvailable,
 } from '@/lib/telecom-plugin';
 import { addCallLog, hasSimilarLog, loadCallLogsFromDB } from '@/lib/call-log-store';
@@ -31,6 +32,27 @@ export default function MissedCallBridge() {
         await loadCallLogsFromDB();
       } catch {}
 
+
+      // Drain the native pending queue first — entries captured while the
+      // app was closed. Same push() so dedupe applies.
+      const drain = async () => {
+        try {
+          const entries = await drainCallLogNative();
+          if (!entries || entries.length === 0) return;
+          console.log('[CallBridge] draining', entries.length, 'pending call log(s)');
+          for (const e of entries) {
+            const t: CallLog['type'] = e.type === 'missed'
+              ? 'missed'
+              : e.type === 'incoming'
+                ? 'incoming'
+                : 'outgoing';
+            await push(e.number, e.name, e.timestamp, t);
+          }
+        } catch (err) {
+          console.error('[CallBridge] drain failed', err);
+        }
+      };
+
       const push = async (
         phone: string,
         name: string,
@@ -50,6 +72,9 @@ export default function MissedCallBridge() {
         };
         await addCallLog(entry);
       };
+
+      // Drain pending entries first (from a previous session).
+      await drain();
 
       const missed = await addMissedCallListener((d) =>
         push(d.number, d.name, d.timestamp, 'missed')
