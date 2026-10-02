@@ -5,7 +5,6 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Send,
-  Paperclip,
   MoreVertical,
   Trash2,
   Copy,
@@ -59,7 +58,6 @@ function ChatDetailContent() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const reloadDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [inputText, setInputText] = useState('');
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -74,7 +72,6 @@ function ChatDetailContent() {
   const MSG_SWIPE_THRESHOLD = 8;
 
   // File Picker Input reference
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Simulated Voice/Video Call states
@@ -342,24 +339,6 @@ function ChatDetailContent() {
     }
   };
 
-  // Attach Image via hidden input file picker
-  const handleImagePickClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        setSelectedImage(reader.result);
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
   // Actually send the SMS with tracked status. clientId == message id in DB.
   // Helper: mark a message as failed in DB + reload UI.
   const markMessageFailed = async (clientId: string) => {
@@ -443,7 +422,7 @@ function ChatDetailContent() {
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() && !selectedImage) return;
+    if (!inputText.trim()) return;
 
     const bodyText = inputText.trim();
 
@@ -452,7 +431,6 @@ function ChatDetailContent() {
       id: generateId('msg'),
       chatId,
       text: bodyText,
-      image: selectedImage || undefined,
       sender: 'user',
       timestamp: getCurrentTimestamp(),
       status: 'sending'
@@ -466,7 +444,6 @@ function ChatDetailContent() {
     
     // Clear inputs immediately
     setInputText('');
-    setSelectedImage(null);
 
     // Refresh display
     await loadMessages();
@@ -689,7 +666,7 @@ function ChatDetailContent() {
   useBackHandler(selectedMsgIds.length > 0 && !isForwarding, () => setSelectedMsgIds([]));
   useBackHandler(!!activeMessage, () => setActiveMessage(null));
 
-  const hasTextOrMedia = inputText.trim().length > 0 || selectedImage !== null;
+  const hasTextOrMedia = inputText.trim().length > 0;
 
   return (
     <div className="fixed inset-x-0 top-0 bottom-0 w-full md:max-w-md md:mx-auto bg-zinc-950 text-white flex flex-col z-30 overflow-hidden md:border-x border-zinc-900 shadow-2xl">
@@ -830,47 +807,13 @@ function ChatDetailContent() {
       </div>
 
       {/* Selected Image Preview Bar above input */}
-      {selectedImage && (
-        <div className="bg-zinc-900 border-t border-zinc-805 p-2 flex items-center justify-between select-none">
-          <div className="flex items-center gap-2">
-            <FileImage className="h-4 w-4 text-[#cbfe00]" />
-            <span className="text-[10px] text-zinc-400 truncate max-w-sm">Pulse Media Attachment Ready...</span>
-          </div>
-          <button
-            onClick={() => setSelectedImage(null)}
-            className="p-1 rounded-full bg-zinc-800 text-zinc-400 hover:text-white cursor-pointer"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      )}
-
       {/* Bottom Message Composer Input form is fixed position and non-scrollable */}
       <form
         onSubmit={handleSendMessage}
         className="p-2 px-3 bg-zinc-950 border-t border-zinc-900 flex items-center gap-2 z-30 select-none pb-4"
         id="messages-composer-form"
       >
-        <button
-          type="button"
-          onClick={handleImagePickClick}
-          className="p-2.5 bg-zinc-900 text-zinc-450 hover:text-white rounded-xl transition-colors active:scale-90 cursor-pointer"
-          title="Attach Image"
-          id="image-attach-btn"
-        >
-          <Paperclip className="h-4 w-4 text-[#cbfe00]" />
-        </button>
-
         {/* Hidden Picker Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          accept="image/*"
-          className="hidden"
-          id="hidden-file-input"
-        />
-
         <div className="flex-1 relative">
           <textarea
             value={inputText}
@@ -880,7 +823,7 @@ function ChatDetailContent() {
               // a newline. This matches standard chat keyboard behavior.
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                if (inputText.trim() || selectedImage) {
+                if (inputText.trim()) {
                   handleSendMessage();
                 }
               }
