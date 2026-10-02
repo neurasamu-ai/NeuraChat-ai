@@ -361,27 +361,6 @@ function ChatDetailContent() {
   };
 
   // Actually send the SMS with tracked status. clientId == message id in DB.
-  // Safety net: if the native SENT/DELIVERED callback never arrives (some
-  // ROMs silently drop the broadcast, or the process restarts mid-send), the
-  // bubble would spin forever. After 45s we flip the message to 'failed' so
-  // the Retry button comes back.
-  const scheduleSendTimeout = (clientId: string) => {
-    setTimeout(async () => {
-      try {
-        const { getMessages: fetchMsgs } = await import('@/lib/db');
-        const list = await fetchMsgs(chatId);
-        const m = list.find((x) => x.id === clientId);
-        if (!m) return;
-        if (m.status !== 'sending') return;
-        m.status = 'failed';
-        await saveMessage(m);
-        await loadMessages();
-      } catch (e) {
-        console.error('scheduleSendTimeout', e);
-      }
-    }, 45000);
-  };
-
   // Helper: mark a message as failed in DB + reload UI.
   const markMessageFailed = async (clientId: string) => {
     try {
@@ -492,10 +471,6 @@ function ChatDetailContent() {
     // Refresh display
     await loadMessages();
 
-    // Safety net for the spinner: if no status event arrives within 45s,
-    // flip to 'failed'.
-    scheduleSendTimeout(newMsg.id);
-
     // 3. Dispatch SMS via selected/default SIM (track with newMsg.id)
     triggerVibration();
     await dispatchSms(bodyText, newMsg.id);
@@ -511,7 +486,6 @@ function ChatDetailContent() {
       const updated: Message = { ...msg, status: 'sending' };
       await saveMessage(updated);
       await loadMessages();
-      scheduleSendTimeout(msg.id);
       // Determine which SIM to use (same rules as a fresh send).
       const subs = await getActiveSubscriptions();
       let subId: number | undefined;
