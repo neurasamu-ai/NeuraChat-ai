@@ -51,14 +51,20 @@ export async function* streamOpenAI(
     stream: true,
   };
 
+  // Local / custom endpoints often have no key. Only add the Authorization
+  // header when a key was actually supplied.
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  if (apiKey && apiKey.trim()) {
+    headers.Authorization = `Bearer ${apiKey}`;
+  }
+
   let res: Response;
   try {
     res = await doFetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers,
       body: JSON.stringify(body),
       signal,
     });

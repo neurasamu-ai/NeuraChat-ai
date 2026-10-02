@@ -95,7 +95,8 @@
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
         android:supportsRtl="true"
-        android:roundIcon="@mipmap/ic_launcher_round">
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:usesCleartextTraffic="true">
 
         <!-- MainActivity: Multi-Intent Launch-Pad -->
         <activity

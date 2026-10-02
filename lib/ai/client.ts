@@ -49,8 +49,26 @@ export async function* streamChat(
   }
 
   const settings = (await getProviderSetting(providerId)) || undefined;
-  const baseUrl = (settings?.baseUrl || provider.defaultBaseUrl || '').trim();
+  let baseUrl = (settings?.baseUrl || provider.defaultBaseUrl || '').trim();
   const model = (settings?.model || provider.defaultModelHint || '').trim();
+
+  // Normalize the base URL for OpenAI-compatible providers. Users often
+  // paste "http://192.168.1.5:1234" without the trailing /v1 that the
+  // OpenAI chat completions path expects. Only touch custom/openai-kind
+  // providers, and only when the URL does not already have a path segment.
+  if (provider.kind === 'openai' && baseUrl) {
+    try {
+      const u = new URL(baseUrl);
+      if (u.pathname === '/' || u.pathname === '' || u.pathname === '/v1' || u.pathname === '/v1/') {
+        // fine — but if it's the bare root, add /v1
+        if (u.pathname === '/' || u.pathname === '') {
+          baseUrl = baseUrl.replace(/\/+$/, '') + '/v1';
+        }
+      }
+    } catch {
+      // Not a full URL — leave it alone and let the adapter fail loudly.
+    }
+  }
 
   if (!baseUrl) {
     yield { error: `No base URL set for ${provider.name}. Configure it in Settings → AI Providers.` };
@@ -61,7 +79,7 @@ export async function* streamChat(
     return;
   }
 
-  const pick = await pickKey(providerId);
+  const pick = await pickKey(providerId, provider.requiresKey);
   if ('error' in pick) {
     yield { error: pick.error };
     return;

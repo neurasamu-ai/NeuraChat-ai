@@ -10,8 +10,8 @@ export const PROVIDERS: ProviderDef[] = [
     kind: 'openai',
     defaultBaseUrl: '',
     defaultModelHint: '',
-    requiresKey: true,
-    description: 'Any OpenAI-compatible endpoint',
+    requiresKey: false,
+    description: 'Any OpenAI-compatible endpoint (local or remote)',
   },
   {
     id: 'openrouter',
