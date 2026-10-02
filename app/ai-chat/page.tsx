@@ -42,7 +42,6 @@ export default function AiChatPage() {
   const router = useRouter();
 
   const [mode, setMode] = useState<Mode>('api');
-  const [modeKey, setModeKey] = useState(0);
 
   // API mode
   const [activeProviderId, setActiveProviderId] = useState<string>('openai');
@@ -78,7 +77,6 @@ export default function AiChatPage() {
   const switchMode = (m: Mode) => {
     triggerVibration();
     setMode(m);
-    setModeKey((k) => k + 1);
   };
 
   // Reload provider settings + enabled list from the keystore. Called on
@@ -165,7 +163,6 @@ export default function AiChatPage() {
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') {
-        setModeKey((k) => k + 1);
       }
     };
     document.addEventListener('visibilitychange', onVisible);
@@ -547,7 +544,7 @@ export default function AiChatPage() {
         }
       />
 
-      <div key={modeKey} className="flex-1 flex flex-col min-h-0 bg-zinc-950">
+      <div className="flex-1 flex flex-col min-h-0 bg-zinc-950">
         {/* Toggle + provider badge + history */}
         <div className="px-4 pt-3 pb-2 flex items-center gap-2">
           {mode === 'api' && (
@@ -763,7 +760,7 @@ export default function AiChatPage() {
 
         {/* ================= WEB MODE ================= */}
         {mode === 'web' && (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 -mt-8">
+          <div className="flex-1 flex flex-col items-center justify-center px-6">
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
