@@ -347,6 +347,26 @@ public class TelecomPlugin extends Plugin {
     // Robust call dispatcher: tries TelecomManager first (works when we
     // hold the default-dialer role), falls back to ACTION_CALL (works with
     // CALL_PHONE permission regardless of role).
+    // Normalize a phone number for dialing:
+    //  - strip spaces / dashes / parens (keep + * #)
+    //  - if it starts with the country code (e.g. 92...) and does not
+    //    already have a +, prepend +
+    //  - if it starts with 00, convert to +
+    private static String normalizeNumber(String raw) {
+        if (raw == null) return "";
+        String s = raw.replaceAll("[^+0-9*#]", "");
+        if (s.isEmpty()) return s;
+        if (s.startsWith("+")) return s;
+        if (s.startsWith("00")) return "+" + s.substring(2);
+        // Common case: country code without + (e.g. 92 for Pakistan).
+        // We only prepend + for lengths that look international (>= 11 digits).
+        // Local numbers shorter than that are left alone.
+        if (s.length() >= 11 && !s.startsWith("0")) {
+            return "+" + s;
+        }
+        return s;
+    }
+
     @PluginMethod
     public void call(PluginCall call) {
         String number = call.getString("number");
@@ -354,7 +374,7 @@ public class TelecomPlugin extends Plugin {
             call.reject("Number is required.");
             return;
         }
-        String cleaned = number.replaceAll("[^+0-9*#]", "");
+        String cleaned = normalizeNumber(number);
         String accountId = call.getString("accountId"); // optional
         String nameHint = call.getString("nameHint");   // optional
         Context ctx = getContext();
