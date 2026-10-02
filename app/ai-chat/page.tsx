@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import Header from '@/components/Header';
 import AiHubLogo from '@/components/AiHubLogo';
+import AiProvidersModal from '@/components/AiProvidersModal';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { PROVIDERS, getProvider } from '@/lib/ai/providers';
 import { getProviderSettings } from '@/lib/ai/keystore';
@@ -64,6 +65,7 @@ export default function AiChatPage() {
   // Web mode
   const [webModelId, setWebModelId] = useState<string>('chatgpt');
   const [webPickerOpen, setWebPickerOpen] = useState(false);
+  const [providersModalOpen, setProvidersModalOpen] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -521,10 +523,10 @@ export default function AiChatPage() {
             <button
               onClick={() => {
                 triggerVibration();
-                router.push('/settings?ai=1');
+                setProvidersModalOpen(true);
               }}
               className="p-2 rounded-full text-zinc-400 hover:text-white transition-colors"
-              title="Settings"
+              title="AI Providers"
             >
               <SettingsIcon className="h-4.5 w-4.5" />
             </button>
@@ -895,11 +897,11 @@ export default function AiChatPage() {
                   <button
                     onClick={() => {
                       setPickerOpen(false);
-                      router.push('/settings?ai=1');
+                      setProvidersModalOpen(true);
                     }}
                     className="px-4 py-2 rounded-xl bg-[#00D4FF] text-black text-xs font-bold active:scale-95"
                   >
-                    Configure in Settings
+                    Configure Providers
                   </button>
                 </div>
               ) : (
@@ -991,6 +993,10 @@ export default function AiChatPage() {
           </div>
         )}
       </AnimatePresence>
+      <AiProvidersModal
+        open={providersModalOpen}
+        onClose={() => setProvidersModalOpen(false)}
+      />
     </>
   );
 }

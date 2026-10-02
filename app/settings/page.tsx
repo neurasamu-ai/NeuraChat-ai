@@ -29,9 +29,7 @@ import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
-import { PROVIDERS, getProvider } from '@/lib/ai/providers';
-import { getKeys, getKeyForProvider, setKeyForProvider, clearKeyForProvider, getProviderSettings, updateProviderSettings } from '@/lib/ai/keystore';
-import { ProviderKey, ProviderSettings } from '@/lib/ai/types';
+import AiProvidersModal from '@/components/AiProvidersModal';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -63,13 +61,6 @@ export default function SettingsPage() {
   const [isBlockedOpen, setIsBlockedOpen] = useState(false);
   const [blockedList, setBlockedList] = useState<BlockedContact[]>([]);
   const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
-  const [aiSettings, setAiSettings] = useState<ProviderSettings[]>([]);
-  const [aiKeys, setAiKeys] = useState<ProviderKey[]>([]);
-  const [editingProvider, setEditingProvider] = useState<string | null>(null);
-  const [editBaseUrl, setEditBaseUrl] = useState('');
-  const [editModel, setEditModel] = useState('');
-  const [editApiKey, setEditApiKey] = useState('');
-  const [aiMessage, setAiMessage] = useState('');
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -176,78 +167,6 @@ export default function SettingsPage() {
 
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
   useBackHandler(isAiProvidersOpen, () => setIsAiProvidersOpen(false));
-  useBackHandler(!!editingProvider, () => setEditingProvider(null));
-
-  const loadAiState = async () => {
-    try {
-      const [settings, keys] = await Promise.all([getProviderSettings(), getKeys()]);
-      setAiSettings(settings);
-      setAiKeys(keys);
-    } catch (e) {
-      console.error('loadAiState failed', e);
-    }
-  };
-
-  // Auto-open AI Providers if the URL has ?ai=1 (link from AI chat).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('ai') === '1') {
-      setIsAiProvidersOpen(true);
-      // Clean the query so a back navigation does not reopen.
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isAiProvidersOpen) return;
-    loadAiState();
-  }, [isAiProvidersOpen]);
-
-  const toggleProviderEnabled = async (providerId: string) => {
-    triggerVibration();
-    const cur = aiSettings.find((s) => s.providerId === providerId);
-    await updateProviderSettings(providerId, { enabled: !cur?.enabled });
-    await loadAiState();
-  };
-
-  const openProviderEditor = async (providerId: string) => {
-    triggerVibration();
-    const def = getProvider(providerId);
-    const cur = aiSettings.find((s) => s.providerId === providerId);
-    const existingKey = await getKeyForProvider(providerId);
-    setEditBaseUrl(cur?.baseUrl || def?.defaultBaseUrl || '');
-    setEditModel(cur?.model || '');
-    setEditApiKey(existingKey?.key || '');
-    setEditingProvider(providerId);
-    setAiMessage('');
-  };
-
-  const saveProviderEdits = async () => {
-    if (!editingProvider) return;
-    triggerVibration();
-    setAiMessage('');
-    try {
-      await updateProviderSettings(editingProvider, {
-        baseUrl: editBaseUrl.trim() || undefined,
-        model: editModel.trim() || undefined,
-      });
-      if (editApiKey.trim()) {
-        await setKeyForProvider(editingProvider, editApiKey.trim());
-      } else {
-        await clearKeyForProvider(editingProvider);
-      }
-      setAiMessage('Saved');
-      await loadAiState();
-    } catch (e: any) {
-      setAiMessage('Save failed: ' + (e?.message || 'unknown'));
-    }
-  };
-
-  const canSaveProvider = !!editingProvider
-    && editBaseUrl.trim().length > 0
-    && editModel.trim().length > 0
-    && editApiKey.trim().length > 0;
 
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
@@ -723,180 +642,7 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
-        {/* ========== AI PROVIDERS MODAL ========== */}
-        <AnimatePresence>
-          {isAiProvidersOpen && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
-              >
-                <button
-                  onClick={() => setIsAiProvidersOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <h3 className="text-base font-bold text-white mb-1">AI Providers</h3>
-                <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
-                  Turn on the providers you use and add at least one API key.
-                  The chat only shows enabled providers.
-                </p>
-
-                <div className="space-y-2">
-                  {PROVIDERS.map((p) => {
-                    const setting = aiSettings.find((x) => x.providerId === p.id);
-                    const enabled = !!setting?.enabled;
-                    const keyCount = aiKeys.filter((k) => k.providerId === p.id).length;
-                    return (
-                      <div
-                        key={p.id}
-                        className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-white truncate">
-                              {p.name}
-                            </p>
-                            <p className="text-[10px] text-zinc-500 truncate mt-0.5">
-                              {keyCount} key{keyCount === 1 ? '' : 's'}
-                              {setting?.model ? ` · ${setting.model}` : ''}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => toggleProviderEnabled(p.id)}
-                            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider active:scale-95 ${
-                              enabled
-                                ? 'bg-[#00D4FF]/20 text-[#00D4FF]'
-                                : 'bg-zinc-800 text-zinc-400'
-                            }`}
-                          >
-                            {enabled ? 'On' : 'Off'}
-                          </button>
-                        </div>
-                        <button
-                          onClick={() => openProviderEditor(p.id)}
-                          className="w-full mt-2 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 text-[10px] font-bold uppercase tracking-wider active:scale-95"
-                        >
-                          Manage keys & model
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={() => setIsAiProvidersOpen(false)}
-                  className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
-                >
-                  Done
-                </button>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
-
-        {/* ========== PROVIDER EDITOR MODAL ========== */}
-        <AnimatePresence>
-          {editingProvider && (() => {
-            const p = getProvider(editingProvider);
-            return (
-              <div className="fixed inset-0 bg-black/92 backdrop-blur-md z-[60] flex items-center justify-center p-6 select-none">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[88vh] overflow-y-auto"
-                >
-                  <button
-                    onClick={() => setEditingProvider(null)}
-                    className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-
-                  <h3 className="text-base font-bold text-white mb-1">
-                    {p?.name || editingProvider}
-                  </h3>
-                  {p?.description && (
-                    <p className="text-[10px] text-zinc-500 mb-4">{p.description}</p>
-                  )}
-
-                  {/* Base URL */}
-                  <div className="mb-3">
-                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                      Base URL
-                    </label>
-                    <input
-                      type="text"
-                      value={editBaseUrl}
-                      onChange={(e) => setEditBaseUrl(e.target.value)}
-                      placeholder={p?.defaultBaseUrl || 'https://api.example.com/v1'}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  {/* Model name (custom) */}
-                  <div className="mb-3">
-                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                      Model name
-                    </label>
-                    <input
-                      type="text"
-                      value={editModel}
-                      onChange={(e) => setEditModel(e.target.value)}
-                      placeholder={p?.defaultModelHint || 'model-id (type anything)'}
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                    />
-                    <p className="text-[9px] text-zinc-600 mt-1 leading-snug">
-                      Type the exact model id. No fixed list — any model the
-                      provider supports works.
-                    </p>
-                  </div>
-
-                  {/* API key */}
-                  <div className="mb-4">
-                    <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                      API key
-                    </label>
-                    <input
-                      type="password"
-                      value={editApiKey}
-                      onChange={(e) => setEditApiKey(e.target.value)}
-                      placeholder="sk-…  (stored locally, never leaves the device except to the provider)"
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  <button
-                    onClick={saveProviderEdits}
-                    disabled={!canSaveProvider}
-                    className="w-full py-2.5 rounded-xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    Save
-                  </button>
-
-                  {!canSaveProvider && (
-                    <p className="text-[10px] text-zinc-500 text-center mt-2">
-                      Fill all three fields to enable Save.
-                    </p>
-                  )}
-
-                  {aiMessage && (
-                    <p className="text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mt-3 leading-snug">
-                      {aiMessage}
-                    </p>
-                  )}
-                </motion.div>
-              </div>
-            );
-          })()}
-        </AnimatePresence>
-
-{/* ========== BLOCKED CONTACTS MODAL ========== */}
+        {/* ========== BLOCKED CONTACTS MODAL ========== */}
         <AnimatePresence>
           {isBlockedOpen && (
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -1015,6 +761,11 @@ export default function SettingsPage() {
             </div>
           )}
         </AnimatePresence>
+
+        <AiProvidersModal
+          open={isAiProvidersOpen}
+          onClose={() => setIsAiProvidersOpen(false)}
+        />
 
       </main>
 
