@@ -166,6 +166,25 @@ public class CallService extends InCallService {
                 pc.name = nm;
                 pc.wasLogged = true;
                 TelecomPlugin.dispatchOutgoingCall(num, nm, System.currentTimeMillis());
+
+                // Present the native call screen immediately (state=ACTIVE,
+                // but the status label shows "Calling..." until the call is
+                // answered — updateState will refresh it).
+                try {
+                    Intent ca = new Intent(this, CallActivity.class);
+                    ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_ACTIVE);
+                    ca.putExtra(CallActivity.EXTRA_NUMBER, num);
+                    ca.putExtra(CallActivity.EXTRA_NAME, nm);
+                    ca.putExtra(CallActivity.EXTRA_INCOMING, false);
+                    startActivity(ca);
+                    Log.d(TAG, "CallActivity launched for outgoing call " + num);
+                } catch (Exception e) {
+                    Log.w(TAG, "outgoing CallActivity launch failed", e);
+                }
             } catch (Exception e) {
                 Log.w(TAG, "dispatchOutgoingCall failed", e);
             }
