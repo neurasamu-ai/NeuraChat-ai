@@ -81,21 +81,26 @@ export default function AiChatPage() {
     setModeKey((k) => k + 1);
   };
 
-  // Init: load settings + providers, load web model, create or pick a thread.
-  useEffect(() => {
-    (async () => {
-      const settings = await getProviderSettings();
-      const enabled = settings.filter((s) => s.enabled).map((s) => s.providerId);
-      setEnabledProviders(enabled);
-      const firstEnabled = enabled[0] || 'openai';
-      setActiveProviderId(firstEnabled);
-      const s = settings.find((x) => x.providerId === firstEnabled);
-      const def = getProvider(firstEnabled);
-      setActiveModel(s?.model || def?.defaultModelHint || '');
-      setWebModelId(getPreferredAiModelId());
+  // Reload provider settings + enabled list from the keystore. Called on
+  // mount and whenever the AI Providers modal closes, so the chat picks up
+  // enabled / disabled / key changes without leaving the screen.
+  const reloadProviders = async (opts: { resetThreads?: boolean } = {}) => {
+    const settings = await getProviderSettings();
+    const enabled = settings.filter((s) => s.enabled).map((s) => s.providerId);
+    setEnabledProviders(enabled);
+    const firstEnabled = enabled[0] || 'openai';
+    // Only switch the active provider if the current one was disabled.
+    setActiveProviderId((cur) => {
+      const stillEnabled = enabled.includes(cur);
+      const next = stillEnabled ? cur : firstEnabled;
+      const s2 = settings.find((x) => x.providerId === next);
+      const def2 = getProvider(next);
+      setActiveModel(s2?.model || def2?.defaultModelHint || '');
+      return next;
+    });
+    setWebModelId(getPreferredAiModelId());
 
-      // Load threads for the first provider and either resume the newest
-      // or create a fresh one.
+    if (opts.resetThreads) {
       const list = await listThreads(firstEnabled);
       setThreads(list);
       if (list.length > 0) {
@@ -106,7 +111,15 @@ export default function AiChatPage() {
         setThreads([t]);
         setActiveThreadId(t.id);
       }
+    }
+  };
+
+  // Init: load settings + providers, load web model, create or pick a thread.
+  useEffect(() => {
+    (async () => {
+      await reloadProviders({ resetThreads: true });
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Reload threads whenever the provider changes.
@@ -995,7 +1008,12 @@ export default function AiChatPage() {
       </AnimatePresence>
       <AiProvidersModal
         open={providersModalOpen}
-        onClose={() => setProvidersModalOpen(false)}
+        onClose={() => {
+          setProvidersModalOpen(false);
+          // Instant refresh so newly enabled / disabled providers and
+          // updated keys apply without leaving the chat screen.
+          reloadProviders();
+        }}
       />
     </>
   );
