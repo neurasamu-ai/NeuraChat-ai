@@ -33,6 +33,7 @@ public class CallActivity extends Activity {
 
     public static final String STATE_INCOMING = "INCOMING";
     public static final String STATE_ACTIVE = "ACTIVE";
+    public static final String STATE_DIALING = "DIALING";
 
     private String state = STATE_INCOMING;
     private String number = "";
@@ -343,14 +344,17 @@ public class CallActivity extends Activity {
         View incomingRow = findViewById(R.id.call_incoming_row);
         View activeRow = findViewById(R.id.call_active_row);
 
+        boolean isDialing = STATE_DIALING.equalsIgnoreCase(state);
+
         if (isIncoming) {
             if (status != null) status.setText("Incoming call");
             if (incomingRow != null) incomingRow.setVisibility(View.VISIBLE);
             if (snoozeBtn != null) snoozeBtn.setVisibility(View.VISIBLE);
             if (activeRow != null) activeRow.setVisibility(View.GONE);
             stopTicker();
+            startedAt = 0L;
         } else {
-            if (status != null) status.setText("Connected");
+            if (status != null) status.setText(isDialing ? "Calling…" : "Connected");
             if (incomingRow != null) incomingRow.setVisibility(View.GONE);
             if (snoozeBtn != null) snoozeBtn.setVisibility(View.GONE);
             if (activeRow != null) activeRow.setVisibility(View.VISIBLE);
@@ -358,7 +362,12 @@ public class CallActivity extends Activity {
             updateCtrlHighlight(R.id.call_btn_speaker, CallService.isSpeakerOn);
             updateCtrlHighlight(R.id.call_btn_hold, CallService.isHeld);
             updateCtrlHighlight(R.id.call_btn_record, CallService.isRecording);
-            startTickerIfNeeded();
+            if (isDialing) {
+                stopTicker();
+                startedAt = 0L;
+            } else {
+                startTickerIfNeeded();
+            }
         }
     }
 

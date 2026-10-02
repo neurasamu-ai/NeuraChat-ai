@@ -176,7 +176,7 @@ public class CallService extends InCallService {
                         | Intent.FLAG_ACTIVITY_CLEAR_TOP
                         | Intent.FLAG_ACTIVITY_SINGLE_TOP
                         | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
-                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_ACTIVE);
+                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_DIALING);
                     ca.putExtra(CallActivity.EXTRA_NUMBER, num);
                     ca.putExtra(CallActivity.EXTRA_NAME, nm);
                     ca.putExtra(CallActivity.EXTRA_INCOMING, false);
@@ -547,6 +547,13 @@ public class CallService extends InCallService {
                     try { startActivity(ca); } catch (Exception ignore) {}
                 } else {
                     Log.d(TAG, "ACTIVE: app foreground, web UI handles call");
+                }
+            } else if (stateStr.equals("DIALING") || stateStr.equals("CONNECTING")) {
+                // Outgoing: keep CallActivity showing "Calling…" while the
+                // remote side has not answered yet.
+                if (CallActivity.isVisible()) {
+                    CallActivity.updateIfVisible(
+                        CallActivity.STATE_DIALING, currentNumber, currentName, false);
                 }
             } else if (stateStr.equals("DISCONNECTED") || stateStr.equals("IDLE")) {
                 CallNotifier.cancelIncoming(getApplicationContext());
