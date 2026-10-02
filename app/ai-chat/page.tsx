@@ -44,7 +44,7 @@ export default function AiChatPage() {
   const [mode, setMode] = useState<Mode>('api');
 
   // API mode
-  const [activeProviderId, setActiveProviderId] = useState<string>('openai');
+  const [activeProviderId, setActiveProviderId] = useState<string>('');
   const [activeModel, setActiveModel] = useState<string>('');
   const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -86,7 +86,7 @@ export default function AiChatPage() {
     const settings = await getProviderSettings();
     const enabled = settings.filter((s) => s.enabled).map((s) => s.providerId);
     setEnabledProviders(enabled);
-    const firstEnabled = enabled[0] || 'openai';
+    const firstEnabled = enabled[0] || '';
     // Only switch the active provider if the current one was disabled.
     setActiveProviderId((cur) => {
       const stillEnabled = enabled.includes(cur);

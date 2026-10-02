@@ -79,7 +79,7 @@ export async function getProviderSettings(): Promise<ProviderSettings[]> {
   }
   return PROVIDERS.map((p) => ({
     providerId: p.id,
-    enabled: p.id === 'openai',
+    enabled: false,
   }));
 }
 

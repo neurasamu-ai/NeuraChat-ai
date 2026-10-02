@@ -15,8 +15,9 @@ interface Props {
   onClose: () => void;
 }
 
-// Shared AI Providers modal used from both Settings and AI Chat. Keeps
-// state local and reloads from IndexedDB every time it opens.
+// Shared AI Providers modal used from both Settings and AI Chat.
+// Dark, minimal, and self-contained: state reloads from IndexedDB every
+// time it opens, and any edit is written immediately.
 export default function AiProvidersModal({ open, onClose }: Props) {
   const [aiSettings, setAiSettings] = useState<ProviderSettings[]>([]);
   const [aiKeys, setAiKeys] = useState<ProviderKey[]>([]);
@@ -45,7 +46,7 @@ export default function AiProvidersModal({ open, onClose }: Props) {
     loadAiState();
   }, [open]);
 
-  const toggleProviderEnabled = async (providerId: string) => {
+  const toggleProvider = async (providerId: string) => {
     vibrate();
     const cur = aiSettings.find((s) => s.providerId === providerId);
     await updateProviderSettings(providerId, { enabled: !cur?.enabled });
@@ -78,8 +79,9 @@ export default function AiProvidersModal({ open, onClose }: Props) {
       } else {
         await clearKeyForProvider(editingProvider);
       }
-      setAiMessage('Saved');
-      await loadAiState();
+      // Close the editor AND the modal so the user lands back on the chat.
+      setEditingProvider(null);
+      onClose();
     } catch (e: any) {
       setAiMessage('Save failed: ' + (e?.message || 'unknown'));
     }
@@ -103,177 +105,219 @@ export default function AiProvidersModal({ open, onClose }: Props) {
     <AnimatePresence>
       <>
         {!editingProvider && (
-          <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6 select-none">
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[100] flex items-end sm:items-center justify-center p-3 sm:p-6 select-none">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[85vh] overflow-y-auto"
+              initial={{ y: 40, opacity: 0, scale: 0.97 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 40, opacity: 0, scale: 0.97 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              className="w-full max-w-md bg-zinc-950 border border-zinc-800/80 rounded-3xl relative max-h-[88vh] overflow-hidden flex flex-col"
             >
-              <button
-                onClick={handleClose}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              {/* Header */}
+              <div className="px-5 pt-5 pb-3 border-b border-zinc-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-white">AI Providers</h3>
+                    <p className="text-[11px] text-zinc-500 mt-0.5 leading-snug">
+                      Add providers you use. Cloud needs a key, local can skip it.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleClose}
+                    className="p-1.5 rounded-full bg-zinc-900 text-zinc-400 hover:text-white active:scale-90 transition-all"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
-              <h3 className="text-base font-bold text-white mb-1">AI Providers</h3>
-              <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
-                Turn on the providers you use. Add an API key for cloud
-                providers, or leave it blank for a local / custom endpoint.
-              </p>
-
-              <div className="space-y-2">
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1.5">
                 {PROVIDERS.map((p) => {
                   const setting = aiSettings.find((x) => x.providerId === p.id);
                   const enabled = !!setting?.enabled;
                   const keyCount = aiKeys.filter((k) => k.providerId === p.id).length;
+                  const hasModel = !!setting?.model;
+                  const configured = keyCount > 0 || !p.requiresKey;
                   return (
                     <div
                       key={p.id}
-                      className="rounded-2xl bg-zinc-900 border border-zinc-800 p-3"
+                      className={`rounded-2xl border transition-all overflow-hidden ${
+                        enabled
+                          ? 'bg-[#00D4FF]/5 border-[#00D4FF]/40'
+                          : 'bg-zinc-900/40 border-zinc-800/70'
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-white truncate">
+                      <div className="flex items-center gap-3 p-3">
+                        {/* Left indicator */}
+                        <div
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                            enabled ? 'bg-[#00D4FF]/15' : 'bg-zinc-900'
+                          }`}
+                        >
+                          <span
+                            className={`text-xs font-bold ${
+                              enabled ? 'text-[#00D4FF]' : 'text-zinc-500'
+                            }`}
+                          >
+                            {p.name.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+
+                        {/* Name + status */}
+                        <button
+                          onClick={() => openProviderEditor(p.id)}
+                          className="flex-1 min-w-0 text-left active:opacity-70 transition-opacity"
+                        >
+                          <p className={`text-sm font-semibold truncate ${enabled ? 'text-white' : 'text-zinc-300'}`}>
                             {p.name}
                           </p>
                           <p className="text-[10px] text-zinc-500 truncate mt-0.5">
                             {p.requiresKey
-                              ? `${keyCount} key${keyCount === 1 ? '' : 's'}`
-                              : 'No key required'}
-                            {setting?.model ? ` · ${setting.model}` : ''}
+                              ? keyCount > 0
+                                ? `${keyCount} key${keyCount === 1 ? '' : 's'}${hasModel ? ` · ${setting?.model}` : ''}`
+                                : 'No key yet'
+                              : hasModel
+                                ? `Local · ${setting?.model}`
+                                : 'Local endpoint'}
                           </p>
-                        </div>
+                        </button>
+
+                        {/* Add / Remove */}
                         <button
-                          onClick={() => toggleProviderEnabled(p.id)}
-                          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider active:scale-95 ${
+                          onClick={() => toggleProvider(p.id)}
+                          className={`px-3 py-2 rounded-xl text-[10px] font-bold uppercase tracking-wider active:scale-95 transition-all shrink-0 ${
                             enabled
-                              ? 'bg-[#00D4FF]/20 text-[#00D4FF]'
-                              : 'bg-zinc-800 text-zinc-400'
+                              ? 'bg-zinc-900 text-zinc-400 border border-zinc-800'
+                              : configured
+                                ? 'bg-[#00D4FF] text-black'
+                                : 'bg-[#00D4FF]/20 text-[#00D4FF]'
                           }`}
                         >
-                          {enabled ? 'On' : 'Off'}
+                          {enabled ? 'Remove' : 'Add'}
                         </button>
                       </div>
-                      <button
-                        onClick={() => openProviderEditor(p.id)}
-                        className="w-full mt-2 py-2 rounded-lg bg-zinc-950 border border-zinc-800 text-zinc-300 text-[10px] font-bold uppercase tracking-wider active:scale-95"
-                      >
-                        Manage keys & model
-                      </button>
                     </div>
                   );
                 })}
               </div>
 
-              <button
-                onClick={handleClose}
-                className="w-full bg-zinc-900 text-zinc-300 font-semibold text-xs py-2.5 rounded-xl mt-5 cursor-pointer"
-              >
-                Done
-              </button>
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-zinc-900">
+                <button
+                  onClick={handleClose}
+                  className="w-full bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs py-3 rounded-2xl transition-colors"
+                >
+                  Done
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
 
         {editingProvider && (
-          <div className="fixed inset-0 bg-black/92 backdrop-blur-md z-[110] flex items-center justify-center p-6 select-none">
+          <div className="fixed inset-0 bg-black/88 backdrop-blur-md z-[110] flex items-end sm:items-center justify-center p-3 sm:p-6 select-none">
             <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-5 relative max-h-[88vh] overflow-y-auto"
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              className="w-full max-w-md bg-zinc-950 border border-zinc-800/80 rounded-3xl relative max-h-[90vh] overflow-hidden flex flex-col"
             >
-              <button
-                onClick={() => setEditingProvider(null)}
-                className="absolute top-4 right-4 text-zinc-500 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="px-5 pt-5 pb-3 border-b border-zinc-900">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-bold text-white">
+                      {def?.name || editingProvider}
+                    </h3>
+                    {def?.description && (
+                      <p className="text-[11px] text-zinc-500 mt-0.5">{def.description}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setEditingProvider(null)}
+                    className="p-1.5 rounded-full bg-zinc-900 text-zinc-400 hover:text-white active:scale-90 transition-all"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
 
-              <h3 className="text-base font-bold text-white mb-1">
-                {def?.name || editingProvider}
-              </h3>
-              {def?.description && (
-                <p className="text-[10px] text-zinc-500 mb-4">{def.description}</p>
-              )}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold block mb-1.5">
+                    Base URL
+                  </label>
+                  <input
+                    type="text"
+                    value={editBaseUrl}
+                    onChange={(e) => setEditBaseUrl(e.target.value)}
+                    placeholder={
+                      editingProvider === 'custom-openai'
+                        ? 'http://192.168.1.5:1234/v1'
+                        : (def?.defaultBaseUrl || 'https://api.example.com/v1')
+                    }
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-3.5 py-3 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF] transition-colors"
+                  />
+                  {editingProvider === 'custom-openai' && (
+                    <p className="text-[10px] text-zinc-600 mt-1.5 leading-snug">
+                      LM Studio / Ollama / llama.cpp — host:port of the machine
+                      running the model.
+                    </p>
+                  )}
+                </div>
 
-              <div className="mb-3">
-                <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                  Base URL
-                </label>
-                <input
-                  type="text"
-                  value={editBaseUrl}
-                  onChange={(e) => setEditBaseUrl(e.target.value)}
-                  placeholder={
-                    editingProvider === 'custom-openai'
-                      ? 'http://192.168.1.5:1234/v1'
-                      : (def?.defaultBaseUrl || 'https://api.example.com/v1')
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                />
-                {editingProvider === 'custom-openai' && (
-                  <p className="text-[9px] text-zinc-600 mt-1 leading-snug">
-                    For LM Studio / Ollama / llama.cpp, use the host:port of
-                    the machine running the model. Add /v1 if the server
-                    exposes an OpenAI-compatible API.
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold block mb-1.5">
+                    Model
+                  </label>
+                  <input
+                    type="text"
+                    value={editModel}
+                    onChange={(e) => setEditModel(e.target.value)}
+                    placeholder={def?.defaultModelHint || 'model-id'}
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-3.5 py-3 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF] transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold block mb-1.5">
+                    API key {def?.requiresKey ? '' : '(optional)'}
+                  </label>
+                  <input
+                    type="password"
+                    value={editApiKey}
+                    onChange={(e) => setEditApiKey(e.target.value)}
+                    placeholder={
+                      def?.requiresKey ? 'sk-…' : 'Leave blank for local'
+                    }
+                    className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl px-3.5 py-3 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF] transition-colors"
+                  />
+                </div>
+
+                {aiMessage && (
+                  <p className="text-[11px] text-red-400 bg-red-500/5 border border-red-500/20 rounded-2xl p-3 leading-snug">
+                    {aiMessage}
                   </p>
                 )}
               </div>
 
-              <div className="mb-3">
-                <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                  Model name
-                </label>
-                <input
-                  type="text"
-                  value={editModel}
-                  onChange={(e) => setEditModel(e.target.value)}
-                  placeholder={def?.defaultModelHint || 'model-id (type anything)'}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                />
+              <div className="px-5 py-4 border-t border-zinc-900">
+                <button
+                  onClick={saveProviderEdits}
+                  disabled={!canSaveProvider}
+                  className="w-full py-3.5 rounded-2xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Save
+                </button>
+                {!canSaveProvider && (
+                  <p className="text-[10px] text-zinc-500 text-center mt-2">
+                    {def?.requiresKey
+                      ? 'Base URL, model, and API key required.'
+                      : 'Base URL and model required.'}
+                  </p>
+                )}
               </div>
-
-              <div className="mb-4">
-                <label className="text-[9px] uppercase tracking-widest text-zinc-500 font-mono font-bold block mb-1">
-                  API key {def?.requiresKey ? '' : '(optional)'}
-                </label>
-                <input
-                  type="password"
-                  value={editApiKey}
-                  onChange={(e) => setEditApiKey(e.target.value)}
-                  placeholder={
-                    def?.requiresKey
-                      ? 'sk-… (stored locally)'
-                      : 'Leave blank for local / custom endpoints'
-                  }
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-[#00D4FF]"
-                />
-              </div>
-
-              <button
-                onClick={saveProviderEdits}
-                disabled={!canSaveProvider}
-                className="w-full py-2.5 rounded-xl bg-[#00D4FF] text-black font-bold text-xs uppercase tracking-wider active:scale-97 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Save
-              </button>
-
-              {!canSaveProvider && (
-                <p className="text-[10px] text-zinc-500 text-center mt-2">
-                  {def?.requiresKey
-                    ? 'Base URL, model, and API key are required.'
-                    : 'Base URL and model are required.'}
-                </p>
-              )}
-
-              {aiMessage && (
-                <p className="text-[11px] text-zinc-300 bg-zinc-900 border border-zinc-800 rounded-xl p-2.5 mt-3 leading-snug">
-                  {aiMessage}
-                </p>
-              )}
             </motion.div>
           </div>
         )}
