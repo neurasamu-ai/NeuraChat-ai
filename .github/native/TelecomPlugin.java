@@ -99,6 +99,11 @@ public class TelecomPlugin extends Plugin {
     }
 
     public static void dispatchOutgoingCall(String number, String name, long timestamp) {
+        Context ctx = (instance != null) ? instance.getContext() : null;
+        if (ctx != null) {
+            try { PendingCallLogStore.append(ctx, "outgoing", number, name, timestamp, 0); }
+            catch (Exception e) { Log.w(TAG, "outgoing queue append failed", e); }
+        }
         if (instance != null) {
             JSObject data = new JSObject();
             data.put("number", number == null ? "" : number);
@@ -109,6 +114,11 @@ public class TelecomPlugin extends Plugin {
     }
 
     public static void dispatchAnsweredCall(String number, String name, long timestamp) {
+        Context ctx = (instance != null) ? instance.getContext() : null;
+        if (ctx != null) {
+            try { PendingCallLogStore.append(ctx, "incoming", number, name, timestamp, 0); }
+            catch (Exception e) { Log.w(TAG, "answered queue append failed", e); }
+        }
         if (instance != null) {
             JSObject data = new JSObject();
             data.put("number", number == null ? "" : number);
@@ -204,6 +214,11 @@ public class TelecomPlugin extends Plugin {
     }
 
     public static void dispatchMissedCall(String number, String name, long timestamp) {
+        Context ctx = (instance != null) ? instance.getContext() : null;
+        if (ctx != null) {
+            try { PendingCallLogStore.append(ctx, "missed", number, name, timestamp, 0); }
+            catch (Exception e) { Log.w(TAG, "missed queue append failed", e); }
+        }
         if (instance != null) {
             JSObject data = new JSObject();
             data.put("number", number == null ? "" : number);
@@ -214,6 +229,25 @@ public class TelecomPlugin extends Plugin {
     }
 
     // NAYA LOGIC: Request Default Dialer Pop-up
+    // Returns the native queue of call log events captured since the last
+    // drain. The web layer calls this on startup and writes each entry into
+    // IndexedDB so received / missed / outgoing calls are not lost when the
+    // app was closed at the time of the event.
+    @PluginMethod
+    public void drainCallLog(PluginCall call) {
+        try {
+            String raw = PendingCallLogStore.drain(getContext());
+            JSObject ret = new JSObject();
+            ret.put("entries", raw);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.w(TAG, "drainCallLog failed", e);
+            JSObject ret = new JSObject();
+            ret.put("entries", "[]");
+            call.resolve(ret);
+        }
+    }
+
     @PluginMethod
     public void requestDefaultDialer(PluginCall call) {
         Context context = getContext();

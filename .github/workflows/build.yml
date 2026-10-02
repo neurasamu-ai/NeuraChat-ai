@@ -57,6 +57,7 @@ jobs:
         cp .github/native/TelecomPlugin.java $TARGET/
         cp .github/native/CallService.java $TARGET/
         cp .github/native/CallActivity.java $TARGET/
+        cp .github/native/PendingCallLogStore.java $TARGET/
         cp .github/native/CallIntentProcessor.java $TARGET/
         cp .github/native/SmsReceiver.java $TARGET/
         cp .github/native/MmsReceiver.java $TARGET/
