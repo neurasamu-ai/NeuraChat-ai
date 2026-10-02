@@ -168,8 +168,7 @@
         <activity
             android:name="com.neurasamu.build.chat.CallActivity"
             android:exported="false"
-            android:launchMode="singleInstance"
-            android:taskAffinity="com.neurasamu.build.chat.call"
+            android:launchMode="singleTask"
             android:excludeFromRecents="true"
             android:noHistory="false"
             android:showWhenLocked="true"

@@ -279,8 +279,24 @@ public class CallService extends InCallService {
                     }
                 }
             } else {
-                // Path 2: app is in foreground - web UI handles it.
-                Log.d(TAG, "app foreground, web ActiveCallScreen handles " + num);
+                // Path 2: app is in foreground. There is no web call UI any
+                // more, so launch the native CallActivity so the user sees
+                // the incoming call screen immediately.
+                try {
+                    Intent ca = new Intent(this, CallActivity.class);
+                    ca.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_NO_USER_ACTION);
+                    ca.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_INCOMING);
+                    ca.putExtra(CallActivity.EXTRA_NUMBER, num);
+                    ca.putExtra(CallActivity.EXTRA_NAME, nm);
+                    ca.putExtra(CallActivity.EXTRA_INCOMING, true);
+                    startActivity(ca);
+                    Log.d(TAG, "CallActivity launched (app foreground) for " + num);
+                } catch (Exception e) {
+                    Log.w(TAG, "foreground CallActivity launch failed", e);
+                }
             }
         }
 
