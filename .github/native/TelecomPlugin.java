@@ -98,11 +98,28 @@ public class TelecomPlugin extends Plugin {
         }
     }
 
+
+    // Best-effort application context for queue appends. Prefer the plugin
+    // context (WebView running), else fall back to the CallService which is
+    // alive for the duration of the call regardless of whether the app was
+    // opened. This is what makes queue appends work when the app is dead.
+    private static Context queueContext() {
+        try {
+            if (instance != null) return instance.getContext();
+        } catch (Exception ignore) {}
+        try {
+            if (CallService.instance != null) return CallService.instance.getApplicationContext();
+        } catch (Exception ignore) {}
+        return null;
+    }
+
     public static void dispatchOutgoingCall(String number, String name, long timestamp) {
-        Context ctx = (instance != null) ? instance.getContext() : null;
+        Context ctx = queueContext();
         if (ctx != null) {
             try { PendingCallLogStore.append(ctx, "outgoing", number, name, timestamp, 0); }
             catch (Exception e) { Log.w(TAG, "outgoing queue append failed", e); }
+        } else {
+            Log.w(TAG, "outgoing queue append skipped — no context");
         }
         if (instance != null) {
             JSObject data = new JSObject();
@@ -114,10 +131,12 @@ public class TelecomPlugin extends Plugin {
     }
 
     public static void dispatchAnsweredCall(String number, String name, long timestamp) {
-        Context ctx = (instance != null) ? instance.getContext() : null;
+        Context ctx = queueContext();
         if (ctx != null) {
             try { PendingCallLogStore.append(ctx, "incoming", number, name, timestamp, 0); }
             catch (Exception e) { Log.w(TAG, "answered queue append failed", e); }
+        } else {
+            Log.w(TAG, "answered queue append skipped — no context");
         }
         if (instance != null) {
             JSObject data = new JSObject();
@@ -214,10 +233,12 @@ public class TelecomPlugin extends Plugin {
     }
 
     public static void dispatchMissedCall(String number, String name, long timestamp) {
-        Context ctx = (instance != null) ? instance.getContext() : null;
+        Context ctx = queueContext();
         if (ctx != null) {
             try { PendingCallLogStore.append(ctx, "missed", number, name, timestamp, 0); }
             catch (Exception e) { Log.w(TAG, "missed queue append failed", e); }
+        } else {
+            Log.w(TAG, "missed queue append skipped — no context");
         }
         if (instance != null) {
             JSObject data = new JSObject();
