@@ -7,7 +7,6 @@ import BackButtonHandler from '@/components/BackButtonHandler';
 import SmsInboxBridge from '@/components/SmsInboxBridge';
 import DefaultSmsBanner from '@/components/DefaultSmsBanner';
 import DefaultDialerBanner from '@/components/DefaultDialerBanner';
-import ActiveCallScreen from '@/components/ActiveCallScreen';
 import NotificationNavigator from '@/components/NotificationNavigator';
 import MissedCallBridge from '@/components/MissedCallBridge';
 import SmsStatusBridge from '@/components/SmsStatusBridge';
@@ -42,7 +41,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ThemeManager />
         <BackButtonHandler />
         <SmsInboxBridge />
-        <ActiveCallScreen />
         <NotificationNavigator />
         <MissedCallBridge />
         <SmsStatusBridge />
