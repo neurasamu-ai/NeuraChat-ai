@@ -140,6 +140,7 @@ export default function ContactsPage() {
   const simCall = useSimCall();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('neurachat');
   const [addAvatar, setAddAvatar] = useState<string>('');
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [addError, setAddError] = useState('');
 
   const loadContactsData = async () => {
@@ -343,10 +344,11 @@ export default function ContactsPage() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setAddAvatar(reader.result);
+        setCropSrc(reader.result);
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   // Toggle favorite on contact within active sheet
@@ -1030,6 +1032,17 @@ export default function ContactsPage() {
         onRememberChange={simCall.setRemember}
         onPick={simCall.pick}
         onCancel={simCall.cancel}
+      />
+
+      <ImageCropModal
+        open={!!cropSrc}
+        src={cropSrc || ''}
+        aspect={1}
+        onCancel={() => setCropSrc(null)}
+        onConfirm={(cropped) => {
+          setAddAvatar(cropped);
+          setCropSrc(null);
+        }}
       />
     </>
   );

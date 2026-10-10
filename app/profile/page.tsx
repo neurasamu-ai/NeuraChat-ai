@@ -28,6 +28,7 @@ import {
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount } from '@/lib/neura-contacts';
 import CallSimPicker from '@/components/CallSimPicker';
+import ImageCropModal from '@/components/ImageCropModal';
 import { useSimCall } from '@/hooks/use-sim-call';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
@@ -49,6 +50,7 @@ function ProfileContent() {
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -150,9 +152,10 @@ function ProfileContent() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') setEditAvatar(reader.result);
+      if (typeof reader.result === 'string') setCropSrc(reader.result);
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
   const handleSave = async () => {
@@ -632,6 +635,17 @@ function ProfileContent() {
           onRememberChange={simCall.setRemember}
           onPick={simCall.pick}
           onCancel={simCall.cancel}
+        />
+
+        <ImageCropModal
+          open={!!cropSrc}
+          src={cropSrc || ''}
+          aspect={1}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={(cropped) => {
+            setEditAvatar(cropped);
+            setCropSrc(null);
+          }}
         />
       </main>
     </div>

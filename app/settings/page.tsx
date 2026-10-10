@@ -29,6 +29,7 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
+import ImageCropModal from '@/components/ImageCropModal';
 import {
   pickSoundNative, getSoundNative, clearSoundNative,
   isSoundPluginAvailable, SoundInfo, SoundType,
@@ -74,6 +75,7 @@ export default function SettingsPage() {
   const [editBio, setEditBio] = useState('');
   const [editUsername, setEditUsername] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
 
   // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
@@ -178,10 +180,11 @@ export default function SettingsPage() {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') {
-        setEditAvatar(reader.result);
+        setCropSrc(reader.result);
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = '';
   };
 
 
@@ -969,6 +972,17 @@ export default function SettingsPage() {
         <AiProvidersModal
           open={isAiProvidersOpen}
           onClose={() => setIsAiProvidersOpen(false)}
+        />
+
+        <ImageCropModal
+          open={!!cropSrc}
+          src={cropSrc || ''}
+          aspect={1}
+          onCancel={() => setCropSrc(null)}
+          onConfirm={(cropped) => {
+            setEditAvatar(cropped);
+            setCropSrc(null);
+          }}
         />
 
       </main>
