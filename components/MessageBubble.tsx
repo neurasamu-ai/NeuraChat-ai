@@ -27,7 +27,7 @@ function initialsOf(input: string): string {
   if (parts.length >= 2) {
     return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
   }
-  return src.substring(0, Math.min(2, src.length())).toUpperCase();
+  return src.substring(0, Math.min(2, src.length)).toUpperCase();
 }
 
 // Formats "10:02 PM · 10 Oct" for the header row.
