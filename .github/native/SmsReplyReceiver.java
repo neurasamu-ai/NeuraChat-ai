@@ -110,7 +110,7 @@ public class SmsReplyReceiver extends BroadcastReceiver {
             } catch (Exception ignore) {}
 
             // Queue to app inbox as OUTGOING so the chat shows it as sent by user.
-            SmsPlugin.receiveOutgoingSms(context, sender, text, System.currentTimeMillis());
+            SmsPlugin.receiveOutgoingSms(context, sender, text, System.currentTimeMillis(), -1);
 
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);

@@ -68,16 +68,16 @@ public class SmsPlugin extends Plugin {
     }
 
     // ---- Called from SmsReceiver (may run when app is dead) ----
-    public static void receiveIncomingSms(Context context, String sender, String body, long timestamp) {
-        enqueue(context, sender, body, timestamp, "incoming");
+    public static void receiveIncomingSms(Context context, String sender, String body, long timestamp, int subscriptionId) {
+        enqueue(context, sender, body, timestamp, "incoming", subscriptionId);
     }
 
     // Called when this app sends an SMS (from chat, SIM picker, or notification reply).
-    public static void receiveOutgoingSms(Context context, String recipient, String body, long timestamp) {
-        enqueue(context, recipient, body, timestamp, "outgoing");
+    public static void receiveOutgoingSms(Context context, String recipient, String body, long timestamp, int subscriptionId) {
+        enqueue(context, recipient, body, timestamp, "outgoing", subscriptionId);
     }
 
-    private static void enqueue(Context context, String address, String body, long timestamp, String direction) {
+    private static void enqueue(Context context, String address, String body, long timestamp, String direction, int subscriptionId) {
         Log.d(TAG, "enqueue " + direction + " with " + address);
 
         // 1. Persist to the system SMS provider (Inbox for incoming, Sent for
@@ -111,6 +111,7 @@ public class SmsPlugin extends Plugin {
             item.put("body", body == null ? "" : body);
             item.put("timestamp", timestamp);
             item.put("direction", direction);
+            item.put("subscriptionId", subscriptionId);
             arr.put(item);
             // Keep only last 200
             if (arr.length() > 200) {
@@ -133,6 +134,7 @@ public class SmsPlugin extends Plugin {
             data.put("body", body == null ? "" : body);
             data.put("timestamp", timestamp);
             data.put("direction", direction);
+            data.put("subscriptionId", subscriptionId);
             instance.notifyListeners(direction.equals("outgoing") ? "smsSent" : "smsReceived", data);
         }
     }
@@ -230,7 +232,8 @@ public class SmsPlugin extends Plugin {
             }
 
             // Persist + queue as outgoing so the app shows it as sent.
-            receiveOutgoingSms(getContext(), phone, message, System.currentTimeMillis());
+            receiveOutgoingSms(getContext(), phone, message, System.currentTimeMillis(),
+                subscriptionId == null ? -1 : subscriptionId);
 
             JSObject ret = new JSObject();
             ret.put("status", "sent");
@@ -403,6 +406,7 @@ public class SmsPlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("status", "queued");
             ret.put("clientId", clientId);
+            ret.put("subscriptionId", subscriptionId == null ? -1 : subscriptionId);
             call.resolve(ret);
         } catch (Exception e) {
             Log.e(TAG, "sendDirectSMSTracked failed", e);

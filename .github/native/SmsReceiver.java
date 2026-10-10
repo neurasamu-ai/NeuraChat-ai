@@ -66,7 +66,7 @@ public class SmsReceiver extends BroadcastReceiver {
             }
 
             // Persist + queue for the app inbox and notify.
-            SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp);
+            SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp, subId);
             SmsNotifier.show(context, sender, body.toString(), timestamp, subId);
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);
