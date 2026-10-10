@@ -80,6 +80,7 @@ export default function SettingsPage() {
   // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
+  const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
   const [smsSound, setSmsSound] = useState<SoundInfo>({ type: 'sms', name: 'Default', custom: false });
   const [callSound, setCallSound] = useState<SoundInfo>({ type: 'call', name: 'Default', custom: false });
   const [soundBusy, setSoundBusy] = useState<SoundType | null>(null);
@@ -302,14 +303,32 @@ export default function SettingsPage() {
           </div>
 
 
-          {/* Bubble Color */}
-          <div className="flex flex-col p-3 px-4 transition-colors rounded-xl space-y-2">
-            <div className="flex items-center justify-between">
+          {/* Bubble Color (collapsible) */}
+          <div className="flex flex-col p-3 px-4 transition-colors rounded-xl">
+            <button
+              onClick={() => {
+                triggerVibration();
+                setBubbleColorOpen((v) => !v);
+              }}
+              className="flex items-center justify-between w-full text-left"
+            >
               <div className="flex items-center gap-3">
                 <Palette className="h-4 w-4 text-pink-400" />
                 <span className="text-xs font-medium text-zinc-200">Bubble Color</span>
               </div>
-            </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-4 h-4 rounded-full border border-zinc-800"
+                  style={{ backgroundColor: bubbleColor }}
+                />
+                <ChevronRight
+                  className={`h-4 w-4 text-zinc-500 transition-transform ${bubbleColorOpen ? 'rotate-90' : ''}`}
+                />
+              </div>
+            </button>
+
+            {bubbleColorOpen && (
+            <div className="mt-2 space-y-2">
             <p className="text-[10px] text-zinc-500 leading-snug">
               Color of your outgoing SMS bubbles across all chats.
             </p>
@@ -364,6 +383,8 @@ export default function SettingsPage() {
                 Preview message
               </div>
             </div>
+            </div>
+            )}
           </div>
 
           {/* Sounds */}
