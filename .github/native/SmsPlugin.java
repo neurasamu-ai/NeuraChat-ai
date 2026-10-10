@@ -190,6 +190,21 @@ public class SmsPlugin extends Plugin {
                         if (carrierName != null) sub.put("carrierName", carrierName.toString());
                         CharSequence displayName = info.getDisplayName();
                         if (displayName != null) sub.put("displayName", displayName.toString());
+                        // Best-effort SIM phone number. Some carriers do not
+                        // populate this; when null the JS layer falls back to
+                        // the SIM label.
+                        try {
+                            String number = info.getNumber();
+                            if (number != null && !number.isEmpty()) {
+                                sub.put("number", number);
+                            } else {
+                                sub.put("number", "");
+                            }
+                        } catch (Exception ignore) {
+                            sub.put("number", "");
+                        }
+                        // Carrier + label combined so callers can show either.
+                        sub.put("simLabel", "SIM " + (info.getSimSlotIndex() + 1));
                         result.put(sub);
                     }
                 }
