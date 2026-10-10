@@ -62,9 +62,9 @@ async function getCroppedBase64(
   ctx.drawImage(img, 0, 0);
   ctx.restore();
 
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
-  const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
-  return base64;
+  // Return the full data URL so callers can drop it straight into an
+  // <img src> (existing avatars in the app are stored this way too).
+  return canvas.toDataURL('image/jpeg', 0.92);
 }
 
 export default function ImageCropModal({
