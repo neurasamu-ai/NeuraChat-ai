@@ -849,14 +849,18 @@ function ChatDetailContent() {
 
       {/* Messages Scroll Area */}
       <div className="relative flex-1 min-h-0 flex flex-col">
-        {/* Per-chat custom background (behind the messages) */}
+        {/* Per-chat custom background (behind the messages).
+            Height is pinned to 100vh so the layer keeps covering the
+            screen even when the soft keyboard shrinks the flex parent. */}
         {chatBg?.image && (
           <div
-            className="absolute inset-0 pointer-events-none bg-cover bg-center"
+            className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
             style={{
+              minHeight: '100vh',
               backgroundImage: `url(data:image/jpeg;base64,${chatBg.image})`,
               opacity: (chatBg.opacity ?? 40) / 100,
-              transform: `scale(${chatBg.zoom ?? 1}) translate(${chatBg.panX ?? 0}%, ${chatBg.panY ?? 0}%)`,
+              backgroundPosition: `calc(50% + ${chatBg.panX ?? 0}%) calc(50% + ${chatBg.panY ?? 0}%)`,
+              backgroundSize: `${(chatBg.zoom ?? 1) * 100}% auto`,
             }}
           />
         )}
