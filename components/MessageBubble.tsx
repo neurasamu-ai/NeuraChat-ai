@@ -14,6 +14,7 @@ interface MessageBubbleProps {
   userName: string;
   userAvatar?: string;
   bubbleColor: string;
+  simLabel?: string;
   onRetry: (msg: Message) => void;
   onPressStart: (msg: Message, x?: number, y?: number) => void;
   onPressEnd: () => void;
@@ -80,6 +81,7 @@ function MessageBubbleInner({
   userName,
   userAvatar,
   bubbleColor,
+  simLabel,
   onRetry,
   onPressStart,
   onPressEnd,
@@ -175,6 +177,24 @@ function MessageBubbleInner({
         )}
 
         {/* Status (outgoing only) */}
+        {/* SIM badge (bottom of bubble) */}
+        {simLabel && (
+          <div
+            className={`mt-1 ${isUser ? 'text-right' : 'text-left'}`}
+          >
+            <span
+              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider"
+              style={
+                isUser
+                  ? { backgroundColor: 'rgba(0,0,0,0.15)', color: bubbleTextColor(bubbleColor) }
+                  : { backgroundColor: 'rgba(255,255,255,0.08)', color: '#a1a1aa' }
+              }
+            >
+              {simLabel}
+            </span>
+          </div>
+        )}
+
         {isUser && (
           <div className="flex justify-end mt-0.5">
             {msg.status === 'sending' ? (
@@ -224,6 +244,7 @@ const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.userName !== next.userName) return false;
   if (prev.userAvatar !== next.userAvatar) return false;
   if (prev.bubbleColor !== next.bubbleColor) return false;
+  if (prev.simLabel !== next.simLabel) return false;
   const a = prev.msg;
   const b = next.msg;
   if (a.id !== b.id) return false;

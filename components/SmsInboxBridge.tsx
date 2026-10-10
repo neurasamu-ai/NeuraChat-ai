@@ -62,6 +62,7 @@ async function persistIncoming(msg: IncomingSms) {
     sender: isOutgoing ? 'user' : 'contact',
     timestamp: msg.timestamp || Date.now(),
     status: isOutgoing ? 'sent' : 'received',
+    subscriptionId: typeof msg.subscriptionId === 'number' ? msg.subscriptionId : undefined,
   };
 
   try {

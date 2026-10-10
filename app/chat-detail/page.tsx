@@ -94,6 +94,23 @@ function ChatDetailContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
   const [chatBg, setChatBg] = useState<ChatBackground | null>(null);
+  const [subsMap, setSubsMap] = useState<Record<number, string>>({});
+
+  // Fetch the SIM subscriptions once so we can map subscriptionId -> "SIM 1" etc.
+  useEffect(() => {
+    (async () => {
+      try {
+        const subs = await getActiveSubscriptions();
+        const map: Record<number, string> = {};
+        for (const s of subs) {
+          map[s.subscriptionId] = s.label || `SIM ${(s.slotIndex ?? 0) + 1}`;
+        }
+        setSubsMap(map);
+      } catch (e) {
+        console.error('load subs failed', e);
+      }
+    })();
+  }, []);
 
   // Load the per-chat background image when the chat changes.
   useEffect(() => {
@@ -417,6 +434,20 @@ function ChatDetailContent() {
   };
 
   const performSmsSend = async (text: string, subscriptionId: number | undefined, clientId: string) => {
+    // Persist the SIM (subscriptionId) on the message before sending, so
+    // the outgoing bubble can show which SIM this went through.
+    try {
+      const { getMessages: fetchMsgs } = await import('@/lib/db');
+      const list = await fetchMsgs(chatId);
+      const m = list.find((x) => x.id === clientId);
+      if (m) {
+        m.subscriptionId = subscriptionId;
+        await saveMessage(m);
+      }
+    } catch (e) {
+      console.error('save subId failed', e);
+    }
+
     if (!isSmsPluginAvailable()) {
       alertToast('Native SMS unavailable — opening system messenger', 'error');
       await markMessageFailed(clientId);
@@ -887,6 +918,7 @@ function ChatDetailContent() {
               userName={userProfile?.name || 'You'}
               userAvatar={userProfile?.avatar || undefined}
               bubbleColor={bubbleColor}
+              simLabel={msg.subscriptionId != null ? subsMap[msg.subscriptionId] : undefined}
               onRetry={handleRetryMessage}
               onPressStart={handleMessagePressStart}
               onPressEnd={handleMessagePressEnd}

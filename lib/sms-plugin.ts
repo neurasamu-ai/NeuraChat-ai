@@ -22,6 +22,7 @@ export interface IncomingSms {
   body: string;
   timestamp: number;
   direction?: 'incoming' | 'outgoing';
+  subscriptionId?: number; // SIM subscription id, -1 / undefined if unknown
 }
 
 export interface SmsPluginType {
