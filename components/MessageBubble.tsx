@@ -125,20 +125,14 @@ function MessageBubbleInner({
             : undefined
         }
       >
-        {/* Header INSIDE bubble: avatar + name + date/time */}
+        {/* Header INSIDE bubble: avatar + name only */}
         <div className="flex items-center gap-1.5 mb-1">
           {isUser ? (
             <>
-              <span
-                className="text-[9px] font-mono whitespace-nowrap"
-                style={{ color: isUser ? bubbleTextColor(bubbleColor) + 'aa' : undefined }}
-              >
-                {dateTime}
-              </span>
               <div className="flex-1" />
               <span
                 className="text-[10px] font-semibold truncate max-w-[120px]"
-                style={{ color: isUser ? bubbleTextColor(bubbleColor) : undefined }}
+                style={{ color: bubbleTextColor(bubbleColor) }}
               >
                 {headerName}
               </span>
@@ -151,9 +145,6 @@ function MessageBubbleInner({
                 {headerName}
               </span>
               <div className="flex-1" />
-              <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
-                {dateTime}
-              </span>
             </>
           )}
         </div>
@@ -176,62 +167,83 @@ function MessageBubbleInner({
           </p>
         )}
 
-        {/* Status (outgoing only) */}
-        {/* SIM badge (bottom of bubble) */}
-        {simLabel && (
-          <div
-            className={`mt-1 ${isUser ? 'text-right' : 'text-left'}`}
-          >
-            <span
-              className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono font-bold tracking-wider"
-              style={
-                isUser
-                  ? { backgroundColor: 'rgba(0,0,0,0.15)', color: bubbleTextColor(bubbleColor) }
-                  : { backgroundColor: 'rgba(255,255,255,0.08)', color: '#a1a1aa' }
-              }
-            >
-              {simLabel}
-            </span>
-          </div>
-        )}
-
-        {isUser && (
-          <div className="flex justify-end mt-0.5">
-            {msg.status === 'sending' ? (
-              <div className="relative h-3.5 w-3.5" aria-label="Sending">
-                {[0, 1, 2].map((i) => (
-                  <span
-                    key={i}
-                    className="absolute inset-0 animate-spin"
-                    style={{
-                      animationDuration: '1.1s',
-                      animationDelay: `-${((i * 1.1) / 3).toFixed(2)}s`,
-                    }}
-                  >
-                    <span
-                      className="absolute left-1/2 top-0 w-[3px] h-[3px] -translate-x-1/2 rounded-full"
-                      style={{ backgroundColor: bubbleTextColor(bubbleColor) }}
-                    />
-                  </span>
-                ))}
-              </div>
-            ) : msg.status === 'failed' ? (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRetry(msg);
-                }}
-                className="text-[10px] font-bold text-red-700 underline-offset-2 hover:underline"
+        {/* Bottom row: date/time + SIM badge. Outgoing = right-aligned,
+            incoming = left-aligned. */}
+        <div className={`mt-1 flex items-center gap-1.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
+          {isUser ? (
+            <>
+              <span
+                className="text-[9px] font-mono whitespace-nowrap"
+                style={{ color: bubbleTextColor(bubbleColor) + '99' }}
               >
-                Retry
-              </button>
-            ) : msg.status === 'read' ? (
-              <CheckCheck className="h-3 w-3 text-emerald-700 font-bold opacity-80" />
-            ) : (
-              <Check className="h-3 w-3 text-zinc-700 opacity-80" />
-            )}
-          </div>
-        )}
+                {dateTime}
+              </span>
+              {simLabel && (
+                <span
+                  className="inline-flex items-center px-1 py-px rounded text-[7px] font-mono font-bold tracking-wider"
+                  style={{
+                    backgroundColor: 'rgba(0,0,0,0.15)',
+                    color: bubbleTextColor(bubbleColor),
+                    opacity: 0.7,
+                  }}
+                >
+                  {simLabel}
+                </span>
+              )}
+              {msg.status === 'sending' ? (
+                <div className="relative h-3 w-3" aria-label="Sending">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="absolute inset-0 animate-spin"
+                      style={{
+                        animationDuration: '1.1s',
+                        animationDelay: `-${((i * 1.1) / 3).toFixed(2)}s`,
+                      }}
+                    >
+                      <span
+                        className="absolute left-1/2 top-0 w-[3px] h-[3px] -translate-x-1/2 rounded-full"
+                        style={{ backgroundColor: bubbleTextColor(bubbleColor) }}
+                      />
+                    </span>
+                  ))}
+                </div>
+              ) : msg.status === 'failed' ? (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRetry(msg);
+                  }}
+                  className="text-[10px] font-bold text-red-700 underline-offset-2 hover:underline"
+                >
+                  Retry
+                </button>
+              ) : msg.status === 'read' ? (
+                <CheckCheck className="h-3 w-3 text-emerald-700 font-bold opacity-80" />
+              ) : (
+                <Check className="h-3 w-3 text-zinc-700 opacity-80" />
+              )}
+            </>
+          ) : (
+            <>
+              {simLabel && (
+                <span
+                  className="inline-flex items-center px-1 py-px rounded text-[7px] font-mono font-bold tracking-wider"
+                  style={{
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    color: '#a1a1aa',
+                    opacity: 0.7,
+                  }}
+                >
+                  {simLabel}
+                </span>
+              )}
+              <span className="text-[9px] font-mono text-zinc-500 whitespace-nowrap">
+                {dateTime}
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </motion.div>
   );
