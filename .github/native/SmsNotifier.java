@@ -18,7 +18,7 @@ import androidx.core.app.RemoteInput;
 public class SmsNotifier {
 
     private static final String TAG = "NeuraSmsNotifier";
-    private static final String CHANNEL_ID = "neura_sms_incoming";
+    private static final String CHANNEL_ID = "neura_sms_incoming_v3";
     private static final String CHANNEL_NAME = "Incoming SMS";
     private static final String KEY_REPLY_TEXT = "neura_reply_text";
     private static final int NOTIFICATION_ID = 8001;
@@ -123,6 +123,22 @@ public class SmsNotifier {
             NotificationManager.IMPORTANCE_HIGH
         );
         channel.setDescription("Incoming SMS notifications");
+        channel.enableVibration(true);
+        channel.enableLights(true);
+        channel.setShowBadge(true);
+        channel.setVibrationPattern(new long[]{0, 250, 200, 250});
+        try {
+            android.net.Uri soundUri = SoundPreferenceStore.effectiveUri(context, "sms");
+            if (soundUri != null) {
+                channel.setSound(
+                    soundUri,
+                    new android.media.AudioAttributes.Builder()
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION)
+                        .build()
+                );
+            }
+        } catch (Exception ignore) {}
         nm.createNotificationChannel(channel);
     }
 

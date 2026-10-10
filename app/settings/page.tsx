@@ -18,7 +18,8 @@ import {
   Ban,
   Sparkles,
   Trash2,
-  Palette
+  Palette,
+  Music
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -28,6 +29,10 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
+import {
+  pickSoundNative, getSoundNative, clearSoundNative,
+  isSoundPluginAvailable, SoundInfo, SoundType,
+} from '@/lib/sound-plugin';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
@@ -73,6 +78,9 @@ export default function SettingsPage() {
   // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
+  const [smsSound, setSmsSound] = useState<SoundInfo>({ type: 'sms', name: 'Default', custom: false });
+  const [callSound, setCallSound] = useState<SoundInfo>({ type: 'call', name: 'Default', custom: false });
+  const [soundBusy, setSoundBusy] = useState<SoundType | null>(null);
 
 
 
@@ -120,6 +128,18 @@ export default function SettingsPage() {
       setEditAvatar(stored.avatar || '');
       setAppearance(stored.theme || 'system');
       setBubbleColor(getBubbleColorHex(stored.bubbleColor));
+      if (isSoundPluginAvailable()) {
+        try {
+          const [sSms, sCall] = await Promise.all([
+            getSoundNative('sms'),
+            getSoundNative('call'),
+          ]);
+          setSmsSound(sSms);
+          setCallSound(sCall);
+        } catch (e) {
+          console.error('sound load failed', e);
+        }
+      }
     }
     const handle = setTimeout(() => {
       loadProfile();
@@ -340,6 +360,122 @@ export default function SettingsPage() {
               >
                 Preview message
               </div>
+            </div>
+          </div>
+
+          {/* Sounds */}
+          <div className="flex flex-col p-3 px-4 transition-colors rounded-xl space-y-3">
+            <div className="flex items-center gap-3">
+              <Music className="h-4 w-4 text-amber-400" />
+              <span className="text-xs font-medium text-zinc-200">Sounds</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-snug -mt-1">
+              Customize notification sound and call ringtone. System picker
+              opens — pick a default or your own file.
+            </p>
+
+            {/* SMS notification */}
+            <div className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3">
+              <div className="w-9 h-9 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0">
+                <MessageSquare className="h-4 w-4 text-[#cbfe00]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-zinc-200">SMS Notification</p>
+                <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                  {smsSound.name}
+                  {smsSound.custom ? ' · custom' : ''}
+                </p>
+              </div>
+              <button
+                disabled={soundBusy !== null}
+                onClick={async () => {
+                  triggerVibration();
+                  if (!isSoundPluginAvailable()) {
+                    alert('Sound picker not available');
+                    return;
+                  }
+                  setSoundBusy('sms');
+                  try {
+                    const r = await pickSoundNative('sms');
+                    if (r) setSmsSound(r);
+                  } finally {
+                    setSoundBusy(null);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#cbfe00] text-black text-[10px] font-bold uppercase tracking-wider active:scale-95 disabled:opacity-50 shrink-0"
+              >
+                {soundBusy === 'sms' ? '…' : 'Change'}
+              </button>
+              {smsSound.custom && (
+                <button
+                  onClick={async () => {
+                    triggerVibration();
+                    setSoundBusy('sms');
+                    try {
+                      const r = await clearSoundNative('sms');
+                      setSmsSound(r);
+                    } finally {
+                      setSoundBusy(null);
+                    }
+                  }}
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all"
+                  title="Reset to default"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Call ringtone */}
+            <div className="flex items-center gap-3 bg-zinc-900/50 border border-zinc-800 rounded-2xl p-3">
+              <div className="w-9 h-9 rounded-xl bg-zinc-900 flex items-center justify-center shrink-0">
+                <Phone className="h-4 w-4 text-[#10b981]" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-zinc-200">Call Ringtone</p>
+                <p className="text-[10px] text-zinc-500 truncate mt-0.5">
+                  {callSound.name}
+                  {callSound.custom ? ' · custom' : ''}
+                </p>
+              </div>
+              <button
+                disabled={soundBusy !== null}
+                onClick={async () => {
+                  triggerVibration();
+                  if (!isSoundPluginAvailable()) {
+                    alert('Sound picker not available');
+                    return;
+                  }
+                  setSoundBusy('call');
+                  try {
+                    const r = await pickSoundNative('call');
+                    if (r) setCallSound(r);
+                  } finally {
+                    setSoundBusy(null);
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-[#10b981] text-black text-[10px] font-bold uppercase tracking-wider active:scale-95 disabled:opacity-50 shrink-0"
+              >
+                {soundBusy === 'call' ? '…' : 'Change'}
+              </button>
+              {callSound.custom && (
+                <button
+                  onClick={async () => {
+                    triggerVibration();
+                    setSoundBusy('call');
+                    try {
+                      const r = await clearSoundNative('call');
+                      setCallSound(r);
+                    } finally {
+                      setSoundBusy(null);
+                    }
+                  }}
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-white active:scale-90 transition-all"
+                  title="Reset to default"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
 

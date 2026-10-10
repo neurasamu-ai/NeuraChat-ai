@@ -221,7 +221,7 @@ public class CallNotifier {
     // off, Android launches CallActivity directly via the full-screen
     // intent, so the user sees the call screen immediately.
 
-    private static final String INCOMING_CHANNEL_ID = "neura_call_incoming_v1";
+    private static final String INCOMING_CHANNEL_ID = "neura_call_incoming_v3";
     private static final String INCOMING_CHANNEL_NAME = "Incoming Calls";
     private static final int INCOMING_NOTIFICATION_ID = 9100;
 
@@ -323,13 +323,16 @@ public class CallNotifier {
         channel.enableVibration(true);
         channel.setShowBadge(false);
         try {
-            channel.setSound(
-                android.media.RingtoneManager.getDefaultUri(android.media.RingtoneManager.TYPE_RINGTONE),
-                new android.media.AudioAttributes.Builder()
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                    .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
-                    .build()
-            );
+            android.net.Uri soundUri = SoundPreferenceStore.effectiveUri(context, "call");
+            if (soundUri != null) {
+                channel.setSound(
+                    soundUri,
+                    new android.media.AudioAttributes.Builder()
+                        .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .setUsage(android.media.AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                        .build()
+                );
+            }
         } catch (Exception ignore) {}
         nm.createNotificationChannel(channel);
     }

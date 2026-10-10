@@ -55,6 +55,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SmsPlugin.class);
         registerPlugin(TelecomPlugin.class);
         registerPlugin(SettingsPlugin.class);
+        registerPlugin(SoundPlugin.class);
         registerPlugin(NeuraContactsPlugin.class);
         registerPlugin(AiWebViewPlugin.class);
 
