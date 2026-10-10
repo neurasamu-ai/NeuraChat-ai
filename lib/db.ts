@@ -1,5 +1,13 @@
 import { openDB, IDBPDatabase } from 'idb';
 
+export interface ChatBackground {
+  image: string;     // base64 (no data-url prefix)
+  opacity: number;   // 0-100
+  zoom: number;      // 1-3
+  panX: number;      // -100..100 (percentage offset)
+  panY: number;      // -100..100
+}
+
 export interface Chat {
   id: string;
   name: string;
@@ -9,6 +17,7 @@ export interface Chat {
   timestamp: number;
   unread: number;
   archived: boolean;
+  background?: ChatBackground;
 }
 
 export interface Message {

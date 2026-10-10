@@ -34,10 +34,12 @@ import {
   Message,
   Chat,
   Contact,
-  UserProfile
+  UserProfile,
+  ChatBackground
 } from '@/lib/db';
 import Header from '@/components/Header';
 import MessageBubble from '@/components/MessageBubble';
+import ChatBackgroundModal from '@/components/ChatBackgroundModal';
 import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/lib/chats-store';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -90,6 +92,36 @@ function ChatDetailContent() {
   
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isBgModalOpen, setIsBgModalOpen] = useState(false);
+  const [chatBg, setChatBg] = useState<ChatBackground | null>(null);
+
+  // Load the per-chat background image when the chat changes.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getChats } = await import('@/lib/db');
+        const chats = await getChats();
+        const c = chats.find((x) => x.id === chatId);
+        setChatBg(c?.background || null);
+      } catch (e) {
+        console.error('load chatBg failed', e);
+      }
+    })();
+  }, [chatId]);
+
+  const saveChatBackground = async (bg: ChatBackground | null) => {
+    try {
+      const { getChats, saveChat } = await import('@/lib/db');
+      const chats = await getChats();
+      const c = chats.find((x) => x.id === chatId);
+      if (!c) return;
+      const updated: Chat = { ...c, background: bg || undefined };
+      await saveChat(updated);
+      setChatBg(bg);
+    } catch (e) {
+      console.error('saveChatBackground failed', e);
+    }
+  };
 
   // Selected Message Context Dialog (Copy/Delete)
   const [activeMessage, setActiveMessage] = useState<Message | null>(null);
@@ -687,6 +719,7 @@ function ChatDetailContent() {
   }, []);
 
   useBackHandler(isMenuOpen, () => setIsMenuOpen(false));
+  useBackHandler(isBgModalOpen, () => setIsBgModalOpen(false));
   useBackHandler(isShareOpen, () => setIsShareOpen(false));
   useBackHandler(isForwarding, () => {
     setIsForwarding(false);
@@ -789,6 +822,15 @@ function ChatDetailContent() {
                       >
                         Share Profile
                       </button>
+                      <button
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          setIsBgModalOpen(true);
+                        }}
+                        className="w-full text-left font-sans text-xs py-2 px-3 hover:bg-zinc-850 rounded-lg text-zinc-200 transition-colors cursor-pointer"
+                      >
+                        Chat Background
+                      </button>
                       <div className="h-[1px] bg-zinc-805 my-1" />
                       <button
                         onClick={handleClearChat}
@@ -806,7 +848,19 @@ function ChatDetailContent() {
       />
 
       {/* Messages Scroll Area */}
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
+      <div className="relative flex-1 min-h-0 flex flex-col">
+        {/* Per-chat custom background (behind the messages) */}
+        {chatBg?.image && (
+          <div
+            className="absolute inset-0 pointer-events-none bg-cover bg-center"
+            style={{
+              backgroundImage: `url(data:image/jpeg;base64,${chatBg.image})`,
+              opacity: (chatBg.opacity ?? 40) / 100,
+              transform: `scale(${chatBg.zoom ?? 1}) translate(${chatBg.panX ?? 0}%, ${chatBg.panY ?? 0}%)`,
+            }}
+          />
+        )}
+      <div ref={messagesContainerRef} className="relative flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
         {messages.length === 0 ? (
           /* Empty State emoji hello with name */
           <div className="flex flex-col items-center justify-center h-full text-center py-20 select-none" id="messages-empty-state">
@@ -838,6 +892,7 @@ function ChatDetailContent() {
           ))
         )}
         <div ref={scrollRef} className="h-2" />
+      </div>
       </div>
 
       {/* Selected Image Preview Bar above input */}
@@ -1299,6 +1354,16 @@ function ChatDetailContent() {
           </div>
         )}
       </AnimatePresence>
+
+      <ChatBackgroundModal
+        open={isBgModalOpen}
+        current={chatBg || undefined}
+        onCancel={() => setIsBgModalOpen(false)}
+        onSave={(bg) => {
+          saveChatBackground(bg);
+          setIsBgModalOpen(false);
+        }}
+      />
     </div>
   );
 }
