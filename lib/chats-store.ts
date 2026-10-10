@@ -70,8 +70,12 @@ export async function upsertChat(chat: Chat): Promise<void> {
   }
   next.sort((a, b) => b.timestamp - a.timestamp);
   setState({ chats: next, loadedOnce: true });
+  // Persist the *merged* row so partial updates (e.g. an incoming SMS
+  // that only knows lastMessage / unread) do not wipe fields the caller
+  // did not include — like a per-chat background image.
+  const merged = next.find((c) => c.id === chat.id) || chat;
   try {
-    await saveChat(chat);
+    await saveChat(merged);
   } catch (e) {
     console.error('[chats-store] persist failed', e);
   }

@@ -59,6 +59,7 @@ function ChatDetailContent() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [resolvedContact, setResolvedContact] = useState<{ name: string; avatar?: string } | null>(null);
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
 
   // Load the owner's profile once, so outgoing bubbles can show their
@@ -149,6 +150,40 @@ function ChatDetailContent() {
     }
     return sub.label || 'SIM';
   };
+
+  // Resolve the contact for this chat: prefer the URL params, then the
+  // stored Chat row, then a contacts lookup by phone.
+  useEffect(() => {
+    (async () => {
+      try {
+        const { getChats, getContacts: fetchContacts } = await import('@/lib/db');
+        const chats = await getChats();
+        const row = chats.find((x) => x.id === chatId);
+
+        // Try contact lookup by phone too — the chat row avatar may be
+        // empty even when the contact has one, e.g. after a fresh SMS
+        // created the chat without consulting the contacts table.
+        let contactMatch: { name: string; avatar?: string } | null = null;
+        try {
+          const list = await fetchContacts();
+          const target = normalizePhone(row?.phone || phone);
+          if (target) {
+            const c = list.find((x) => normalizePhone(x.phone || '') === target);
+            if (c) contactMatch = { name: c.name, avatar: c.avatar };
+          }
+        } catch {}
+
+        const finalName =
+          contactMatch?.name || row?.name || row?.phone || phone || 'Unknown';
+        const finalAvatar =
+          contactMatch?.avatar || row?.avatar || undefined;
+
+        setResolvedContact({ name: finalName, avatar: finalAvatar });
+      } catch (e) {
+        console.error('resolvedContact load failed', e);
+      }
+    })();
+  }, [chatId, phone]);
 
   // Load the per-chat background image when the chat changes.
   useEffect(() => {
@@ -951,8 +986,8 @@ function ChatDetailContent() {
               key={msg.id}
               msg={msg}
               isSelected={selectedMsgIds.includes(msg.id)}
-              contactName={name || phone}
-              contactAvatar={avatar || undefined}
+              contactName={name || phone || resolvedContact?.name || 'Unknown'}
+              contactAvatar={avatar || resolvedContact?.avatar || undefined}
               userName={msg.sender === 'user' ? senderNameFor(msg.subscriptionId) : (userProfile?.name || 'You')}
               userAvatar={userProfile?.avatar || undefined}
               bubbleColor={bubbleColor}
