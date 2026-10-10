@@ -201,12 +201,15 @@ function ChatDetailContent() {
 
   const saveChatBackground = async (bg: ChatBackground | null) => {
     try {
-      const { getChats, saveChat } = await import('@/lib/db');
+      const { getChats } = await import('@/lib/db');
       const chats = await getChats();
       const c = chats.find((x) => x.id === chatId);
       if (!c) return;
       const updated: Chat = { ...c, background: bg || undefined };
-      await saveChat(updated);
+      // Use upsertChat so the in-memory store also reflects this change.
+      // Otherwise a later partial update (e.g. from SmsInboxBridge) merges
+      // against a snapshot that still has background=undefined and wipes it.
+      await upsertChat(updated);
       setChatBg(bg);
     } catch (e) {
       console.error('saveChatBackground failed', e);
@@ -1012,7 +1015,7 @@ function ChatDetailContent() {
       {/* Bottom Message Composer Input form is fixed position and non-scrollable */}
       <form
         onSubmit={handleSendMessage}
-        className="p-2 px-3 bg-zinc-950 border-t border-zinc-900 flex items-center gap-2 z-30 select-none pb-4"
+        className="relative z-30 mx-3 mb-3 mt-1 flex items-end gap-2 select-none rounded-3xl bg-zinc-950/70 backdrop-blur-xl border border-zinc-800/60 shadow-[0_8px_30px_rgba(0,0,0,0.5)] px-2.5 py-2"
         id="messages-composer-form"
       >
         {/* Hidden Picker Input */}
@@ -1021,19 +1024,19 @@ function ChatDetailContent() {
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder="Encrypt and send pulse..."
-            rows={3}
-            className="w-full bg-zinc-900 border border-zinc-850 rounded-2xl py-2.5 px-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors resize-none max-h-40 leading-snug"
-            style={{ minHeight: '68px' }}
+            rows={1}
+            className="w-full bg-transparent py-2 px-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors resize-none max-h-32 leading-snug"
+            style={{ minHeight: '36px' }}
           />
         </div>
 
         {/* Send button is gray by default, turns yellow when there is text or media */}
         <button
           type="submit"
-          className={`p-2.5 rounded-xl transition-all duration-200 cursor-pointer ${
+          className={`p-2.5 rounded-2xl transition-all duration-200 cursor-pointer shrink-0 ${
             hasTextOrMedia
-              ? 'bg-yellow-400 text-zinc-950 font-bold shadow-[0_0_12px_rgba(234,179,8,0.4)] active:scale-95'
-              : 'bg-zinc-800 text-zinc-500'
+              ? 'bg-[#cbfe00] text-zinc-950 font-bold shadow-[0_0_12px_rgba(203,254,0,0.45)] active:scale-95'
+              : 'bg-zinc-800/60 text-zinc-500'
           }`}
           disabled={!hasTextOrMedia}
           id="message-send-btn"
