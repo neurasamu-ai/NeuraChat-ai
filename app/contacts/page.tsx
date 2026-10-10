@@ -33,6 +33,7 @@ import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
 import CallSimPicker from '@/components/CallSimPicker';
+import ImageCropModal from '@/components/ImageCropModal';
 import { useSimCall } from '@/hooks/use-sim-call';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
