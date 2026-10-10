@@ -30,9 +30,11 @@ import {
   saveMessage,
   deleteMessage,
   getContacts,
+  getUserProfile,
   Message,
   Chat,
-  Contact
+  Contact,
+  UserProfile
 } from '@/lib/db';
 import Header from '@/components/Header';
 import MessageBubble from '@/components/MessageBubble';
@@ -53,6 +55,20 @@ function ChatDetailContent() {
   const chatId = chatIdFromPhone(phone);
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  // Load the owner's profile once, so outgoing bubbles can show their
+  // own avatar / name on the right side.
+  useEffect(() => {
+    (async () => {
+      try {
+        const p = await getUserProfile();
+        setUserProfile(p);
+      } catch (e) {
+        console.error('load userProfile failed', e);
+      }
+    })();
+  }, []);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
@@ -795,6 +811,10 @@ function ChatDetailContent() {
               key={msg.id}
               msg={msg}
               isSelected={selectedMsgIds.includes(msg.id)}
+              contactName={name || phone}
+              contactAvatar={avatar || undefined}
+              userName={userProfile?.name || 'You'}
+              userAvatar={userProfile?.avatar || undefined}
               onRetry={handleRetryMessage}
               onPressStart={handleMessagePressStart}
               onPressEnd={handleMessagePressEnd}
@@ -818,20 +838,10 @@ function ChatDetailContent() {
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            onKeyDown={(e) => {
-              // Enter (without Shift) sends the message. Shift+Enter inserts
-              // a newline. This matches standard chat keyboard behavior.
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (inputText.trim()) {
-                  handleSendMessage();
-                }
-              }
-            }}
             placeholder="Encrypt and send pulse..."
-            rows={1}
-            className="w-full bg-zinc-900 border border-zinc-850 rounded-xl py-2 px-3 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors resize-none max-h-24"
-            style={{ minHeight: '36px' }}
+            rows={3}
+            className="w-full bg-zinc-900 border border-zinc-850 rounded-2xl py-2.5 px-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-[#cbfe00] transition-colors resize-none max-h-40 leading-snug"
+            style={{ minHeight: '68px' }}
           />
         </div>
 
