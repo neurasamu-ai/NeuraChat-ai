@@ -55,6 +55,7 @@ export default function ChatsPage() {
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
+  const longPressFiredRef = useRef(false);
 
   // New Chat Dialog States
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -112,11 +113,13 @@ export default function ChatsPage() {
   // Start Selection Long Press Handlers
   const handlePressStart = (chatId: string) => {
     if (isSelectionMode) return;
+    longPressFiredRef.current = false;
     pressTimer.current = setTimeout(() => {
+      longPressFiredRef.current = true;
       triggerVibration();
       setIsSelectionMode(true);
       setSelectedChatIds([chatId]);
-    }, 600); // 600ms long press
+    }, 800); // 800ms long press (Android default; fast taps never trigger it)
   };
 
   const handlePressEnd = () => {
@@ -127,6 +130,13 @@ export default function ChatsPage() {
   };
 
   const handleChatTap = (chat: Chat) => {
+    // If the long-press just fired, swallow the click that follows so the
+    // tap does not also navigate / toggle. Ref is synchronous so it is
+    // always fresh (unlike state, which lags by a render).
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false;
+      return;
+    }
     if (isSelectionMode) {
       triggerVibration();
       if (selectedChatIds.includes(chat.id)) {
