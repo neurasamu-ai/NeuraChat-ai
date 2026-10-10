@@ -971,7 +971,7 @@ function ChatDetailContent() {
             }}
           />
         )}
-      <div ref={messagesContainerRef} className="relative flex-1 overflow-y-auto px-4 py-3 space-y-4 no-scrollbar" id="messages-scroller">
+      <div ref={messagesContainerRef} className="relative flex-1 overflow-y-auto px-4 pt-6 pb-1 space-y-4 no-scrollbar" id="messages-scroller">
         {messages.length === 0 ? (
           /* Empty State emoji hello with name */
           <div className="flex flex-col items-center justify-center h-full text-center py-20 select-none" id="messages-empty-state">
@@ -1015,7 +1015,7 @@ function ChatDetailContent() {
       {/* Bottom Message Composer Input form is fixed position and non-scrollable */}
       <form
         onSubmit={handleSendMessage}
-        className="relative z-30 mx-3 mb-3 mt-1 flex items-end gap-2 select-none rounded-3xl bg-zinc-950/70 backdrop-blur-xl border border-zinc-800/60 shadow-[0_8px_30px_rgba(0,0,0,0.5)] px-2.5 py-2"
+        className="relative z-30 mx-3 mb-1 mt-1 flex items-end gap-2 select-none rounded-3xl bg-zinc-950/70 backdrop-blur-xl border border-zinc-800/60 shadow-[0_8px_30px_rgba(0,0,0,0.5)] px-2.5 py-2"
         id="messages-composer-form"
       >
         {/* Hidden Picker Input */}
@@ -1023,7 +1023,7 @@ function ChatDetailContent() {
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Encrypt and send pulse..."
+            placeholder="Send chat..."
             rows={1}
             className="w-full bg-transparent py-2 px-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors resize-none max-h-32 leading-snug"
             style={{ minHeight: '36px' }}
