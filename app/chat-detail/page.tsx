@@ -43,7 +43,7 @@ import ChatBackgroundModal from '@/components/ChatBackgroundModal';
 import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/lib/chats-store';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
-import { chatIdFromPhone } from '@/lib/phone';
+import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
 import { DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
@@ -94,16 +94,20 @@ function ChatDetailContent() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
   const [chatBg, setChatBg] = useState<ChatBackground | null>(null);
-  const [subsMap, setSubsMap] = useState<Record<number, string>>({});
+  const [subsMap, setSubsMap] = useState<Record<number, { label: string; number: string }>>({});
+  const [contactsByPhone, setContactsByPhone] = useState<Record<string, { name: string; avatar?: string }>>({});
 
-  // Fetch the SIM subscriptions once so we can map subscriptionId -> "SIM 1" etc.
+  // Fetch the SIM subscriptions once so we can map subscriptionId -> label + number.
   useEffect(() => {
     (async () => {
       try {
         const subs = await getActiveSubscriptions();
-        const map: Record<number, string> = {};
+        const map: Record<number, { label: string; number: string }> = {};
         for (const s of subs) {
-          map[s.subscriptionId] = s.label || `SIM ${(s.slotIndex ?? 0) + 1}`;
+          map[s.subscriptionId] = {
+            label: s.label || `SIM ${(s.slotIndex ?? 0) + 1}`,
+            number: (s as any).number || '',
+          };
         }
         setSubsMap(map);
       } catch (e) {
@@ -111,6 +115,40 @@ function ChatDetailContent() {
       }
     })();
   }, []);
+
+  // Index contacts by normalized phone so we can resolve a SIM number to a
+  // saved contact name (used on the outgoing bubble header).
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await getContacts();
+        const m: Record<string, { name: string; avatar?: string }> = {};
+        for (const c of list) {
+          const clean = normalizePhone(c.phone || '');
+          if (clean) m[clean] = { name: c.name, avatar: c.avatar };
+        }
+        setContactsByPhone(m);
+      } catch (e) {
+        console.error('load contactsByPhone failed', e);
+      }
+    })();
+  }, []);
+
+  // Returns the display name for an outgoing bubble based on the SIM that
+  // sent it: contact name if the SIM number is saved, else the raw number,
+  // else the SIM label, else fallback to the owner profile name.
+  const senderNameFor = (subId?: number): string => {
+    if (subId == null) return userProfile?.name || 'You';
+    const sub = subsMap[subId];
+    if (!sub) return userProfile?.name || 'You';
+    if (sub.number) {
+      const clean = normalizePhone(sub.number);
+      const match = contactsByPhone[clean];
+      if (match?.name) return match.name;
+      return sub.number;
+    }
+    return sub.label || 'SIM';
+  };
 
   // Load the per-chat background image when the chat changes.
   useEffect(() => {
@@ -915,10 +953,14 @@ function ChatDetailContent() {
               isSelected={selectedMsgIds.includes(msg.id)}
               contactName={name || phone}
               contactAvatar={avatar || undefined}
-              userName={userProfile?.name || 'You'}
+              userName={msg.sender === 'user' ? senderNameFor(msg.subscriptionId) : (userProfile?.name || 'You')}
               userAvatar={userProfile?.avatar || undefined}
               bubbleColor={bubbleColor}
-              simLabel={msg.subscriptionId != null ? subsMap[msg.subscriptionId] : undefined}
+              simLabel={
+                msg.subscriptionId != null
+                  ? subsMap[msg.subscriptionId]?.label
+                  : undefined
+              }
               onRetry={handleRetryMessage}
               onPressStart={handleMessagePressStart}
               onPressEnd={handleMessagePressEnd}
