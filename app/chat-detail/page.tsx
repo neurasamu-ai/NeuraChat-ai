@@ -42,6 +42,7 @@ import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/li
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone } from '@/lib/phone';
+import { DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { getActiveSubscriptions, sendSmsTracked, isSmsPluginAvailable, getPreferredSimId, setPreferredSimId, Subscription } from '@/lib/sms-plugin';
 
@@ -56,6 +57,7 @@ function ChatDetailContent() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
 
   // Load the owner's profile once, so outgoing bubbles can show their
   // own avatar / name on the right side.
@@ -64,10 +66,21 @@ function ChatDetailContent() {
       try {
         const p = await getUserProfile();
         setUserProfile(p);
+        setBubbleColor(getBubbleColorHex(p.bubbleColor));
       } catch (e) {
         console.error('load userProfile failed', e);
       }
     })();
+  }, []);
+
+  // React live to Settings changes to bubble color without a reload.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { color?: string } | undefined;
+      if (detail?.color) setBubbleColor(detail.color);
+    };
+    window.addEventListener('neurachat-bubble-color-change', handler);
+    return () => window.removeEventListener('neurachat-bubble-color-change', handler);
   }, []);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -815,6 +828,7 @@ function ChatDetailContent() {
               contactAvatar={avatar || undefined}
               userName={userProfile?.name || 'You'}
               userAvatar={userProfile?.avatar || undefined}
+              bubbleColor={bubbleColor}
               onRetry={handleRetryMessage}
               onPressStart={handleMessagePressStart}
               onPressEnd={handleMessagePressEnd}

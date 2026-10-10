@@ -4,6 +4,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { Check, CheckCheck } from 'lucide-react';
 import { Message } from '@/lib/db';
+import { bubbleTextColor } from '@/lib/bubble-colors';
 
 interface MessageBubbleProps {
   msg: Message;
@@ -12,6 +13,7 @@ interface MessageBubbleProps {
   contactAvatar?: string;
   userName: string;
   userAvatar?: string;
+  bubbleColor: string;
   onRetry: (msg: Message) => void;
   onPressStart: (msg: Message, x?: number, y?: number) => void;
   onPressEnd: () => void;
@@ -77,6 +79,7 @@ function MessageBubbleInner({
   contactAvatar,
   userName,
   userAvatar,
+  bubbleColor,
   onRetry,
   onPressStart,
   onPressEnd,
@@ -111,9 +114,14 @@ function MessageBubbleInner({
       <div
         className={`p-2 px-2.5 rounded-2xl relative transition-all duration-200 flex flex-col ${
           isUser
-            ? 'max-w-[80%] bg-[#cbfe00] text-zinc-950 rounded-tr-sm'
+            ? 'max-w-[80%] rounded-tr-sm'
             : 'max-w-[82%] bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-sm'
         } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
+        style={
+          isUser
+            ? { backgroundColor: bubbleColor, color: bubbleTextColor(bubbleColor) }
+            : undefined
+        }
       >
         {/* Header INSIDE bubble: avatar + name + date/time */}
         <div className="flex items-center gap-1.5 mb-1">
@@ -121,12 +129,15 @@ function MessageBubbleInner({
             <>
               <span
                 className="text-[9px] font-mono whitespace-nowrap"
-                style={{ color: 'rgba(24,24,27,0.55)' }}
+                style={{ color: isUser ? bubbleTextColor(bubbleColor) + 'aa' : undefined }}
               >
                 {dateTime}
               </span>
               <div className="flex-1" />
-              <span className="text-[10px] font-semibold text-zinc-800 truncate max-w-[120px]">
+              <span
+                className="text-[10px] font-semibold truncate max-w-[120px]"
+                style={{ color: isUser ? bubbleTextColor(bubbleColor) : undefined }}
+              >
                 {headerName}
               </span>
               <Avatar src={headerAvatar} name={headerName} size={20} />
@@ -177,7 +188,10 @@ function MessageBubbleInner({
                       animationDelay: `-${((i * 1.1) / 3).toFixed(2)}s`,
                     }}
                   >
-                    <span className="absolute left-1/2 top-0 w-[3px] h-[3px] -translate-x-1/2 rounded-full bg-zinc-800" />
+                    <span
+                      className="absolute left-1/2 top-0 w-[3px] h-[3px] -translate-x-1/2 rounded-full"
+                      style={{ backgroundColor: bubbleTextColor(bubbleColor) }}
+                    />
                   </span>
                 ))}
               </div>
@@ -209,6 +223,7 @@ const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (prev.contactAvatar !== next.contactAvatar) return false;
   if (prev.userName !== next.userName) return false;
   if (prev.userAvatar !== next.userAvatar) return false;
+  if (prev.bubbleColor !== next.bubbleColor) return false;
   const a = prev.msg;
   const b = next.msg;
   if (a.id !== b.id) return false;

@@ -57,6 +57,7 @@ export interface UserProfile {
   bio?: string;
   username?: string;
   theme?: 'dark' | 'light' | 'system';
+  bubbleColor?: string; // hex, e.g. "#cbfe00"; default handled in UI
 }
 
 const DB_NAME = 'neurachat_db';

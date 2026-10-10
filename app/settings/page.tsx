@@ -17,7 +17,8 @@ import {
   Shield as ShieldIcon,
   Ban,
   Sparkles,
-  Trash2
+  Trash2,
+  Palette
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -27,6 +28,7 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
+import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import AiProvidersModal from '@/components/AiProvidersModal';
@@ -70,6 +72,7 @@ export default function SettingsPage() {
 
   // Appearance
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
+  const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
 
 
 
@@ -116,6 +119,7 @@ export default function SettingsPage() {
       setEditUsername(stored.username || '');
       setEditAvatar(stored.avatar || '');
       setAppearance(stored.theme || 'system');
+      setBubbleColor(getBubbleColorHex(stored.bubbleColor));
     }
     const handle = setTimeout(() => {
       loadProfile();
@@ -274,6 +278,70 @@ export default function SettingsPage() {
             </div>
           </div>
 
+
+          {/* Bubble Color */}
+          <div className="flex flex-col p-3 px-4 transition-colors rounded-xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Palette className="h-4 w-4 text-pink-400" />
+                <span className="text-xs font-medium text-zinc-200">Bubble Color</span>
+              </div>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Color of your outgoing SMS bubbles across all chats.
+            </p>
+
+            <div className="grid grid-cols-4 gap-2 mt-1">
+              {BUBBLE_COLORS.map((c) => {
+                const isSelected = bubbleColor.toLowerCase() === c.hex.toLowerCase();
+                return (
+                  <button
+                    key={c.id}
+                    onClick={async () => {
+                      triggerVibration();
+                      setBubbleColor(c.hex);
+                      const updated = { ...profile, bubbleColor: c.hex };
+                      setProfile(updated);
+                      await saveUserProfile(updated);
+                      window.dispatchEvent(new CustomEvent('neurachat-bubble-color-change', { detail: { color: c.hex } }));
+                    }}
+                    className={`relative aspect-square rounded-2xl border-2 transition-all active:scale-90 flex items-center justify-center ${
+                      isSelected ? 'border-white shadow-lg' : 'border-transparent'
+                    }`}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                  >
+                    {isSelected && (
+                      <svg
+                        viewBox="0 0 24 24"
+                        className="w-5 h-5"
+                        fill="none"
+                        stroke={bubbleTextColor(c.hex)}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Preview */}
+            <div className="mt-2 flex justify-end">
+              <div
+                className="px-3 py-2 rounded-2xl rounded-tr-sm text-xs font-medium"
+                style={{
+                  backgroundColor: bubbleColor,
+                  color: bubbleTextColor(bubbleColor),
+                }}
+              >
+                Preview message
+              </div>
+            </div>
+          </div>
 
           {/* App Permissions */}
           <div
