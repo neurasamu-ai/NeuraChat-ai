@@ -989,7 +989,16 @@ function ChatDetailContent() {
               key={msg.id}
               msg={msg}
               isSelected={selectedMsgIds.includes(msg.id)}
-              contactName={name || phone || resolvedContact?.name || 'Unknown'}
+              contactName={(() => {
+                // If the URL name is just a phone number, prefer the
+                // resolved contact name (which came from the contacts DB).
+                const urlName = (name || '').trim();
+                const urlLooksLikeNumber = /^[+0-9][0-9\s\-()]*$/.test(urlName);
+                if (!urlName || urlLooksLikeNumber) {
+                  return resolvedContact?.name || urlName || phone || 'Unknown';
+                }
+                return urlName;
+              })()}
               contactAvatar={avatar || resolvedContact?.avatar || undefined}
               userName={msg.sender === 'user' ? senderNameFor(msg.subscriptionId) : (userProfile?.name || 'You')}
               userAvatar={userProfile?.avatar || undefined}

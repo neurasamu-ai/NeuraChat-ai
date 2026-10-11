@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { getMessages, saveMessage, Chat, Message } from '@/lib/db';
+import { getMessages, saveMessage, getContacts, Chat, Message } from '@/lib/db';
 import { upsertChat, loadChatsFromDB, getState as getChatsState } from '@/lib/chats-store';
 import { loadCallLogsFromDB } from '@/lib/call-log-store';
 import { generateId } from '@/lib/utils';
@@ -28,22 +28,46 @@ async function persistIncoming(msg: IncomingSms) {
   const isOutgoing = msg.direction === 'outgoing';
   const chatId = chatIdFor(address);
 
+  // Look up the contact once so a freshly-created chat uses the saved
+  // name (and avatar) instead of the raw phone number.
+  let contactName: string | undefined;
+  let contactAvatar: string | undefined;
+  try {
+    const list = await getContacts();
+    const target = normalizePhone(address);
+    if (target) {
+      const c = list.find((x) => normalizePhone(x.phone || '') === target);
+      if (c) {
+        contactName = c.name;
+        contactAvatar = c.avatar;
+      }
+    }
+  } catch {}
+
   // Ensure chat exists via the global chats store so every screen updates.
   try {
     const current = getChatsState().chats;
     const existing = current.find((c) => c.id === chatId);
     if (existing) {
-      await upsertChat({
+      const patch: Chat = {
         ...existing,
         lastMessage: msg.body || '',
         timestamp: msg.timestamp || Date.now(),
         unread: isOutgoing ? existing.unread || 0 : (existing.unread || 0) + 1,
-      });
+      };
+      if (contactName && (!existing.name || existing.name === existing.phone)) {
+        patch.name = contactName;
+      }
+      if (contactAvatar && !existing.avatar) {
+        patch.avatar = contactAvatar;
+      }
+      await upsertChat(patch);
     } else {
       const newChat: Chat = {
         id: chatId,
-        name: address,
+        name: contactName || address,
         phone: address,
+        avatar: contactAvatar,
         lastMessage: msg.body || '',
         timestamp: msg.timestamp || Date.now(),
         unread: isOutgoing ? 0 : 1,
