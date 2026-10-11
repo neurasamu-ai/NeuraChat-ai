@@ -11,6 +11,7 @@ import {
 import Header from '@/components/Header';
 import AiHubLogo from '@/components/AiHubLogo';
 import AiProvidersModal from '@/components/AiProvidersModal';
+import AdBanner from '@/components/AdBanner';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { PROVIDERS, getProvider } from '@/lib/ai/providers';
 import { getProviderSettings } from '@/lib/ai/keystore';
@@ -1012,6 +1013,7 @@ export default function AiChatPage() {
           reloadProviders();
         }}
       />
+      <AdBanner position="bottom" />
     </>
   );
 }

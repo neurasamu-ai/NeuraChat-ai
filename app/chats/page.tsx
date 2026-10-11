@@ -21,6 +21,7 @@ import {
   Chat,
 } from '@/lib/db';
 import Header from '@/components/Header';
+import AdBanner from '@/components/AdBanner';
 import BottomNav from '@/components/BottomNav';
 import AiHubLogo from '@/components/AiHubLogo';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
@@ -618,6 +619,7 @@ export default function ChatsPage() {
       </button>
 
       {/* Bottom Main Tab Bar */}
+      <AdBanner position="bottom" />
       <BottomNav currentTab="chats" />
     </>
   );

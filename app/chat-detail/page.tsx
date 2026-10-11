@@ -40,6 +40,7 @@ import {
 import Header from '@/components/Header';
 import MessageBubble from '@/components/MessageBubble';
 import ChatBackgroundModal from '@/components/ChatBackgroundModal';
+import AdBanner from '@/components/AdBanner';
 import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/lib/chats-store';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -1479,6 +1480,8 @@ function ChatDetailContent() {
           </div>
         )}
       </AnimatePresence>
+
+      <AdBanner position="top" />
 
       <ChatBackgroundModal
         open={isBgModalOpen}
