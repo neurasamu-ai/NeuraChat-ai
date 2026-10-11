@@ -33,7 +33,7 @@ export async function initAds(): Promise<boolean> {
 
 let bannerVisible = false;
 
-export async function showBanner(): Promise<void> {
+export async function showBanner(position: 'top' | 'bottom' = 'bottom'): Promise<void> {
   if (!isAdsAvailable()) return;
   if (!initialized) await initAds();
   if (bannerVisible) return;
@@ -41,7 +41,9 @@ export async function showBanner(): Promise<void> {
     await AdMob.showBanner({
       adId: ACTIVE_ADS.banner,
       adSize: BannerAdSize.ADAPTIVE_BANNER,
-      position: BannerAdPosition.BOTTOM_CENTER,
+      position: position === 'top'
+        ? BannerAdPosition.TOP_CENTER
+        : BannerAdPosition.BOTTOM_CENTER,
       margin: 0,
       isTesting: true,
     });
