@@ -1,7 +1,7 @@
 'use client';
 
 import { Capacitor } from '@capacitor/core';
-import { AdMob, BannerAdPosition, BannerAdSize } from '@capacitor-community/admob';
+import { AdMob, BannerAdPosition, BannerAdSize, RewardAdPluginEvents } from '@capacitor-community/admob';
 import { ACTIVE_ADS, INTERSTITIAL_MIN_GAP_MS } from './ad-config';
 
 let initialized = false;
@@ -91,10 +91,10 @@ export async function showRewarded(): Promise<boolean> {
   return new Promise<boolean>(async (resolve) => {
     try {
       let earned = false;
-      const rewardListener = await AdMob.addListener('onRewarded', () => {
+      const rewardListener = await AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
         earned = true;
       });
-      const dismissListener = await AdMob.addListener('onRewardedVideoAdDismissed', async () => {
+      const dismissListener = await AdMob.addListener(RewardAdPluginEvents.Dismissed, async () => {
         try { rewardListener.remove(); } catch {}
         try { dismissListener.remove(); } catch {}
         resolve(earned);
