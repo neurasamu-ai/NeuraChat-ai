@@ -31,6 +31,8 @@ import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
 import ImageCropModal from '@/components/ImageCropModal';
 import AdBanner from '@/components/AdBanner';
+import { showRewarded } from '@/lib/ads';
+import { useAdFree, grantAdFree, adFreeUntil, AD_FREE_HOURS_REWARDED } from '@/lib/use-ad-free';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
@@ -78,6 +80,8 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
+  const [adBusy, setAdBusy] = useState(false);
+  const adFree = useAdFree();
 
 
 
@@ -871,6 +875,45 @@ export default function SettingsPage() {
             setCropSrc(null);
           }}
         />
+
+      {/* Remove Ads */}
+      <div className="mx-4 mb-2 p-4 rounded-2xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/80 to-zinc-950/80">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <div>
+            <p className="text-sm font-bold text-white">Remove ads</p>
+            <p className="text-[10px] text-zinc-500 mt-0.5">
+              {adFree && adFreeUntil() > 0
+                ? `Ad-free until ${new Date(adFreeUntil()).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}`
+                : `Watch 1 ad for ${AD_FREE_HOURS_REWARDED}h ad-free`}
+            </p>
+          </div>
+          {adFree && adFreeUntil() > 0 && (
+            <span className="px-2 py-1 rounded-full bg-[#cbfe00]/15 text-[#cbfe00] text-[10px] font-bold uppercase tracking-wider">
+              Active
+            </span>
+          )}
+        </div>
+        <button
+          disabled={adBusy || (adFree && adFreeUntil() > 0)}
+          onClick={async () => {
+            triggerVibration();
+            setAdBusy(true);
+            try {
+              const ok = await showRewarded();
+              if (ok) {
+                grantAdFree(AD_FREE_HOURS_REWARDED);
+              } else {
+                alert('Ad was not completed. Please try again.');
+              }
+            } finally {
+              setAdBusy(false);
+            }
+          }}
+          className="w-full mt-2 py-3 rounded-xl bg-[#cbfe00] text-black text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {adBusy ? 'Loading…' : (adFree && adFreeUntil() > 0 ? 'Ad-free active' : 'Watch 1 ad → 12h ad-free')}
+        </button>
+      </div>
 
       </main>
 
