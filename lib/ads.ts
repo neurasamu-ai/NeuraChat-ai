@@ -30,24 +30,29 @@ export async function initAds(): Promise<boolean> {
 }
 
 // ---- Banner ----
-
-let bannerVisible = false;
+//
+// AdMob.showBanner is idempotent — calling it while a banner is already
+// showing just updates the position. So we do NOT gate it behind a
+// module-level "visible" flag: doing that caused a race where the new
+// screen mounted (skipped because the flag was still true) before the
+// old screen unmounted and hid the banner, leaving nothing on screen.
 
 export async function showBanner(position: 'top' | 'bottom' = 'bottom'): Promise<void> {
   if (!isAdsAvailable()) return;
   if (!initialized) await initAds();
-  if (bannerVisible) return;
   try {
     await AdMob.showBanner({
       adId: ACTIVE_ADS.banner,
-      adSize: BannerAdSize.ADAPTIVE_BANNER,
+      // Fixed BANNER size is more reliable than ADAPTIVE_BANNER across ROMs.
+      adSize: BannerAdSize.BANNER,
       position: position === 'top'
         ? BannerAdPosition.TOP_CENTER
         : BannerAdPosition.BOTTOM_CENTER,
-      margin: 0,
+      // Non-zero margin lifts the banner above the system navigation bar.
+      margin: position === 'top' ? 24 : 56,
       isTesting: true,
     });
-    bannerVisible = true;
+    console.log('[ads] banner shown, pos=' + position);
   } catch (e) {
     console.error('[ads] showBanner failed', e);
   }
@@ -55,10 +60,8 @@ export async function showBanner(position: 'top' | 'bottom' = 'bottom'): Promise
 
 export async function hideBanner(): Promise<void> {
   if (!isAdsAvailable()) return;
-  if (!bannerVisible) return;
   try {
     await AdMob.hideBanner();
-    bannerVisible = false;
   } catch (e) {
     console.error('[ads] hideBanner failed', e);
   }
