@@ -25,7 +25,7 @@ export const TEST_ADS: AdIds = {
 };
 
 // Flip to production once real IDs are ready.
-export const USE_TEST_ADS = true;
+export const USE_TEST_ADS = false;
 
 // Placeholder — replace the four strings when going live.
 export const PRODUCTION_ADS: AdIds = {
