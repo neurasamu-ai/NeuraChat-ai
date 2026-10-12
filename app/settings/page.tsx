@@ -885,7 +885,7 @@ export default function SettingsPage() {
             <p className="text-[10px] text-zinc-500 mt-0.5">
               {adFree && adFreeUntil() > 0
                 ? `Ad-free until ${new Date(adFreeUntil()).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}`
-                : `Watch 1 ad for ${AD_FREE_HOURS_REWARDED}h ad-free`}
+                : `Watch 1 ad → +${AD_FREE_HOURS_REWARDED}h ad-free (stacks)`}
             </p>
           </div>
           {adFree && adFreeUntil() > 0 && (
@@ -912,7 +912,7 @@ export default function SettingsPage() {
           }}
           className="w-full mt-2 py-3 rounded-xl bg-[#cbfe00] text-black text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          {adBusy ? 'Loading…' : (adFree && adFreeUntil() > 0 ? 'Ad-free active' : 'Watch 1 ad → 12h ad-free')}
+          {adBusy ? 'Loading…' : (adFree && adFreeUntil() > 0 ? 'Ad-free active' : `Watch 1 ad → +${AD_FREE_HOURS_REWARDED}h ad-free`)}
         </button>
       </div>
 

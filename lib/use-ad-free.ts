@@ -17,10 +17,14 @@ export function isAdFreeNow(): boolean {
   }
 }
 
+// Adds the reward window on top of any time still remaining, so a user
+// who watches two ads back to back gets 4h instead of being reset to 2h.
 export function grantAdFree(hours: number): void {
   if (typeof window === 'undefined') return;
   try {
-    const until = Date.now() + hours * 60 * 60 * 1000;
+    const current = adFreeUntil();
+    const base = current > Date.now() ? current : Date.now();
+    const until = base + hours * 60 * 60 * 1000;
     window.localStorage.setItem(AD_FREE_STORAGE_KEY, String(until));
     window.dispatchEvent(new CustomEvent('neura-ad-free-changed'));
   } catch {}

@@ -18,12 +18,14 @@ export default function AdBanner({ position = 'bottom' }: Props) {
   useEffect(() => {
     if (adFree) {
       hideBanner();
-      return;
+    } else {
+      showBanner(position);
     }
-    showBanner(position);
-    return () => {
-      hideBanner();
-    };
+    // Intentionally no cleanup: hiding on unmount caused the banner to
+    // disappear whenever the user switched between screens (mount of the
+    // new screen races the unmount of the old one). The AdMob banner is
+    // a native overlay that stays put; a new AdBanner mount with a
+    // different position just repositions it.
   }, [adFree, position]);
 
   return null;
