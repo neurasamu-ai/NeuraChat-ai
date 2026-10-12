@@ -101,14 +101,62 @@ jobs:
     - name: Sync Android
       run: npx cap sync android
 
+    - name: Decode keystore
+      run: |
+        echo "${{ secrets.KEYSTORE_BASE64 }}" | tr -d ' \n' | base64 -d > ${{ runner.temp }}/neurachat.keystore
+        ls -la ${{ runner.temp }}/neurachat.keystore
+
+    - name: Inject signing config
+      env:
+        KEYSTORE_PATH: ${{ runner.temp }}/neurachat.keystore
+        STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+      run: |
+        cat > /tmp/inject_signing.py << 'PYEOF'
+        import os, re
+        p = 'android/app/build.gradle'
+        s = open(p).read()
+        store = os.environ['KEYSTORE_PATH']
+        sp = os.environ['STORE_PASSWORD']
+        kp = os.environ['KEY_PASSWORD']
+        ka = os.environ['KEY_ALIAS']
+        signing = """
+            signingConfigs {
+                release {
+                    storeFile file('%s')
+                    storePassword '%s'
+                    keyAlias '%s'
+                    keyPassword '%s'
+                }
+            }
+        """ % (store, sp, ka, kp)
+        if 'signingConfigs' not in s:
+            s = s.replace('android {', 'android {' + signing, 1)
+        s = re.sub(
+            r'(buildTypes\s*\{[\s\S]*?release\s*\{)',
+            r'\1\n            signingConfig signingConfigs.release',
+            s, count=1
+        )
+        open(p, 'w').write(s)
+        print('Signing config injected')
+        PYEOF
+        python3 /tmp/inject_signing.py
+
     - name: Build Android App
       run: |
         cd android
         chmod +x ./gradlew
-        ./gradlew assembleDebug
+        ./gradlew assembleDebug assembleRelease
 
-    - name: Upload APK Artifact
+    - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
         name: NeuraChat-Debug-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Upload Release APK (signed)
+      uses: actions/upload-artifact@v4
+      with:
+        name: NeuraChat-Release-APK
+        path: android/app/build/outputs/apk/release/app-release.apk
