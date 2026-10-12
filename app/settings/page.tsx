@@ -918,7 +918,7 @@ export default function SettingsPage() {
 
       </main>
 
-      <AdBanner position="bottom" />
+      <AdBanner position="top" />
       <BottomNav currentTab="settings" />
     </>
   );

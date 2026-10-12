@@ -1024,7 +1024,7 @@ export default function ContactsPage() {
           <Plus className="h-4 w-4 stroke-[3]" />
         </button>
 
-      <AdBanner position="bottom" />
+      <AdBanner position="top" />
       <BottomNav currentTab="contacts" />
 
       {/* SIM picker for calls */}

@@ -38,6 +38,6 @@ export const PRODUCTION_ADS: AdIds = {
 export const ACTIVE_ADS: AdIds = USE_TEST_ADS ? TEST_ADS : PRODUCTION_ADS;
 
 // Frequency / policy knobs.
-export const INTERSTITIAL_MIN_GAP_MS = 3 * 60 * 1000;  // 3 minutes between interstitials
+export const INTERSTITIAL_MIN_GAP_MS = 60 * 1000;      // 1 minute between interstitials
 export const AD_FREE_HOURS_REWARDED = 2;               // each rewarded ad adds 2h (cumulative)
 export const AD_FREE_STORAGE_KEY = 'neura_ad_free_until';

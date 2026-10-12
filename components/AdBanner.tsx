@@ -12,7 +12,7 @@ interface Props {
 // overlays it on top of the WebView. Mount it on screens that should
 // show ads; it hides itself on unmount and whenever the user has an
 // active ad-free window.
-export default function AdBanner({ position = 'bottom' }: Props) {
+export default function AdBanner({ position = 'top' }: Props) {
   const adFree = useAdFree();
 
   useEffect(() => {

@@ -619,7 +619,7 @@ export default function ChatsPage() {
       </button>
 
       {/* Bottom Main Tab Bar */}
-      <AdBanner position="bottom" />
+      <AdBanner position="top" />
       <BottomNav currentTab="chats" />
     </>
   );

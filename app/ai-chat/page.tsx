@@ -1013,7 +1013,7 @@ export default function AiChatPage() {
           reloadProviders();
         }}
       />
-      <AdBanner position="bottom" />
+      <AdBanner position="top" />
     </>
   );
 }

@@ -37,19 +37,20 @@ export async function initAds(): Promise<boolean> {
 // screen mounted (skipped because the flag was still true) before the
 // old screen unmounted and hid the banner, leaving nothing on screen.
 
-export async function showBanner(position: 'top' | 'bottom' = 'bottom'): Promise<void> {
+export async function showBanner(position: 'top' | 'bottom' = 'top'): Promise<void> {
   if (!isAdsAvailable()) return;
   if (!initialized) await initAds();
   try {
     await AdMob.showBanner({
       adId: ACTIVE_ADS.banner,
-      // Fixed BANNER size is more reliable than ADAPTIVE_BANNER across ROMs.
-      adSize: BannerAdSize.BANNER,
+      // LARGE_BANNER = 320x100. Twice the height of the default BANNER so
+      // the impression is worth something and stays readable.
+      adSize: BannerAdSize.LARGE_BANNER,
       position: position === 'top'
         ? BannerAdPosition.TOP_CENTER
         : BannerAdPosition.BOTTOM_CENTER,
-      // Non-zero margin lifts the banner above the system navigation bar.
-      margin: position === 'top' ? 24 : 56,
+      // Top: sits just under the status bar. Bottom: above the nav bar.
+      margin: position === 'top' ? 8 : 80,
       isTesting: true,
     });
     console.log('[ads] banner shown, pos=' + position);
