@@ -1,5 +1,7 @@
 'use client';
 
+// v2 — preload pattern for interstitial + rewarded
+
 import { Capacitor } from '@capacitor/core';
 import { AdMob, BannerAdPosition, BannerAdSize, RewardAdPluginEvents } from '@capacitor-community/admob';
 import { ACTIVE_ADS, INTERSTITIAL_MIN_GAP_MS, USE_TEST_ADS } from './ad-config';
@@ -69,29 +71,100 @@ export async function hideBanner(): Promise<void> {
 }
 
 // ---- Interstitial ----
+//
+// The plugin has to prepare the ad before it can be shown. We preload at
+// app start (and again after each dismissal) so a tap on an entry point
+// can show the interstitial instantly. If nothing is ready, we skip the
+// ad entirely rather than blocking the user's navigation.
 
-export async function showInterstitial(): Promise<void> {
+let interstitialReady = false;
+let interstitialLoading = false;
+
+export async function preloadInterstitial(): Promise<void> {
   if (!isAdsAvailable()) return;
   if (!initialized) await initAds();
-  const now = Date.now();
-  if (now - lastInterstitialAt < INTERSTITIAL_MIN_GAP_MS) return;
+  if (interstitialReady || interstitialLoading) return;
+  interstitialLoading = true;
   try {
     await AdMob.prepareInterstitial({
       adId: ACTIVE_ADS.interstitial,
       isTesting: USE_TEST_ADS,
     });
+    interstitialReady = true;
+  } catch (e) {
+    console.error('[ads] interstitial preload failed', e);
+  } finally {
+    interstitialLoading = false;
+  }
+}
+
+// Returns true when an interstitial was actually shown. Callers can then
+// decide whether to wait or navigate immediately.
+export async function showInterstitial(): Promise<boolean> {
+  if (!isAdsAvailable()) return false;
+  if (!initialized) await initAds();
+  const now = Date.now();
+  if (now - lastInterstitialAt < INTERSTITIAL_MIN_GAP_MS) return false;
+  if (!interstitialReady) {
+    // Kick off a background load for next time, but let the user through.
+    preloadInterstitial();
+    return false;
+  }
+  interstitialReady = false;
+  try {
     await AdMob.showInterstitial();
     lastInterstitialAt = now;
+    // Re-arm for the next tap.
+    setTimeout(() => { preloadInterstitial(); }, 800);
+    return true;
   } catch (e) {
-    console.error('[ads] interstitial failed', e);
+    console.error('[ads] interstitial show failed', e);
+    preloadInterstitial();
+    return false;
   }
 }
 
 // ---- Rewarded (used as "watch 1 ad -> 12h ad-free") ----
 
+let rewardedReady = false;
+let rewardedLoading = false;
+
+export async function preloadRewarded(): Promise<void> {
+  if (!isAdsAvailable()) return;
+  if (!initialized) await initAds();
+  if (rewardedReady || rewardedLoading) return;
+  rewardedLoading = true;
+  try {
+    await AdMob.prepareRewardVideoAd({
+      adId: ACTIVE_ADS.rewarded,
+      isTesting: USE_TEST_ADS,
+    });
+    rewardedReady = true;
+  } catch (e) {
+    console.error('[ads] rewarded preload failed', e);
+  } finally {
+    rewardedLoading = false;
+  }
+}
+
 export async function showRewarded(): Promise<boolean> {
   if (!isAdsAvailable()) return false;
   if (!initialized) await initAds();
+  if (!rewardedReady) {
+    // Load now and show as soon as it is ready — rewarded is user-initiated
+    // so it is fine to make the user wait here.
+    try {
+      await AdMob.prepareRewardVideoAd({
+        adId: ACTIVE_ADS.rewarded,
+        isTesting: USE_TEST_ADS,
+      });
+      rewardedReady = true;
+    } catch (e) {
+      console.error('[ads] rewarded prepare failed', e);
+      return false;
+    }
+  }
+  rewardedReady = false;
   return new Promise<boolean>(async (resolve) => {
     try {
       let earned = false;
@@ -101,15 +174,13 @@ export async function showRewarded(): Promise<boolean> {
       const dismissListener = await AdMob.addListener(RewardAdPluginEvents.Dismissed, async () => {
         try { rewardListener.remove(); } catch {}
         try { dismissListener.remove(); } catch {}
+        setTimeout(() => { preloadRewarded(); }, 800);
         resolve(earned);
-      });
-      await AdMob.prepareRewardVideoAd({
-        adId: ACTIVE_ADS.rewarded,
-        isTesting: USE_TEST_ADS,
       });
       await AdMob.showRewardVideoAd();
     } catch (e) {
-      console.error('[ads] rewarded failed', e);
+      console.error('[ads] rewarded show failed', e);
+      preloadRewarded();
       resolve(false);
     }
   });
