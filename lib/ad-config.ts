@@ -44,6 +44,6 @@ export const AD_FREE_STORAGE_KEY = 'neura_ad_free_until';
 
 // Bubble colors that are free by default. All other palette entries need
 // a one-time "watch a rewarded ad" unlock, stored permanently.
-export const FREE_BUBBLE_COLOR_IDS = ['neon-yellow', 'cyber-cyan', 'emerald', 'hot-pink'];
+export const FREE_BUBBLE_COLOR_IDS = ['neon-yellow'];
 export const UNLOCKED_COLORS_KEY = 'neura_unlocked_colors';
 
