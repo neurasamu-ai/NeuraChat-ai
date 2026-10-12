@@ -22,6 +22,8 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import AdBanner from '@/components/AdBanner';
+import { showInterstitial } from '@/lib/ads';
+import { isAdFreeNow } from '@/lib/use-ad-free';
 import BottomNav from '@/components/BottomNav';
 import AiHubLogo from '@/components/AiHubLogo';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
