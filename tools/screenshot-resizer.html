@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NeuraChat Screenshot Resizer</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0a0a0a; color: #fff; min-height: 100vh;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; color: #00D4FF; }
+  .sub { font-size: 12px; color: #a1a1aa; margin-bottom: 20px; }
+  .card {
+    background: #18181b; border: 1px solid #27272a;
+    border-radius: 16px; padding: 16px; margin-bottom: 16px;
+  }
+  .drop {
+    border: 2px dashed #3f3f46; border-radius: 12px;
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    transition: all 0.2s; background: #0a0a0a;
+  }
+  .drop:hover, .drop.active { border-color: #00D4FF; background: #0a1929; }
+  .drop p { margin: 8px 0 0; color: #71717a; font-size: 13px; }
+  .drop strong { color: #fff; font-size: 15px; }
+  input[type=file] { display: none; }
+  label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a1a1aa; margin-bottom: 6px; }
+  select, input[type=number], input[type=color] {
+    background: #0a0a0a; border: 1px solid #27272a; color: #fff;
+    padding: 10px 12px; border-radius: 10px; font-size: 13px; width: 100%;
+  }
+  select:focus, input:focus { outline: none; border-color: #00D4FF; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .row.full { grid-template-columns: 1fr; }
+  .btn {
+    display: inline-block; padding: 12px 20px; border-radius: 12px;
+    font-weight: 600; font-size: 13px; cursor: pointer; border: none;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: #00D4FF; color: #000; }
+  .btn-primary:hover { background: #00b8e0; }
+  .btn-secondary { background: #27272a; color: #fff; }
+  .btn-secondary:hover { background: #3f3f46; }
+  .btn-sm { padding: 8px 14px; font-size: 12px; border-radius: 8px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px; margin-top: 12px;
+  }
+  .item {
+    background: #0a0a0a; border: 1px solid #27272a; border-radius: 12px;
+    overflow: hidden; position: relative;
+  }
+  .item img { width: 100%; display: block; aspect-ratio: 1; object-fit: contain; background: #000; }
+  .item .info { padding: 8px 10px; font-size: 10px; color: #a1a1aa; }
+  .item .info b { color: #fff; font-size: 11px; display: block; margin-bottom: 2px; word-break: break-all; }
+  .item .actions { display: flex; gap: 4px; padding: 0 8px 8px; }
+  .item .actions button { flex: 1; padding: 6px; border-radius: 6px; border: none; cursor: pointer; font-size: 10px; font-weight: 600; }
+  .dl { background: #00D4FF; color: #000; }
+  .rm { background: #27272a; color: #a1a1aa; }
+  .status { padding: 10px 12px; border-radius: 10px; font-size: 12px; margin-top: 12px; display: none; }
+  .status.ok { background: #10b98120; color: #10b981; border: 1px solid #10b98140; display: block; }
+  .status.err { background: #ef444420; color: #ef4444; border: 1px solid #ef444440; display: block; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+  .header-row h2 { font-size: 14px; margin: 0; color: #fff; }
+  .badge { font-size: 10px; background: #00D4FF20; color: #00D4FF; padding: 3px 8px; border-radius: 20px; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<h1>NeuraChat Screenshot Resizer</h1>
+<p class="sub">Upload screenshots → pick Amazon's target size → download</p>
+
+<div class="card">
+  <div class="drop" id="drop">
+    <strong>Tap or drop screenshots here</strong>
+    <p>PNG, JPG, WEBP — multiple allowed</p>
+    <input type="file" id="fileInput" accept="image/*" multiple>
+  </div>
+</div>
+
+<div class="card">
+  <div class="header-row"><h2>Target size</h2></div>
+  <div class="row full">
+    <div>
+      <label>Preset (Amazon Appstore)</label>
+      <select id="preset">
+        <option value="1920x1080">1920 × 1080 — Phone HD portrait (recommended)</option>
+        <option value="1280x720">1280 × 720 — Phone HD landscape</option>
+        <option value="2560x1600">2560 × 1600 — Tablet HD portrait</option>
+        <option value="1920x1200">1920 × 1200 — Tablet</option>
+        <option value="1024x600">1024 × 600 — Small tablet</option>
+        <option value="1280x800">1280 × 800 — Tablet</option>
+        <option value="800x480">800 × 480 — Minimum</option>
+        <option value="custom">Custom size…</option>
+      </select>
+    </div>
+  </div>
+  <div class="row" id="customRow" style="display:none;">
+    <div>
+      <label>Width (px)</label>
+      <input type="number" id="customW" value="1920" min="100" max="4000">
+    </div>
+    <div>
+      <label>Height (px)</label>
+      <input type="number" id="customH" value="1080" min="100" max="4000">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Fit mode</label>
+      <select id="fitMode">
+        <option value="cover">Cover (fill, may crop)</option>
+        <option value="contain">Contain (fit inside, add padding)</option>
+        <option value="stretch">Stretch (may distort)</option>
+      </select>
+    </div>
+    <div>
+      <label>Background (for padding)</label>
+      <input type="color" id="bgColor" value="#000000">
+    </div>
+  </div>
+  <div class="row">
+    <div>
+      <label>Output format</label>
+      <select id="outFormat">
+        <option value="image/jpeg">JPG (smaller file)</option>
+        <option value="image/png">PNG (lossless)</option>
+      </select>
+    </div>
+    <div>
+      <label>JPG quality: <span id="qVal">92</span>%</label>
+      <input type="range" id="quality" min="50" max="100" value="92" style="width:100%;">
+    </div>
+  </div>
+  <button class="btn btn-primary" style="width:100%;" onclick="processAll()">Resize all</button>
+  <div class="status" id="status"></div>
+</div>
+
+<div class="card" id="resultsCard" style="display:none;">
+  <div class="header-row">
+    <h2>Results <span class="badge" id="count">0</span></h2>
+    <button class="btn btn-secondary btn-sm" onclick="downloadAll()">Download all</button>
+  </div>
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+const dropEl = document.getElementById('drop');
+const fileInput = document.getElementById('fileInput');
+const presetEl = document.getElementById('preset');
+const customRow = document.getElementById('customRow');
+const gridEl = document.getElementById('grid');
+const resultsCard = document.getElementById('resultsCard');
+const statusEl = document.getElementById('status');
+const countEl = document.getElementById('count');
+const qualityEl = document.getElementById('quality');
+const qValEl = document.getElementById('qVal');
+
+let queue = [];        // File objects
+let results = [];      // { name, dataUrl, blob }
+
+dropEl.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => addFiles(e.target.files));
+
+['dragenter','dragover'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault(); dropEl.classList.add('active');
+}));
+['dragleave','drop'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault(); dropEl.classList.remove('active');
+}));
+dropEl.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+
+presetEl.addEventListener('change', () => {
+  customRow.style.display = presetEl.value === 'custom' ? 'grid' : 'none';
+});
+qualityEl.addEventListener('input', () => qValEl.textContent = qualityEl.value);
+
+function addFiles(files) {
+  if (!files || files.length === 0) return;
+  for (const f of files) {
+    if (f.type.startsWith('image/')) queue.push(f);
+  }
+  showStatus(`Loaded ${queue.length} image(s). Tap "Resize all".`, 'ok');
+}
+
+function showStatus(msg, cls = 'ok') {
+  statusEl.textContent = msg;
+  statusEl.className = 'status ' + cls;
+}
+
+function getTargetSize() {
+  if (presetEl.value === 'custom') {
+    return {
+      w: parseInt(document.getElementById('customW').value, 10) || 1920,
+      h: parseInt(document.getElementById('customH').value, 10) || 1080
+    };
+  }
+  const [w, h] = presetEl.value.split('x').map(Number);
+  return { w, h };
+}
+
+function loadImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => resolve({ img, url });
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+
+async function processAll() {
+  if (queue.length === 0) {
+    showStatus('No images loaded.', 'err');
+    return;
+  }
+  const { w: tw, h: th } = getTargetSize();
+  const mode = document.getElementById('fitMode').value;
+  const bg = document.getElementById('bgColor').value;
+  const fmt = document.getElementById('outFormat').value;
+  const q = parseInt(qualityEl.value, 10) / 100;
+
+  results = [];
+  gridEl.innerHTML = '';
+
+  for (let i = 0; i < queue.length; i++) {
+    const file = queue[i];
+    try {
+      const { img, url } = await loadImage(file);
+      const canvas = document.createElement('canvas');
+      canvas.width = tw;
+      canvas.height = th;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, tw, th);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
+      let dw, dh, dx, dy;
+      if (mode === 'stretch') {
+        dw = tw; dh = th; dx = 0; dy = 0;
+      } else {
+        const sRatio = img.width / img.height;
+        const tRatio = tw / th;
+        let scale;
+        if (mode === 'cover') {
+          scale = sRatio > tRatio ? th / img.height : tw / img.width;
+        } else { // contain
+          scale = sRatio > tRatio ? tw / img.width : th / img.height;
+        }
+        dw = img.width * scale;
+        dh = img.height * scale;
+        dx = (tw - dw) / 2;
+        dy = (th - dh) / 2;
+      }
+      ctx.drawImage(img, dx, dy, dw, dh);
+      URL.revokeObjectURL(url);
+
+      const blob = await new Promise(r => canvas.toBlob(r, fmt, q));
+      const outName = file.name.replace(/\.[^.]+$/, '') + `_${tw}x${th}.${fmt === 'image/png' ? 'png' : 'jpg'}`;
+      const dataUrl = URL.createObjectURL(blob);
+      results.push({ name: outName, blob, dataUrl });
+      renderItem(outName, dataUrl, blob, tw, th);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  resultsCard.style.display = 'block';
+  countEl.textContent = results.length;
+  showStatus(`Done — ${results.length} image(s) at ${tw} × ${th}.`, 'ok');
+}
+
+function renderItem(name, dataUrl, blob, w, h) {
+  const div = document.createElement('div');
+  div.className = 'item';
+  div.innerHTML = `
+    <img src="${dataUrl}" alt="">
+    <div class="info">
+      <b>${name}</b>
+      ${w} × ${h} · ${(blob.size / 1024).toFixed(0)} KB
+    </div>
+    <div class="actions">
+      <button class="dl" onclick="downloadOne(${results.length - 1})">Download</button>
+      <button class="rm" onclick="this.closest('.item').remove()">Hide</button>
+    </div>
+  `;
+  gridEl.appendChild(div);
+}
+
+function downloadOne(i) {
+  const r = results[i];
+  if (!r) return;
+  const a = document.createElement('a');
+  a.href = r.dataUrl;
+  a.download = r.name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+function downloadAll() {
+  results.forEach((r, i) => {
+    setTimeout(() => downloadOne(i), i * 300);
+  });
+}
+</script>
+</body>
+</html>
