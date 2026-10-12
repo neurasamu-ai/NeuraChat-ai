@@ -148,6 +148,15 @@ jobs:
         PYEOF
         python3 /tmp/inject_signing.py
 
+    - name: Pin AGP to stable version
+      run: |
+        # AGP 8.13.0 was just released and its transitive deps are not yet
+        # fully available in the Maven repos. Pin to a well-tested version.
+        sed -i 's|com.android.tools.build:gradle:8.[0-9]*.[0-9]*|com.android.tools.build:gradle:8.7.2|g' android/build.gradle
+        sed -i 's|com.android.tools.build:gradle:8.[0-9]*.[0-9]*|com.android.tools.build:gradle:8.7.2|g' android/build.gradle || true
+        echo "=== android/build.gradle (after pin) ==="
+        cat android/build.gradle
+
     - name: Build Android App
       run: |
         cd android
