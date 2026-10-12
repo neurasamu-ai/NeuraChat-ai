@@ -2,7 +2,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { AdMob, BannerAdPosition, BannerAdSize, RewardAdPluginEvents } from '@capacitor-community/admob';
-import { ACTIVE_ADS, INTERSTITIAL_MIN_GAP_MS } from './ad-config';
+import { ACTIVE_ADS, INTERSTITIAL_MIN_GAP_MS, USE_TEST_ADS } from './ad-config';
 
 let initialized = false;
 let lastInterstitialAt = 0;
@@ -20,7 +20,7 @@ export async function initAds(): Promise<boolean> {
   if (initialized) return true;
   if (!isAdsAvailable()) return false;
   try {
-    await AdMob.initialize({ initializeForTesting: true });
+    await AdMob.initialize({ initializeForTesting: USE_TEST_ADS });
     initialized = true;
     return true;
   } catch (e) {
@@ -51,7 +51,7 @@ export async function showBanner(position: 'top' | 'bottom' = 'top'): Promise<vo
         : BannerAdPosition.BOTTOM_CENTER,
       // Top: sits just under the status bar. Bottom: above the nav bar.
       margin: position === 'top' ? 8 : 80,
-      isTesting: true,
+      isTesting: USE_TEST_ADS,
     });
     console.log('[ads] banner shown, pos=' + position);
   } catch (e) {
@@ -78,7 +78,7 @@ export async function showInterstitial(): Promise<void> {
   try {
     await AdMob.prepareInterstitial({
       adId: ACTIVE_ADS.interstitial,
-      isTesting: true,
+      isTesting: USE_TEST_ADS,
     });
     await AdMob.showInterstitial();
     lastInterstitialAt = now;
@@ -105,7 +105,7 @@ export async function showRewarded(): Promise<boolean> {
       });
       await AdMob.prepareRewardVideoAd({
         adId: ACTIVE_ADS.rewarded,
-        isTesting: true,
+        isTesting: USE_TEST_ADS,
       });
       await AdMob.showRewardVideoAd();
     } catch (e) {

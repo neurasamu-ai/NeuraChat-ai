@@ -25,14 +25,14 @@ export const TEST_ADS: AdIds = {
 };
 
 // Flip to production once real IDs are ready.
-export const USE_TEST_ADS = true;
+export const USE_TEST_ADS = false;
 
 // Placeholder — replace the four strings when going live.
 export const PRODUCTION_ADS: AdIds = {
-  appId: 'ca-app-pub-0000000000000000~0000000000',
-  banner: 'ca-app-pub-0000000000000000/0000000000',
-  interstitial: 'ca-app-pub-0000000000000000/0000000000',
-  rewarded: 'ca-app-pub-0000000000000000/0000000000',
+  appId: 'ca-app-pub-9697043842744543~8148065209',
+  banner: 'ca-app-pub-9697043842744543/9317676643',
+  interstitial: 'ca-app-pub-9697043842744543/6521042789',
+  rewarded: 'ca-app-pub-9697043842744543/8372435641',
 };
 
 export const ACTIVE_ADS: AdIds = USE_TEST_ADS ? TEST_ADS : PRODUCTION_ADS;
