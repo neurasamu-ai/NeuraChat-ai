@@ -35,6 +35,8 @@ import { showRewarded } from '@/lib/ads';
 import { useAdFree, grantAdFree, adFreeUntil } from '@/lib/use-ad-free';
 import { AD_FREE_HOURS_REWARDED } from '@/lib/ad-config';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
+import { isColorUnlocked, unlockColor, useUnlockedColors } from '@/lib/use-unlocked';
+import { FREE_BUBBLE_COLOR_IDS } from '@/lib/ad-config';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import AiProvidersModal from '@/components/AiProvidersModal';
@@ -81,6 +83,8 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
+  const unlockedColors = useUnlockedColors();
+  const [unlockingColorId, setUnlockingColorId] = useState<string | null>(null);
   const [adBusy, setAdBusy] = useState(false);
   const adFree = useAdFree();
 
@@ -328,6 +332,22 @@ export default function SettingsPage() {
                     key={c.id}
                     onClick={async () => {
                       triggerVibration();
+                      const unlocked = isColorUnlocked(c.id);
+                      if (!unlocked) {
+                        // Watch an ad to unlock permanently.
+                        setUnlockingColorId(c.id);
+                        try {
+                          const ok = await showRewarded();
+                          if (ok) {
+                            unlockColor(c.id);
+                          } else {
+                            alert('Ad was not completed. Try again.');
+                          }
+                        } finally {
+                          setUnlockingColorId(null);
+                        }
+                        return;
+                      }
                       setBubbleColor(c.hex);
                       const updated = { ...profile, bubbleColor: c.hex };
                       setProfile(updated);
@@ -340,7 +360,7 @@ export default function SettingsPage() {
                     style={{ backgroundColor: c.hex }}
                     title={c.name}
                   >
-                    {isSelected && (
+                    {isSelected && isColorUnlocked(c.id) && (
                       <svg
                         viewBox="0 0 24 24"
                         className="w-5 h-5"
@@ -352,6 +372,26 @@ export default function SettingsPage() {
                       >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
+                    )}
+                    {!isColorUnlocked(c.id) && (
+                      <div className="absolute inset-0 rounded-2xl bg-black/55 flex items-center justify-center">
+                        {unlockingColorId === c.id ? (
+                          <span className="text-white text-[9px] font-bold">…</span>
+                        ) : (
+                          <svg
+                            viewBox="0 0 24 24"
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="#ffffff"
+                            strokeWidth="2.2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                            <path d="M7 11V7a5 5 0 0110 0v4" />
+                          </svg>
+                        )}
+                      </div>
                     )}
                   </button>
                 );

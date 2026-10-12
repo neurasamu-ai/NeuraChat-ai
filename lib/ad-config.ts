@@ -41,3 +41,9 @@ export const ACTIVE_ADS: AdIds = USE_TEST_ADS ? TEST_ADS : PRODUCTION_ADS;
 export const INTERSTITIAL_MIN_GAP_MS = 60 * 1000;      // 1 minute between interstitials
 export const AD_FREE_HOURS_REWARDED = 2;               // each rewarded ad adds 2h (cumulative)
 export const AD_FREE_STORAGE_KEY = 'neura_ad_free_until';
+
+// Bubble colors that are free by default. All other palette entries need
+// a one-time "watch a rewarded ad" unlock, stored permanently.
+export const FREE_BUBBLE_COLOR_IDS = ['neon-yellow', 'cyber-cyan', 'emerald', 'hot-pink'];
+export const UNLOCKED_COLORS_KEY = 'neura_unlocked_colors';
+
