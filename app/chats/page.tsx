@@ -153,10 +153,11 @@ export default function ChatsPage() {
       }
     } else {
       triggerVibration();
-      // Interstitial before entering a chat, unless the user has an
-      // active ad-free window. The 1-min frequency cap lives in ads.ts.
+      // Fire the interstitial (if one is preloaded) and navigate right
+      // away. showInterstitial() returns a promise but we do NOT await it,
+      // so the app never appears stuck when the ad network is slow.
       if (!isAdFreeNow()) {
-        try { await showInterstitial(); } catch {}
+        showInterstitial().catch(() => {});
       }
       router.push(`/chat-detail?phone=${encodeURIComponent(chat.phone)}&name=${encodeURIComponent(chat.name)}&avatar=${encodeURIComponent(chat.avatar || '')}`);
     }
@@ -340,10 +341,10 @@ export default function ChatsPage() {
 
         {/* Pinned AI hub entry — cannot be deleted or archived */}
         <div
-          onClick={async () => {
+          onClick={() => {
                           triggerVibration();
                           if (!isAdFreeNow()) {
-                            try { await showInterstitial(); } catch {}
+                            showInterstitial().catch(() => {});
                           }
                           router.push('/ai-chat');
                         }}
