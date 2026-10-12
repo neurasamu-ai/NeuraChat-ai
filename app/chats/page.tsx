@@ -130,7 +130,7 @@ export default function ChatsPage() {
     }
   };
 
-  const handleChatTap = (chat: Chat) => {
+  const handleChatTap = async (chat: Chat) => {
     // If the long-press just fired, swallow the click that follows so the
     // tap does not also navigate / toggle. Ref is synchronous so it is
     // always fresh (unlike state, which lags by a render).
@@ -150,6 +150,12 @@ export default function ChatsPage() {
         setSelectedChatIds([...selectedChatIds, chat.id]);
       }
     } else {
+      triggerVibration();
+      // Interstitial before entering a chat, unless the user has an
+      // active ad-free window. The 1-min frequency cap lives in ads.ts.
+      if (!isAdFreeNow()) {
+        try { await showInterstitial(); } catch {}
+      }
       router.push(`/chat-detail?phone=${encodeURIComponent(chat.phone)}&name=${encodeURIComponent(chat.name)}&avatar=${encodeURIComponent(chat.avatar || '')}`);
     }
   };
@@ -332,7 +338,13 @@ export default function ChatsPage() {
 
         {/* Pinned AI hub entry — cannot be deleted or archived */}
         <div
-          onClick={() => router.push('/ai-chat')}
+          onClick={async () => {
+                          triggerVibration();
+                          if (!isAdFreeNow()) {
+                            try { await showInterstitial(); } catch {}
+                          }
+                          router.push('/ai-chat');
+                        }}
           className="mb-3 rounded-2xl border border-[#00D4FF]/40 bg-gradient-to-r from-[#00D4FF]/10 to-[#FF006E]/10 p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
         >
           <div className="w-12 h-12 flex items-center justify-center">
