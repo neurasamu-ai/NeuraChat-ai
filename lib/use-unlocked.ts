@@ -1,43 +1,27 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { UNLOCKED_COLORS_KEY, FREE_BUBBLE_COLOR_IDS } from './ad-config';
+import { FREE_BUBBLE_COLOR_IDS } from './ad-config';
+import { BUBBLE_COLORS } from './bubble-colors';
 
-// Reads the set of permanently-unlocked bubble color ids from localStorage.
-export function getUnlockedColors(): string[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.localStorage.getItem(UNLOCKED_COLORS_KEY);
-    if (!raw) return [];
-    const arr = JSON.parse(raw);
-    return Array.isArray(arr) ? arr.filter((x) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
-
-export function isColorUnlocked(id: string): boolean {
+// A color is "unlocked" when it is either free or the current selection.
+// Selecting a new color therefore locks the previous one back — the user
+// must watch another ad to switch to a different premium color.
+export function isColorUnlocked(id: string, currentBubbleHex: string): boolean {
   if (FREE_BUBBLE_COLOR_IDS.includes(id)) return true;
-  return getUnlockedColors().includes(id);
+  const c = BUBBLE_COLORS.find((x) => x.id === id);
+  if (!c) return false;
+  return c.hex.toLowerCase() === currentBubbleHex.toLowerCase();
 }
 
-export function unlockColor(id: string): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const list = getUnlockedColors();
-    if (!list.includes(id)) list.push(id);
-    window.localStorage.setItem(UNLOCKED_COLORS_KEY, JSON.stringify(list));
-    window.dispatchEvent(new CustomEvent('neura-unlocked-colors-changed'));
-  } catch {}
+// No-op kept for API compatibility: the persistence is now the profile's
+// bubbleColor value, written by the settings screen.
+export function unlockColor(_id: string): void {}
+
+// Kept for compatibility with existing callers — no persistent list now.
+export function getUnlockedColors(): string[] {
+  return [];
 }
 
 export function useUnlockedColors(): string[] {
-  const [list, setList] = useState<string[]>([]);
-  useEffect(() => {
-    const update = () => setList(getUnlockedColors());
-    update();
-    window.addEventListener('neura-unlocked-colors-changed', update);
-    return () => window.removeEventListener('neura-unlocked-colors-changed', update);
-  }, []);
-  return list;
+  return [];
 }

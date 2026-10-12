@@ -35,7 +35,7 @@ import { showRewarded } from '@/lib/ads';
 import { useAdFree, grantAdFree, adFreeUntil } from '@/lib/use-ad-free';
 import { AD_FREE_HOURS_REWARDED } from '@/lib/ad-config';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
-import { isColorUnlocked, unlockColor, useUnlockedColors } from '@/lib/use-unlocked';
+import { isColorUnlocked } from '@/lib/use-unlocked';
 import { FREE_BUBBLE_COLOR_IDS } from '@/lib/ad-config';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
@@ -83,7 +83,6 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
-  const unlockedColors = useUnlockedColors();
   const [unlockingColorId, setUnlockingColorId] = useState<string | null>(null);
   const [adBusy, setAdBusy] = useState(false);
   const adFree = useAdFree();
@@ -332,14 +331,23 @@ export default function SettingsPage() {
                     key={c.id}
                     onClick={async () => {
                       triggerVibration();
-                      const unlocked = isColorUnlocked(c.id);
+                      const unlocked = isColorUnlocked(c.id, bubbleColor);
+                      const applyColor = async () => {
+                        setBubbleColor(c.hex);
+                        const updated = { ...profile, bubbleColor: c.hex };
+                        setProfile(updated);
+                        await saveUserProfile(updated);
+                        window.dispatchEvent(new CustomEvent('neurachat-bubble-color-change', { detail: { color: c.hex } }));
+                      };
                       if (!unlocked) {
-                        // Watch an ad to unlock permanently.
+                        // Watch a rewarded ad to switch to this color. Selecting
+                        // it "locks" the previous selection because only one
+                        // premium color can be active at a time.
                         setUnlockingColorId(c.id);
                         try {
                           const ok = await showRewarded();
                           if (ok) {
-                            unlockColor(c.id);
+                            await applyColor();
                           } else {
                             alert('Ad was not completed. Try again.');
                           }
@@ -348,11 +356,7 @@ export default function SettingsPage() {
                         }
                         return;
                       }
-                      setBubbleColor(c.hex);
-                      const updated = { ...profile, bubbleColor: c.hex };
-                      setProfile(updated);
-                      await saveUserProfile(updated);
-                      window.dispatchEvent(new CustomEvent('neurachat-bubble-color-change', { detail: { color: c.hex } }));
+                      await applyColor();
                     }}
                     className={`relative aspect-square rounded-2xl border-2 transition-all active:scale-90 flex items-center justify-center ${
                       isSelected ? 'border-white shadow-lg' : 'border-transparent'
@@ -360,7 +364,7 @@ export default function SettingsPage() {
                     style={{ backgroundColor: c.hex }}
                     title={c.name}
                   >
-                    {isSelected && isColorUnlocked(c.id) && (
+                    {isSelected && isColorUnlocked(c.id, bubbleColor) && (
                       <svg
                         viewBox="0 0 24 24"
                         className="w-5 h-5"
@@ -373,7 +377,7 @@ export default function SettingsPage() {
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     )}
-                    {!isColorUnlocked(c.id) && (
+                    {!isColorUnlocked(c.id, bubbleColor) && (
                       <div className="absolute inset-0 rounded-2xl bg-black/55 flex items-center justify-center">
                         {unlockingColorId === c.id ? (
                           <span className="text-white text-[9px] font-bold">…</span>
