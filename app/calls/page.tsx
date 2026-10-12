@@ -24,6 +24,7 @@ import {
 } from '@/lib/db';
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
+import AdBanner from '@/components/AdBanner';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { dispatchCall, placeCall, setPreferredCallSimId, CallAccount } from '@/lib/telecom-plugin';
 import { normalizePhone, phonesMatch } from '@/lib/phone';
@@ -724,6 +725,7 @@ export default function CallsPage() {
           <PhoneCall className="h-5 w-5" />
         </button>
 
+      <AdBanner position="top" />
       <BottomNav currentTab="calls" />
     </>
   );
