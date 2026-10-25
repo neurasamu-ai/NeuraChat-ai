@@ -16,7 +16,8 @@ import {
   Delete,
   Trash2,
   PhoneOff,
-  MessageSquare
+  MessageSquare,
+  Info
 } from 'lucide-react';
 import {
   Contact,
@@ -58,6 +59,7 @@ export default function CallsPage() {
   };
 
   const [dialNumber, setDialNumber] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [pendingCallNameHint, setPendingCallNameHint] = useState<string | undefined>(undefined);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
@@ -109,6 +111,22 @@ export default function CallsPage() {
       return normalized.includes(query) || normalized.includes(rawDigits);
     });
   }, [deferredQuery, contacts]);
+
+  // Matches for the search bar at the top of the Calls tab.
+  const searchMatches = React.useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    const qDigits = q.replace(/\D/g, '');
+    return contacts.filter(c => {
+      if (c.name.toLowerCase().includes(q)) return true;
+      if (qDigits) {
+        const clean = (c.phone || '').replace(/\D/g, '');
+        if (clean.includes(qDigits)) return true;
+      }
+      return false;
+    }).slice(0, 50);
+  }, [searchQuery, contacts]);
+
 
   const loadCallsAndContacts = async () => {
     try {
@@ -296,6 +314,29 @@ export default function CallsPage() {
       {/* Main Container */}
       <main className="flex-1 p-4 pb-96 overflow-y-auto" id="calls-main-container">
         
+        {/* Search bar */}
+        <div className="relative mb-3" id="calls-search-wrap">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search name or number…"
+            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF006E] transition-colors"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-zinc-500 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+
+
+        {!searchQuery && (
+        <>
         {/* Filter Tab Row */}
         <div className="flex bg-zinc-900 border border-zinc-900 rounded-xl p-1 mb-4 select-none" id="calls-filter-tabs">
           {(['all', 'incoming', 'outgoing', 'missed'] as const).map(filter => (
@@ -419,6 +460,62 @@ export default function CallsPage() {
                 );
               })}
             </AnimatePresence>
+          </div>
+        )}
+
+        </>
+        )}
+
+        {/* Search results */}
+        {searchQuery && searchMatches.length > 0 && (
+          <div className="space-y-2">
+            {searchMatches.map((c) => (
+              <div
+                key={c.id}
+                onClick={() => router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`)}
+                className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-900 rounded-xl hover:bg-zinc-900/60 cursor-pointer active:scale-[0.99] transition-all"
+              >
+                {c.avatar ? (
+                  <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-full object-cover border border-zinc-700 shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase shrink-0">
+                    {c.name.slice(0, 2)}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white truncate">{c.name}</p>
+                  <p className="text-[10px] font-mono text-zinc-400 truncate">{c.phone}</p>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }}
+                    className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[#00D4FF] active:scale-90"
+                    title="Message"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDialCall(c.phone); }}
+                    className="p-2 rounded-lg bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981] active:scale-90"
+                    title="Call"
+                  >
+                    <Phone className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }}
+                    className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 active:scale-90"
+                    title="Info"
+                  >
+                    <Info className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {searchQuery && searchMatches.length === 0 && (
+          <div className="text-center py-16 text-zinc-500 text-xs">
+            No contact matches "{searchQuery}"
           </div>
         )}
 
