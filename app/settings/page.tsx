@@ -31,7 +31,6 @@ import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
 import ImageCropModal from '@/components/ImageCropModal';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
-import { FREE_BUBBLE_COLOR_IDS } from '@/lib/ad-config';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import AiProvidersModal from '@/components/AiProvidersModal';
