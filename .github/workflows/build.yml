@@ -165,3 +165,4 @@ jobs:
       with:
         name: NeuraChat-Release-APK
         path: android/app/build/outputs/apk/release/app-release.apk
+// trigger build
