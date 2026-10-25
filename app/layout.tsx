@@ -10,7 +10,6 @@ import DefaultDialerBanner from '@/components/DefaultDialerBanner';
 import NotificationNavigator from '@/components/NotificationNavigator';
 import MissedCallBridge from '@/components/MissedCallBridge';
 import SmsStatusBridge from '@/components/SmsStatusBridge';
-import AdBootstrap from '@/components/AdBootstrap';
 import ContactsSyncToast from '@/components/ContactsSyncToast';
 import ContactsBootstrap from '@/components/ContactsBootstrap';
 
@@ -44,7 +43,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <NotificationNavigator />
         <MissedCallBridge />
         <SmsStatusBridge />
-        <AdBootstrap />
         <ContactsSyncToast />
         <ContactsBootstrap />
         <div className="flex-1 flex flex-col w-full md:max-w-md md:mx-auto relative md:border-x border-zinc-900 shadow-2xl bg-zinc-950 min-h-0">

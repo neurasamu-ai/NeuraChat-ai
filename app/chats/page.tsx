@@ -21,9 +21,6 @@ import {
   Chat,
 } from '@/lib/db';
 import Header from '@/components/Header';
-import AdBanner from '@/components/AdBanner';
-import { showInterstitial } from '@/lib/ads';
-import { isAdFreeNow } from '@/lib/use-ad-free';
 import BottomNav from '@/components/BottomNav';
 import AiHubLogo from '@/components/AiHubLogo';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
@@ -153,12 +150,6 @@ export default function ChatsPage() {
       }
     } else {
       triggerVibration();
-      // Fire the interstitial (if one is preloaded) and navigate right
-      // away. showInterstitial() returns a promise but we do NOT await it,
-      // so the app never appears stuck when the ad network is slow.
-      if (!isAdFreeNow()) {
-        showInterstitial().catch(() => {});
-      }
       router.push(`/chat-detail?phone=${encodeURIComponent(chat.phone)}&name=${encodeURIComponent(chat.name)}&avatar=${encodeURIComponent(chat.avatar || '')}`);
     }
   };
@@ -343,9 +334,6 @@ export default function ChatsPage() {
         <div
           onClick={() => {
                           triggerVibration();
-                          if (!isAdFreeNow()) {
-                            showInterstitial().catch(() => {});
-                          }
                           router.push('/ai-chat');
                         }}
           className="mb-3 rounded-2xl border border-[#00D4FF]/40 bg-gradient-to-r from-[#00D4FF]/10 to-[#FF006E]/10 p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
@@ -634,7 +622,6 @@ export default function ChatsPage() {
       </button>
 
       {/* Bottom Main Tab Bar */}
-      <AdBanner position="top" />
       <BottomNav currentTab="chats" />
     </>
   );

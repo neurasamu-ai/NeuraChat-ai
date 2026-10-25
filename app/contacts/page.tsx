@@ -27,7 +27,6 @@ import {
   Contact
 } from '@/lib/db';
 import Header from '@/components/Header';
-import AdBanner from '@/components/AdBanner';
 import BottomNav from '@/components/BottomNav';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -1023,8 +1022,6 @@ export default function ContactsPage() {
         >
           <Plus className="h-4 w-4 stroke-[3]" />
         </button>
-
-      <AdBanner position="top" />
       <BottomNav currentTab="contacts" />
 
       {/* SIM picker for calls */}

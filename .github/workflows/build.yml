@@ -89,15 +89,6 @@ jobs:
         cp .github/native/res/values/overlay_styles.xml android/app/src/main/res/values/
         cp .github/native/IncomingCallOverlay.java $TARGET/
 
-    - name: Inject Google Ads SDK (native AdView in CallActivity)
-      run: |
-        if ! grep -q 'play-services-ads' android/app/build.gradle; then
-          sed -i "s|^dependencies {|dependencies {\n    implementation 'com.google.android.gms:play-services-ads:23.6.0'|" android/app/build.gradle
-          echo "play-services-ads injected"
-        else
-          echo "play-services-ads already present"
-        fi
-
     - name: Sync Android
       run: npx cap sync android
 

@@ -46,7 +46,6 @@ public class CallActivity extends Activity {
     private final StringBuilder numpadText = new StringBuilder();
 
     private static CallActivity instance = null;
-    private com.google.android.gms.ads.AdView adView = null;
 
     public static boolean isVisible() {
         return instance != null;
@@ -84,19 +83,6 @@ public class CallActivity extends Activity {
 
         setContentView(R.layout.activity_call);
 
-        // Load the native banner ad at the top of the call screen.
-        try {
-            com.google.android.gms.ads.MobileAds.initialize(getApplicationContext());
-            adView = findViewById(R.id.call_ad_view);
-            if (adView != null) {
-                com.google.android.gms.ads.AdRequest req =
-                    new com.google.android.gms.ads.AdRequest.Builder().build();
-                adView.loadAd(req);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "ad load failed", e);
-        }
-
         readIntent(getIntent());
         wireButtons();
         applyState(state, number, name, incoming);
@@ -116,12 +102,6 @@ public class CallActivity extends Activity {
     protected void onDestroy() {
         if (instance == this) instance = null;
         stopTicker();
-        try {
-            if (adView != null) {
-                adView.destroy();
-                adView = null;
-            }
-        } catch (Exception ignore) {}
         super.onDestroy();
     }
 

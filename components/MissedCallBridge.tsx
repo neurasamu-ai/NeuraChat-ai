@@ -12,8 +12,6 @@ import {
 import { addCallLog, hasSimilarLog, loadCallLogsFromDB } from '@/lib/call-log-store';
 import { CallLog } from '@/lib/db';
 import { generateId } from '@/lib/utils';
-import { showInterstitial } from '@/lib/ads';
-import { isAdFreeNow } from '@/lib/use-ad-free';
 
 // Listens to native call events (missed / answered / outgoing) and pushes
 // them into the global call-log store. Every screen that reads the store
@@ -110,16 +108,6 @@ export default function MissedCallBridge() {
           await loadCallLogsFromDB();
         } catch (e) {
           console.error('[CallBridge] callEnded update failed', e);
-        }
-        // Show a single interstitial after a call ends, unless the user
-        // has an active ad-free window. Frequency cap is enforced inside
-        // lib/ads.ts (min 3 min between interstitials).
-        try {
-          if (!isAdFreeNow()) {
-            await showInterstitial();
-          }
-        } catch (e) {
-          console.error('[CallBridge] interstitial failed', e);
         }
       });
       if (ended) handles.push(ended);

@@ -87,11 +87,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:usesCleartextTraffic="true">
 
-        <!-- AdMob application ID (test ID by default). Replace with the
-             production App ID from your AdMob console to serve real ads. -->
-        <meta-data
-            android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-9697043842744543~8148065209" />
 
         <!-- MainActivity: Multi-Intent Launch-Pad -->
         <activity

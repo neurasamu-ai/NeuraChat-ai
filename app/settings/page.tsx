@@ -30,12 +30,7 @@ import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import { useBackHandler } from '@/lib/use-back-handler';
 import ImageCropModal from '@/components/ImageCropModal';
-import AdBanner from '@/components/AdBanner';
-import { showRewarded } from '@/lib/ads';
-import { useAdFree, grantAdFree, adFreeUntil } from '@/lib/use-ad-free';
-import { AD_FREE_HOURS_REWARDED } from '@/lib/ad-config';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
-import { isColorUnlocked } from '@/lib/use-unlocked';
 import { FREE_BUBBLE_COLOR_IDS } from '@/lib/ad-config';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
@@ -83,9 +78,6 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
-  const [unlockingColorId, setUnlockingColorId] = useState<string | null>(null);
-  const [adBusy, setAdBusy] = useState(false);
-  const adFree = useAdFree();
 
 
 
@@ -331,32 +323,11 @@ export default function SettingsPage() {
                     key={c.id}
                     onClick={async () => {
                       triggerVibration();
-                      const unlocked = isColorUnlocked(c.id, bubbleColor);
-                      const applyColor = async () => {
-                        setBubbleColor(c.hex);
-                        const updated = { ...profile, bubbleColor: c.hex };
-                        setProfile(updated);
-                        await saveUserProfile(updated);
-                        window.dispatchEvent(new CustomEvent('neurachat-bubble-color-change', { detail: { color: c.hex } }));
-                      };
-                      if (!unlocked) {
-                        // Watch a rewarded ad to switch to this color. Selecting
-                        // it "locks" the previous selection because only one
-                        // premium color can be active at a time.
-                        setUnlockingColorId(c.id);
-                        try {
-                          const ok = await showRewarded();
-                          if (ok) {
-                            await applyColor();
-                          } else {
-                            alert('Ad was not completed. Try again.');
-                          }
-                        } finally {
-                          setUnlockingColorId(null);
-                        }
-                        return;
-                      }
-                      await applyColor();
+                      setBubbleColor(c.hex);
+                      const updated = { ...profile, bubbleColor: c.hex };
+                      setProfile(updated);
+                      await saveUserProfile(updated);
+                      window.dispatchEvent(new CustomEvent('neurachat-bubble-color-change', { detail: { color: c.hex } }));
                     }}
                     className={`relative aspect-square rounded-2xl border-2 transition-all active:scale-90 flex items-center justify-center ${
                       isSelected ? 'border-white shadow-lg' : 'border-transparent'
@@ -364,7 +335,7 @@ export default function SettingsPage() {
                     style={{ backgroundColor: c.hex }}
                     title={c.name}
                   >
-                    {isSelected && isColorUnlocked(c.id, bubbleColor) && (
+                    {isSelected && (
                       <svg
                         viewBox="0 0 24 24"
                         className="w-5 h-5"
@@ -376,26 +347,6 @@ export default function SettingsPage() {
                       >
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
-                    )}
-                    {!isColorUnlocked(c.id, bubbleColor) && (
-                      <div className="absolute inset-0 rounded-2xl bg-black/55 flex items-center justify-center">
-                        {unlockingColorId === c.id ? (
-                          <span className="text-white text-[9px] font-bold">…</span>
-                        ) : (
-                          <svg
-                            viewBox="0 0 24 24"
-                            className="w-5 h-5"
-                            fill="none"
-                            stroke="#ffffff"
-                            strokeWidth="2.2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                            <path d="M7 11V7a5 5 0 0110 0v4" />
-                          </svg>
-                        )}
-                      </div>
                     )}
                   </button>
                 );
@@ -920,49 +871,6 @@ export default function SettingsPage() {
             setCropSrc(null);
           }}
         />
-
-      {/* Remove Ads */}
-      <div className="mx-4 mb-2 p-4 rounded-2xl border border-zinc-800/70 bg-gradient-to-br from-zinc-900/80 to-zinc-950/80">
-        <div className="flex items-center justify-between gap-3 mb-1">
-          <div>
-            <p className="text-sm font-bold text-white">Remove ads</p>
-            <p className="text-[10px] text-zinc-500 mt-0.5">
-              {adFree && adFreeUntil() > 0
-                ? `Ad-free until ${new Date(adFreeUntil()).toLocaleString([], { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}`
-                : `Watch 1 ad → +${AD_FREE_HOURS_REWARDED}h ad-free (stacks)`}
-            </p>
-          </div>
-          {adFree && adFreeUntil() > 0 && (
-            <span className="px-2 py-1 rounded-full bg-[#cbfe00]/15 text-[#cbfe00] text-[10px] font-bold uppercase tracking-wider">
-              Active
-            </span>
-          )}
-        </div>
-        <button
-          disabled={adBusy || (adFree && adFreeUntil() > 0)}
-          onClick={async () => {
-            triggerVibration();
-            setAdBusy(true);
-            try {
-              const ok = await showRewarded();
-              if (ok) {
-                grantAdFree(AD_FREE_HOURS_REWARDED);
-              } else {
-                alert('Ad was not completed. Please try again.');
-              }
-            } finally {
-              setAdBusy(false);
-            }
-          }}
-          className="w-full mt-2 py-3 rounded-xl bg-[#cbfe00] text-black text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          {adBusy ? 'Loading…' : (adFree && adFreeUntil() > 0 ? 'Ad-free active' : `Watch 1 ad → +${AD_FREE_HOURS_REWARDED}h ad-free`)}
-        </button>
-      </div>
-
-      </main>
-
-      <AdBanner position="top" />
       <BottomNav currentTab="settings" />
     </>
   );
