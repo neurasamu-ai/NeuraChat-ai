@@ -92,55 +92,6 @@ jobs:
     - name: Sync Android
       run: npx cap sync android
 
-    - name: Decode keystore
-      run: |
-        printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > ${{ runner.temp }}/neurachat.keystore
-        ls -la ${{ runner.temp }}/neurachat.keystore
-        echo "=== keystore verification ==="
-        keytool -list -keystore ${{ runner.temp }}/neurachat.keystore -storepass "${{ secrets.KEYSTORE_PASSWORD }}" 2>&1 | head -5
-
-    - name: Inject signing config
-      env:
-        KEYSTORE_PATH: ${{ runner.temp }}/neurachat.keystore
-        STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-        KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-      run: |
-        cat > /tmp/inject_signing.py << 'PYEOF'
-        import os, re
-        p = 'android/app/build.gradle'
-        s = open(p).read()
-        store = os.environ['KEYSTORE_PATH']
-        sp = os.environ['STORE_PASSWORD']
-        kp = os.environ['KEY_PASSWORD']
-        ka = os.environ['KEY_ALIAS']
-        signing = """
-            signingConfigs {
-                release {
-                    storeFile file('%s')
-                    storePassword '%s'
-                    keyAlias '%s'
-                    keyPassword '%s'
-                }
-            }
-        """ % (store, sp, ka, kp)
-        if 'signingConfigs' not in s:
-            s = s.replace('android {', 'android {' + signing, 1)
-        s = re.sub(
-            r'(buildTypes\s*\{[\s\S]*?release\s*\{)',
-            r'\1\n            signingConfig signingConfigs.release',
-            s, count=1
-        )
-        # Release lint (lintVitalRelease) fails the build on density-folder
-        # warnings from generated splash resources. Turn it off for the
-        # app module so signed release builds succeed.
-        if 'lint {' not in s:
-            s = s.replace('android {', 'android {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }', 1)
-        open(p, 'w').write(s)
-        print('Signing + lint config injected')
-        PYEOF
-        python3 /tmp/inject_signing.py
-
     - name: Pin AGP to stable version
       run: |
         # AGP 8.13.0 was just released and its transitive deps are not yet
@@ -153,8 +104,7 @@ jobs:
       run: |
         cd android
         chmod +x ./gradlew
-        echo "android.suppressUnsupportedCompileSdk=36" >> gradle.properties || true
-        ./gradlew assembleDebug assembleRelease
+        ./gradlew assembleDebug
 
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
@@ -162,9 +112,3 @@ jobs:
         name: NeuraChat-Debug-APK
         path: android/app/build/outputs/apk/debug/app-debug.apk
 
-    - name: Upload Release APK (signed)
-      uses: actions/upload-artifact@v4
-      with:
-        name: NeuraChat-Release-APK
-        path: android/app/build/outputs/apk/release/app-release.apk
-// trigger build
