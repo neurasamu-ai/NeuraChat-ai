@@ -60,6 +60,7 @@ export default function CallsPage() {
 
   const [dialNumber, setDialNumber] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [pendingCallNameHint, setPendingCallNameHint] = useState<string | undefined>(undefined);
   const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
@@ -321,6 +322,8 @@ export default function CallsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearchFocused(true)}
+            onBlur={() => setIsSearchFocused(false)}
             placeholder="Search name or number…"
             className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF006E] transition-colors"
           />
@@ -524,7 +527,7 @@ export default function CallsPage() {
 
         {/* DIALER FULL OVERLAY SHEET */}
         <AnimatePresence>
-          {true && (
+          {(!searchQuery || searchMatches.length === 0) && !isSearchFocused && (
             <div className="fixed bottom-20 left-0 right-0 w-full md:max-w-md md:mx-auto z-30 select-none">
               <motion.div
                 initial={{ y: '100%' }}
@@ -796,7 +799,7 @@ export default function CallsPage() {
         )}
       </AnimatePresence>
 
-      <BottomNav currentTab="calls" />
+      {!isSearchFocused && <BottomNav currentTab="calls" />}
     </>
   );
 }
