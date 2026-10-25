@@ -524,7 +524,7 @@ export default function CallsPage() {
 
         {/* DIALER FULL OVERLAY SHEET */}
         <AnimatePresence>
-          {(isDialerOpen || true) && (
+          {true && (
             <div className="fixed bottom-20 left-0 right-0 w-full md:max-w-md md:mx-auto z-30 select-none">
               <motion.div
                 initial={{ y: '100%' }}
