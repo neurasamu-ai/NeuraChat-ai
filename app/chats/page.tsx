@@ -50,6 +50,7 @@ export default function ChatsPage() {
   };
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [chatFilter, setChatFilter] = useState<'all' | 'contacts' | 'others'>('all');
 
   // Selection mode states
   const [selectedChatIds, setSelectedChatIds] = useState<string[]>([]);
@@ -243,10 +244,22 @@ export default function ChatsPage() {
   useBackHandler(isNewChatOpen && !isManualAddOpen, () => setIsNewChatOpen(false));
 
   // Search filtering
-  const filteredChats = chats.filter(chat =>
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (chat.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Check whether a phone belongs to a saved contact.
+  const isSavedContact = React.useCallback((phone: string) => {
+    const target = normalizePhone(phone || '');
+    if (!target) return false;
+    return contacts.some((c) => normalizePhone(c.phone || '') === target);
+  }, [contacts]);
+
+  const filteredChats = chats.filter(chat => {
+    const matchesSearch =
+      chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (chat.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (chatFilter === 'all') return true;
+    const saved = isSavedContact(chat.phone);
+    return chatFilter === 'contacts' ? saved : !saved;
+  });
 
   const filteredContacts = contacts.filter(c => {
     const q = contactSearch.trim();
@@ -329,6 +342,24 @@ export default function ChatsPage() {
             />
           </div>
         </div>
+
+        {/* Filter tabs: All / Contacts / Others */}
+        <div className="flex bg-zinc-900/60 border border-zinc-900 rounded-xl p-1 mb-4 select-none" id="chats-filter-tabs">
+          {(['all', 'contacts', 'others'] as const).map((f) => (
+            <button
+              key={f}
+              onClick={() => { triggerVibration(); setChatFilter(f); }}
+              className={`flex-1 text-[10px] font-bold uppercase tracking-wider py-1.5 rounded-lg transition-all cursor-pointer ${
+                chatFilter === f
+                  ? 'bg-zinc-800 text-white shadow'
+                  : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {f === 'all' ? 'All' : f === 'contacts' ? 'Contacts' : 'Others'}
+            </button>
+          ))}
+        </div>
+
 
         {/* Pinned AI hub entry — cannot be deleted or archived */}
         <div
