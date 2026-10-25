@@ -856,6 +856,8 @@ export default function SettingsPage() {
           )}
         </AnimatePresence>
 
+      </main>
+
         <AiProvidersModal
           open={isAiProvidersOpen}
           onClose={() => setIsAiProvidersOpen(false)}
