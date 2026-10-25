@@ -57,8 +57,6 @@ export default function CallsPage() {
     return fallbackName !== 'Unknown' ? fallbackName : phone;
   };
 
-  // Dialer dialog states
-  const [isDialerOpen, setIsDialerOpen] = useState(false);
   const [dialNumber, setDialNumber] = useState('');
   const [callSimPickerOpen, setCallSimPickerOpen] = useState(false);
   const [pendingCallNameHint, setPendingCallNameHint] = useState<string | undefined>(undefined);
@@ -211,7 +209,6 @@ export default function CallsPage() {
     
     // Call log is created by MissedCallBridge from the native "outgoingCall" event,
     // which carries the exact name CallService resolved (incl. per-variant nameHint).
-    setIsDialerOpen(false);
     setDialNumber('');
 
     // Route to native call. With 2+ SIMs, show the SIM picker.
@@ -285,7 +282,6 @@ export default function CallsPage() {
   };
 
   // ---- Back-button integration ----
-  useBackHandler(isDialerOpen, () => setIsDialerOpen(false));
   useBackHandler(callSimPickerOpen, () => setCallSimPickerOpen(false));
 
   const filteredLogs = callLogs.filter(log => {
@@ -298,7 +294,7 @@ export default function CallsPage() {
       <Header title="Calls" />
 
       {/* Main Container */}
-      <main className="flex-1 p-4 overflow-y-auto" id="calls-main-container">
+      <main className="flex-1 p-4 pb-96 overflow-y-auto" id="calls-main-container">
         
         {/* Filter Tab Row */}
         <div className="flex bg-zinc-900 border border-zinc-900 rounded-xl p-1 mb-4 select-none" id="calls-filter-tabs">
@@ -431,8 +427,8 @@ export default function CallsPage() {
 
         {/* DIALER FULL OVERLAY SHEET */}
         <AnimatePresence>
-          {isDialerOpen && (
-            <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-end justify-center select-none">
+          {(isDialerOpen || true) && (
+            <div className="fixed bottom-20 left-0 right-0 w-full md:max-w-md md:mx-auto z-30 select-none">
               <motion.div
                 initial={{ y: '100%' }}
                 animate={{ y: 0 }}
@@ -442,13 +438,6 @@ export default function CallsPage() {
                 id="dialer-sheet-container"
               >
                 {/* Close Button top right */}
-                <button
-                  onClick={() => setIsDialerOpen(false)}
-                  className="absolute top-4 right-4 p-1.5 rounded-full bg-zinc-905 text-zinc-500 hover:text-white cursor-pointer"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
                 {/* Match List Area — matched contacts on the left, a
                     persistent "New" button on the right so a fresh number
                     can always be saved. The button is fixed-width and
@@ -465,8 +454,7 @@ export default function CallsPage() {
                               onClick={() => {
                                 triggerVibration();
                                 // Close the dialer and open the contact card.
-                                setIsDialerOpen(false);
-                                router.push(
+                                                            router.push(
                                   `/profile?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`
                                 );
                               }}
@@ -623,8 +611,7 @@ export default function CallsPage() {
                       triggerVibration();
                       const num = dialNumber.replace(/\s+/g, '');
                       if (!num) return;
-                      setIsDialerOpen(false);
-                      setDialNumber('');
+                                        setDialNumber('');
                       router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`);
                     }}
                     className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
@@ -712,17 +699,6 @@ export default function CallsPage() {
         )}
       </AnimatePresence>
 
-      <button
-          onClick={() => {
-            triggerVibration();
-            setIsDialerOpen(true);
-          }}
-          className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#FF006E] to-[#b3004d] text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(255,0,110,0.4)] hover:shadow-[0_0_20px_rgba(255,0,110,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
-          aria-label="Open Dialer"
-          id="open-dialer-fab"
-        >
-          <PhoneCall className="h-5 w-5" />
-        </button>
       <BottomNav currentTab="calls" />
     </>
   );
