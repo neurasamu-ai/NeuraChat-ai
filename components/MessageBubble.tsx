@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'motion/react';
-import { Check, CheckCheck } from 'lucide-react';
+import { Check, CheckCheck, Star } from 'lucide-react';
 import { Message } from '@/lib/db';
 import { bubbleTextColor } from '@/lib/bubble-colors';
 
