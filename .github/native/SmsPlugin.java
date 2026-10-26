@@ -15,6 +15,8 @@ import android.net.Uri;
 import android.os.Build;
 import android.provider.Telephony;
 import android.telephony.SmsManager;
+import android.net.ConnectivityManager;
+import android.net.NetworkCapabilities;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.util.Log;
@@ -232,6 +234,29 @@ public class SmsPlugin extends Plugin {
         }
 
         try {
+            // Strict network check: if there is no cellular network, reject
+            // immediately instead of letting Android queue the message for
+            // later (which would auto-send when signal returns).
+            boolean hasNetwork = false;
+            try {
+                ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+                if (cm != null) {
+                    android.net.Network n = cm.getActiveNetwork();
+                    if (n != null) {
+                        NetworkCapabilities nc = cm.getNetworkCapabilities(n);
+                        if (nc != null && (nc.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) || nc.hasTransport(NetworkCapabilities.TRANSPORT_WIFI))) {
+                            hasNetwork = true;
+                        }
+                    }
+                }
+            } catch (Exception ignore) {}
+
+            if (!hasNetwork) {
+                Log.e(TAG, "no network available - rejecting SMS to prevent queueing");
+                call.reject("No network connection. Please check your signal.");
+                return;
+            }
+
             SmsManager smsManager;
             if (subscriptionId != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
                 smsManager = SmsManager.getSmsManagerForSubscriptionId(subscriptionId);

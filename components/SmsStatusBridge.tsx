@@ -19,8 +19,8 @@ export default function SmsStatusBridge() {
     let handle: { remove: () => void } | null = null;
     let cancelled = false;
 
-    const STUCK_AFTER_MS = 20_000;
-    const SCAN_INTERVAL_MS = 8_000;
+    const STUCK_AFTER_MS = 15_000;
+    const SCAN_INTERVAL_MS = 3_000;
 
     const scanStuck = async () => {
       try {
