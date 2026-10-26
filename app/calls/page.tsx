@@ -40,6 +40,7 @@ export default function CallsPage() {
   const contacts = contactsStore.contacts;
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
+  const [viewMode, setViewMode] = useState<'history' | 'dialer'>('history');
 
   // Dynamic caller name lookup from contacts database
   const findContactFor = (phone: string) => {
@@ -68,16 +69,10 @@ export default function CallsPage() {
   const [rememberCallSim, setRememberCallSim] = useState(false);
 
   const longPressTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-  const isLongPressActiveRef = React.useRef(false);
-  const backspaceTimerRef = React.useRef<NodeJS.Timeout | null>(null);
-  const backspaceLongPressRef = React.useRef(false);
-  const numberInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const startPress = (char: string) => {
-    isLongPressActiveRef.current = false;
-    if (char === '0') {
+      if (char === '0') {
       longPressTimerRef.current = setTimeout(() => {
-        isLongPressActiveRef.current = true;
         triggerVibration();
         setDialNumber(prev => prev + '+');
       }, 600);
@@ -164,60 +159,12 @@ export default function CallsPage() {
     }
   };
 
-  // Numpad key pressure handlers
+  // Numpad key handler — just append.
   const handleNumPress = (char: string) => {
     triggerVibration();
-    const input = numberInputRef.current;
-    if (!input) {
-      setDialNumber((prev) => prev + char);
-      return;
-    }
-    const start = input.selectionStart ?? dialNumber.length;
-    const end = input.selectionEnd ?? dialNumber.length;
-
-    // Fast path: cursor at end (the common case). Just append.
-    if (start === dialNumber.length && end === dialNumber.length) {
-      setDialNumber(dialNumber + char);
-      return;
-    }
-
-    // Insert at cursor.
-    const next = dialNumber.slice(0, start) + char + dialNumber.slice(end);
-    setDialNumber(next);
-    const pos = start + char.length;
-    // Defer cursor restore to the next tick without rAF spam.
-    setTimeout(() => {
-      try { input.setSelectionRange(pos, pos); } catch {}
-    }, 0);
+    setDialNumber((prev) => prev + char);
   };
 
-  const handleBackspace = () => {
-    triggerVibration();
-    const input = numberInputRef.current;
-    if (input) {
-      const start = input.selectionStart ?? dialNumber.length;
-      const end = input.selectionEnd ?? dialNumber.length;
-      let next = dialNumber;
-      let cursor = start;
-      if (start !== end) {
-        // remove selection
-        next = dialNumber.slice(0, start) + dialNumber.slice(end);
-        cursor = start;
-      } else if (start > 0) {
-        // remove char before cursor
-        next = dialNumber.slice(0, start - 1) + dialNumber.slice(end);
-        cursor = start - 1;
-      } else {
-        return;
-      }
-      setDialNumber(next);
-      requestAnimationFrame(() => {
-        try { input.setSelectionRange(cursor, cursor); } catch {}
-      });
-    } else {
-      setDialNumber(prev => prev.slice(0, -1));
-    }
-  };
 
   // Dial Trigger via window.location.href = tel:NUMBER
   const handleDialCall = async (customNum?: string) => {
@@ -310,256 +257,179 @@ export default function CallsPage() {
 
   return (
     <>
-      <Header title="Calls" />
+      <Header
+        title="Calls"
+        rightAction={
+          <button
+            onClick={() => {
+              triggerVibration();
+              setViewMode((m) => (m === 'history' ? 'dialer' : 'history'));
+              setSearchQuery('');
+              setIsSearchFocused(false);
+            }}
+            className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-[10px] font-bold uppercase tracking-wider text-[#FF006E] active:scale-95 transition-all"
+          >
+            {viewMode === 'history' ? 'Dialer' : 'History'}
+          </button>
+        }
+      />
 
-      {/* Main Container */}
-      <main className="flex-1 p-4 pb-96 overflow-y-auto" id="calls-main-container">
-        
-        {/* Search bar */}
-        <div className="relative mb-3" id="calls-search-wrap">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setIsSearchFocused(true)}
-            onBlur={() => setIsSearchFocused(false)}
-            placeholder="Search name or number…"
-            className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF006E] transition-colors"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-zinc-500 hover:text-white"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-
-        {!searchQuery && (
-        <>
-        {/* Filter Tab Row */}
-        <div className="flex bg-zinc-900 border border-zinc-900 rounded-xl p-1 mb-4 select-none" id="calls-filter-tabs">
-          {(['all', 'incoming', 'outgoing', 'missed'] as const).map(filter => (
-            <button
-              key={filter}
-              onClick={() => {
-                triggerVibration();
-                setActiveFilter(filter);
-              }}
-              className={`flex-1 font-display text-[11px] font-semibold tracking-wider uppercase py-2 rounded-lg transition-all cursor-pointer ${
-                activeFilter === filter
-                  ? 'bg-zinc-800 text-white shadow'
-                  : 'text-zinc-500 hover:text-zinc-300'
-              }`}
-            >
-              {filter === 'all' ? 'All' : filter === 'incoming' ? 'Received' : filter === 'outgoing' ? 'Dialed' : 'Missed'}
-            </button>
-          ))}
-        </div>
-
-        {loading ? (
-          <div className="space-y-3" id="calls-skeleton">
-            {[1, 2].map((n) => (
-              <div key={n} className="flex gap-4 p-3 bg-zinc-950 border border-zinc-900 rounded-xl animate-pulse">
-                <div className="w-10 h-10 bg-zinc-850 rounded-full" />
-                <div className="flex-1 space-y-2 py-1">
-                  <div className="h-4 bg-zinc-850 rounded w-1/4" />
-                  <div className="h-3 bg-zinc-850 rounded w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : filteredLogs.length === 0 ? (
-          /* Empty State */
-          <div className="flex flex-col items-center justify-center py-20 text-center select-none" id="calls-empty-state">
-            <div className="w-16 h-16 bg-gradient-to-tr from-[#FF006E]/10 to-[#00D4FF]/10 rounded-full border border-zinc-805 flex items-center justify-center mb-4">
-              <PhoneOff className="h-8 w-8 text-zinc-600" />
+      <main className="flex-1 p-4 overflow-y-auto flex flex-col" id="calls-main-container">
+        {viewMode === 'history' ? (
+          <div className="flex flex-col flex-1 h-full">
+            <div className="flex bg-zinc-900 border border-zinc-900 rounded-xl p-1 mb-4 select-none shrink-0" id="calls-filter-tabs">
+              {(['all', 'incoming', 'outgoing', 'missed'] as const).map(filter => (
+                <button
+                  key={filter}
+                  onClick={() => {
+                    triggerVibration();
+                    setActiveFilter(filter);
+                  }}
+                  className={`flex-1 font-display text-[11px] font-semibold tracking-wider uppercase py-2 rounded-lg transition-all cursor-pointer ${
+                    activeFilter === filter
+                      ? 'bg-zinc-800 text-white shadow'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {filter === 'all' ? 'All' : filter === 'incoming' ? 'Received' : filter === 'outgoing' ? 'Dialed' : 'Missed'}
+                </button>
+              ))}
             </div>
-            <p className="text-zinc-400 font-semibold text-sm font-display mb-1">
-              No calling history
-            </p>
-            <p className="text-zinc-600 text-xs px-10 leading-normal">
-              Tap the (+) dialer key below to route your first network cellular pulse call.
-            </p>
-          </div>
-        ) : (
-          /* Call Logs Feed List */
-          <div className="space-y-2.5" id="calls-list">
-            <AnimatePresence>
-              {filteredLogs.map((log) => {
-                const displayName = resolveCallerName(log.phone, log.name);
-                const contact = findContactFor(log.phone);
-                return (
-                  <motion.div
-                    key={log.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -50 }}
-                    className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-900 hover:border-zinc-805 transition-all select-none"
-                  >
-                    <div
-                      className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-70"
-                      onClick={() => {
-                        triggerVibration();
-                        router.push(
-                          `/profile?phone=${encodeURIComponent(log.phone)}&name=${encodeURIComponent(displayName)}&avatar=${encodeURIComponent(contact?.avatar || '')}`
-                        );
-                      }}
-                    >
-                      {/* Circle Avatar: contact photo when available, else initials */}
-                      {contact?.avatar ? (
-                        <img
-                          src={contact.avatar}
-                          alt={displayName}
-                          className="w-10 h-10 rounded-full object-cover border border-zinc-700 shadow-inner"
-                        />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
-                          {displayName.slice(0, 2)}
-                        </div>
-                      )}
 
-                      <div className="min-w-0">
-                        <h4 className="text-xs font-semibold text-white font-sans truncate pr-2">
-                          {displayName}
-                        </h4>
-                      <div className="flex items-center gap-1.5 mt-0.5">
-                        {getCallIcon(log.type)}
-                        <span className="text-[10px] text-zinc-500 font-mono truncate">
-                          {formatTime(log.timestamp)} • {formatDuration(log.duration)}
-                        </span>
-                      </div>
+            {loading ? (
+              <div className="space-y-3" id="calls-skeleton">
+                {[1, 2].map((n) => (
+                  <div key={n} className="flex gap-4 p-3 bg-zinc-950 border border-zinc-900 rounded-xl animate-pulse">
+                    <div className="w-10 h-10 bg-zinc-850 rounded-full" />
+                    <div className="flex-1 space-y-2 py-1">
+                      <div className="h-4 bg-zinc-850 rounded w-1/4" />
+                      <div className="h-3 bg-zinc-850 rounded w-1/2" />
                     </div>
                   </div>
-
-                  {/* Native callback Actions */}
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleDialCall(log.phone)}
-                      className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-[#00D4FF] text-zinc-400 rounded-lg transition-all cursor-pointer active:scale-90"
-                      title="Audio Call"
-                    >
-                      <Phone className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDialCall(log.phone)}
-                      className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-[#FF006E] text-zinc-400 rounded-lg transition-all cursor-pointer active:scale-90"
-                      title="Video Call"
-                    >
-                      <Video className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteLog(log.id, e)}
-                      className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-red-400 text-zinc-500 rounded-lg transition-all cursor-pointer"
-                      title="Remove Log"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </motion.div>
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        )}
-
-        </>
-        )}
-
-        {/* Search results */}
-        {searchQuery && searchMatches.length > 0 && (
-          <div className="space-y-2">
-            {searchMatches.map((c) => (
-              <div
-                key={c.id}
-                onClick={() => router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`)}
-                className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-900 rounded-xl hover:bg-zinc-900/60 cursor-pointer active:scale-[0.99] transition-all"
-              >
-                {c.avatar ? (
-                  <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-full object-cover border border-zinc-700 shrink-0" />
-                ) : (
-                  <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase shrink-0">
-                    {c.name.slice(0, 2)}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-white truncate">{c.name}</p>
-                  <p className="text-[10px] font-mono text-zinc-400 truncate">{c.phone}</p>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }}
-                    className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[#00D4FF] active:scale-90"
-                    title="Message"
-                  >
-                    <MessageSquare className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDialCall(c.phone); }}
-                    className="p-2 rounded-lg bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981] active:scale-90"
-                    title="Call"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }}
-                    className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 active:scale-90"
-                    title="Info"
-                  >
-                    <Info className="h-4 w-4" />
-                  </button>
-                </div>
+                ))}
               </div>
-            ))}
+            ) : filteredLogs.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-20 text-center select-none" id="calls-empty-state">
+                <div className="w-16 h-16 bg-gradient-to-tr from-[#FF006E]/10 to-[#00D4FF]/10 rounded-full border border-zinc-805 flex items-center justify-center mb-4">
+                  <PhoneOff className="h-8 w-8 text-zinc-600" />
+                </div>
+                <p className="text-zinc-400 font-semibold text-sm font-display mb-1">No calling history</p>
+                <p className="text-zinc-600 text-xs px-10 leading-normal">Switch to Dialer to start a call.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5" id="calls-list">
+                <AnimatePresence>
+                  {filteredLogs.map((log) => {
+                    const displayName = resolveCallerName(log.phone, log.name);
+                    const contact = findContactFor(log.phone);
+                    return (
+                      <motion.div
+                        key={log.id}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, x: -50 }}
+                        className="flex items-center justify-between p-3 rounded-xl bg-zinc-950 border border-zinc-900 hover:border-zinc-805 transition-all select-none"
+                      >
+                        <div
+                          className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer active:opacity-70"
+                          onClick={() => {
+                            triggerVibration();
+                            router.push(`/profile?phone=${encodeURIComponent(log.phone)}&name=${encodeURIComponent(displayName)}&avatar=${encodeURIComponent(contact?.avatar || '')}`);
+                          }}
+                        >
+                          {contact?.avatar ? (
+                            <img src={contact.avatar} alt={displayName} className="w-10 h-10 rounded-full object-cover border border-zinc-700 shadow-inner" />
+                          ) : (
+                            <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 font-bold text-xs uppercase shadow-inner">
+                              {displayName.slice(0, 2)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <h4 className="text-xs font-semibold text-white font-sans truncate pr-2">{displayName}</h4>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {getCallIcon(log.type)}
+                              <span className="text-[10px] text-zinc-500 font-mono truncate">
+                                {formatTime(log.timestamp)} • {formatDuration(log.duration)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => handleDialCall(log.phone)} className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-[#00D4FF] text-zinc-400 rounded-lg transition-all cursor-pointer active:scale-90" title="Audio Call">
+                            <Phone className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={() => handleDialCall(log.phone)} className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-[#FF006E] text-zinc-400 rounded-lg transition-all cursor-pointer active:scale-90" title="Video Call">
+                            <Video className="h-3.5 w-3.5" />
+                          </button>
+                          <button onClick={(e) => handleDeleteLog(log.id, e)} className="p-2 bg-zinc-900 hover:bg-zinc-850 hover:text-red-400 text-zinc-500 rounded-lg transition-all cursor-pointer" title="Remove Log">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
-        )}
-        {searchQuery && searchMatches.length === 0 && (
-          <div className="text-center py-16 text-zinc-500 text-xs">
-            No contact matches "{searchQuery}"
-          </div>
-        )}
+        ) : (
+          <div className="flex flex-col flex-1 h-full">
+            <div className="relative mb-3 shrink-0" id="calls-search-wrap">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setIsSearchFocused(false)}
+                placeholder="Search name or number…"
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-9 pr-9 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-[#FF006E] transition-colors"
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-zinc-500 hover:text-white">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
 
-        {/* DIALER DIALOG OPEN FAB */}
-        
-
-        {/* DIALER FULL OVERLAY SHEET */}
-        <AnimatePresence>
-          {(!searchQuery || searchMatches.length === 0) && !isSearchFocused && (
-            <div className="fixed bottom-20 left-0 right-0 w-full md:max-w-md md:mx-auto z-30 select-none">
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 25, stiffness: 220 }}
-                className="w-full max-w-md bg-zinc-950 border-t border-zinc-900 rounded-t-3xl p-6 pb-8 flex flex-col items-center"
-                id="dialer-sheet-container"
-              >
-                {/* Close Button top right */}
-                {/* Match List Area — matched contacts on the left, a
-                    persistent "New" button on the right so a fresh number
-                    can always be saved. The button is fixed-width and
-                    never shrinks, so no amount of matches can push it off
-                    screen. Up to ~6 rows are visible; more rows scroll. */}
-                <div className="w-full max-w-[360px] mb-4 flex flex-row items-stretch gap-2">
-                  <div className="flex-1 min-w-0 flex items-center">
-                    {dialNumber && dialNumber.length > 0 ? (
-                      matchedContacts.length > 0 ? (
-                        <div className="w-full max-h-[288px] overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40">
+            {searchQuery && searchMatches.length > 0 ? (
+              <div className="space-y-2 flex-1 overflow-y-auto">
+                {searchMatches.map((c) => (
+                  <div key={c.id} className="flex items-center gap-3 p-3 bg-zinc-950 border border-zinc-900 rounded-xl hover:bg-zinc-900/60 cursor-pointer active:scale-[0.99] transition-all" onClick={() => router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`)}>
+                    {c.avatar ? (
+                      <img src={c.avatar} alt={c.name} className="w-10 h-10 rounded-full object-cover border border-zinc-700 shrink-0" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase shrink-0">
+                        {c.name.slice(0, 2)}
+                      </div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-white truncate">{c.name}</p>
+                      <p className="text-[10px] font-mono text-zinc-400 truncate">{c.phone}</p>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }} className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-[#00D4FF] active:scale-90" title="Message">
+                        <MessageSquare className="h-4 w-4" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); handleDialCall(c.phone); }} className="p-2 rounded-lg bg-[#10b981]/15 border border-[#10b981]/30 text-[#10b981] active:scale-90" title="Call">
+                        <Phone className="h-4 w-4" />
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); router.push(`/profile?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}&avatar=${encodeURIComponent(c.avatar || '')}`); }} className="p-2 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-400 active:scale-90" title="Info">
+                        <Info className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex-1 flex flex-col justify-end pb-2">
+                {dialNumber && dialNumber.length > 0 && (
+                  <div className="w-full max-w-[360px] mx-auto mb-4 flex flex-row items-stretch gap-2 shrink-0">
+                    <div className="flex-1 min-w-0 flex items-center">
+                      {matchedContacts.length > 0 ? (
+                        <div className="w-full max-h-[160px] overflow-y-auto space-y-1.5 no-scrollbar bg-zinc-900/40 p-1 rounded-xl border border-zinc-800/40">
                           {matchedContacts.map(contact => (
-                            <div
-                              key={contact.id}
-                              onClick={() => {
-                                triggerVibration();
-                                // Close the dialer and open the contact card.
-                                                            router.push(
-                                  `/profile?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`
-                                );
-                              }}
-                              className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 cursor-pointer active:scale-[0.99] transition-all"
-                            >
+                            <div key={contact.id} onClick={() => router.push(`/profile?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`)} className="flex items-center justify-between p-2 rounded-lg bg-zinc-950 hover:bg-zinc-900 border border-zinc-900 cursor-pointer active:scale-[0.99] transition-all">
                               <div className="flex items-center gap-2 min-w-0">
                                 {contact.avatar ? (
                                   <img src={contact.avatar} alt={contact.name} className="w-6.5 h-6.5 rounded-full object-cover border border-zinc-700" />
@@ -573,13 +443,7 @@ export default function CallsPage() {
                                   <p className="text-[9px] font-mono text-zinc-400 truncate leading-tight">{contact.phone}</p>
                                 </div>
                               </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDialCall(contact.phone);
-                                }}
-                                className="p-1 px-2.5 rounded bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] text-[9px] font-bold tracking-wide active:scale-95 transition-all"
-                              >
+                              <button onClick={(e) => { e.stopPropagation(); handleDialCall(contact.phone); }} className="p-1 px-2.5 rounded bg-[#10b981]/20 hover:bg-[#10b981]/30 text-[#10b981] text-[9px] font-bold tracking-wide active:scale-95 transition-all">
                                 Call
                               </button>
                             </div>
@@ -589,109 +453,49 @@ export default function CallsPage() {
                         <div className="w-full h-12 flex items-center justify-center text-[10px] text-zinc-500 font-mono italic px-3 bg-zinc-900/40 rounded-xl border border-zinc-800/40">
                           No saved contact matches
                         </div>
-                      )
-                    ) : (
-                      <span className="text-[10px] text-zinc-600 font-mono italic px-3">Enter digits to search database...</span>
-                    )}
-                  </div>
-
-                  {/* Persistent "New contact" button — fixed width, always
-                      visible as soon as any character is typed. */}
-                  {dialNumber && dialNumber.length > 0 && (
-                    <button
-                      onClick={() => {
-                        triggerVibration();
-                        router.push(`/contacts?add=true&phone=${encodeURIComponent(dialNumber)}`);
-                      }}
-                      className="w-14 rounded-xl bg-gradient-to-br from-[#00D4FF] to-[#008BBF] text-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all shrink-0 shadow-lg"
-                      title="Save as new contact"
-                    >
+                      )}
+                    </div>
+                    <button onClick={() => router.push(`/contacts?add=true&phone=${encodeURIComponent(dialNumber)}`)} className="w-14 rounded-xl bg-gradient-to-br from-[#00D4FF] to-[#008BBF] text-black flex flex-col items-center justify-center gap-1 active:scale-95 transition-all shrink-0 shadow-lg" title="Save as new contact">
                       <Plus className="h-5 w-5 stroke-[3]" />
                       <span className="text-[9px] font-bold uppercase tracking-wide">New</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
-                {/* Dialer Header: Number Display Area */}
-                <div className="w-full text-center mb-3 mt-2 relative px-8 flex flex-col items-center justify-center min-h-[3rem]">
+                <div className="w-full text-center mb-2 relative px-4 flex flex-col items-center justify-center min-h-[3rem]">
                   <div className="flex items-center justify-center w-full relative min-h-[2.5rem] px-10">
-                    <input
-                      ref={numberInputRef}
-                      type="text"
-                      inputMode="none"
-                      value={dialNumber}
-                      onChange={(e) => {
-                        // Allow only digits, plus, star, hash; keep cursor at end on manual change
-                        const cleaned = e.target.value.replace(/[^\d+*#]/g, '');
-                        setDialNumber(cleaned);
-                      }}
-                      placeholder=" "
-                      autoComplete="off"
-                      spellCheck={false}
-                      className="w-full bg-transparent text-2xl font-black font-mono text-white tracking-tight text-center outline-none caret-[#00D4FF] px-6"
-                    />
-
+                    <div className="w-full bg-transparent text-2xl font-black font-mono text-white tracking-tight text-center px-6 break-all">
+                      {dialNumber || <span className="opacity-0">0</span>}
+                    </div>
                     {dialNumber && (
-                      <button
-                        onClick={() => {
-                          // If long press already cleared, skip single delete
-                          if (backspaceLongPressRef.current) {
-                            backspaceLongPressRef.current = false;
-                            return;
-                          }
-                          handleBackspace();
-                        }}
-                        onPointerDown={() => {
-                          backspaceLongPressRef.current = false;
-                          if (backspaceTimerRef.current) clearTimeout(backspaceTimerRef.current);
-                          backspaceTimerRef.current = setTimeout(() => {
-                            backspaceLongPressRef.current = true;
-                            triggerVibration();
-                            setDialNumber('');
-                          }, 600);
-                        }}
-                        onPointerUp={() => {
-                          if (backspaceTimerRef.current) {
-                            clearTimeout(backspaceTimerRef.current);
-                            backspaceTimerRef.current = null;
-                          }
-                        }}
-                        onPointerLeave={() => {
-                          if (backspaceTimerRef.current) {
-                            clearTimeout(backspaceTimerRef.current);
-                            backspaceTimerRef.current = null;
-                          }
-                        }}
-                        className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90"
-                        title="Backspace (long press to clear)"
-                      >
+                      <button onClick={() => setDialNumber('')} className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90" title="Clear">
                         <Delete className="h-7 w-7" />
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Numpad Keypad grid */}
-                <div className="grid grid-cols-3 gap-y-4 gap-x-6 w-full max-w-[280px] mb-6">
+                <div className="grid grid-cols-3 gap-y-3 gap-x-6 w-full max-w-[280px] mx-auto mb-4 shrink-0">
                   {[
-                    { char: '1', sub: ' ' }, { char: '2', sub: 'ABC' }, { char: '3', sub: 'DEF' },
-                    { char: '4', sub: 'GHI' }, { char: '5', sub: 'JKL' }, { char: '6', sub: 'MNO' },
-                    { char: '7', sub: 'PQRS' }, { char: '8', sub: 'TUV' }, { char: '9', sub: 'WXYZ' },
-                    { char: '*', sub: ' ' }, { char: '0', sub: '+' }, { char: '#', sub: ' ' }
+                    { char: '1', sub: '' },
+                    { char: '2', sub: 'ABC' },
+                    { char: '3', sub: 'DEF' },
+                    { char: '4', sub: 'GHI' },
+                    { char: '5', sub: 'JKL' },
+                    { char: '6', sub: 'MNO' },
+                    { char: '7', sub: 'PQRS' },
+                    { char: '8', sub: 'TUV' },
+                    { char: '9', sub: 'WXYZ' },
+                    { char: '*', sub: '' },
+                    { char: '0', sub: '+' },
+                    { char: '#', sub: '' },
                   ].map((keyItem) => (
                     <button
                       key={keyItem.char}
-                      onPointerDown={() => startPress(keyItem.char)}
-                      onPointerUp={() => endPress(keyItem.char)}
-                      onPointerLeave={() => endPress(keyItem.char)}
-                      onPointerCancel={() => endPress(keyItem.char)}
                       onClick={() => {
-                        if (keyItem.char === '0' && isLongPressActiveRef.current) {
-                          return;
-                        }
                         handleNumPress(keyItem.char);
                       }}
-                      className="flex flex-col items-center justify-center w-[76px] h-[76px] rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-transform duration-100 ease-out cursor-pointer relative select-none"
+                      className="flex flex-col items-center justify-center w-[76px] h-[76px] mx-auto rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-transform duration-100 ease-out cursor-pointer relative select-none"
                     >
                       <span className="text-3xl font-black font-mono text-white leading-none">{keyItem.char}</span>
                       {keyItem.sub.trim() && (
@@ -701,44 +505,22 @@ export default function CallsPage() {
                   ))}
                 </div>
 
-                {/* Actions Row: SMS and Call */}
-                <div className="flex items-center gap-6 justify-center w-full">
-                  {/* SMS Button (Only active when number is entered) */}
-                  <button
-                    type="button"
-                    disabled={!dialNumber}
-                    onClick={() => {
-                      triggerVibration();
-                      const num = dialNumber.replace(/\s+/g, '');
-                      if (!num) return;
-                                        setDialNumber('');
-                      router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`);
-                    }}
-                    className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-                    title="Send SMS"
-                  >
+                <div className="flex items-center gap-6 justify-center w-full shrink-0">
+                  <button type="button" disabled={!dialNumber} onClick={() => { const num = dialNumber.replace(/\s+/g, ''); if (!num) return; setDialNumber(''); router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`); }} className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer" title="Send SMS">
                     <MessageSquare className="h-5 w-5" />
                   </button>
-
-                  {/* Green Call Trigger Button */}
-                  <button
-                    type="button"
-                    onClick={() => handleDialCall()}
-                    disabled={!dialNumber}
-                    className="w-16 h-16 rounded-full bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer"
-                    title="Call Phone intent"
-                  >
+                  <button type="button" onClick={() => handleDialCall()} disabled={!dialNumber} className="w-16 h-16 rounded-full bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer" title="Call">
                     <Phone className="h-6 w-6 stroke-[2.5]" />
                   </button>
                 </div>
-
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
-      {/* CALL SIM PICKER MODAL */}
+      <BottomNav currentTab="calls" />
+
       <AnimatePresence>
         {callSimPickerOpen && (
           <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
@@ -798,8 +580,7 @@ export default function CallsPage() {
           </div>
         )}
       </AnimatePresence>
-
-      {!isSearchFocused && <BottomNav currentTab="calls" />}
     </>
   );
 }
+
