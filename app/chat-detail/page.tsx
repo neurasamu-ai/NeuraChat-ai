@@ -93,6 +93,7 @@ function ChatDetailContent() {
   
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
   const [chatBg, setChatBg] = useState<ChatBackground | null>(null);
   const [subsMap, setSubsMap] = useState<Record<number, { label: string; number: string }>>({});
@@ -227,6 +228,8 @@ function ChatDetailContent() {
 
   // File Picker Input reference
   const scrollRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string>('');
 
   // Simulated Voice/Video Call states
   // SIM picker for outgoing SMS
@@ -480,11 +483,41 @@ function ChatDetailContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatId]);
 
-  // Scroll to bottom whenever messages list gets updated
+  // Track whether the user is at the bottom of the message list.
+  // Only auto-scroll when a NEW message arrives AND the user is already
+  // near the bottom, so reading older messages is not interrupted.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const onScroll = () => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      isAtBottomRef.current = distanceFromBottom < 120;
+      setShowScrollBtn(distanceFromBottom > 200);
+    };
+    container.addEventListener('scroll', onScroll, { passive: true });
+    return () => container.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // Smart auto-scroll: only fire on a new message at the end of the list,
+  // and only if the user was at the bottom. Status updates (sent / read /
+  // failed) never scroll. Loading older pages never scrolls (the actual
+  // scroll position is preserved by loadOlderMessages).
+  useEffect(() => {
+    if (messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    const prevLastId = lastMessageIdRef.current;
+    const isNewMessage = lastMsg.id !== prevLastId;
+    lastMessageIdRef.current = lastMsg.id;
+
+    if (!isNewMessage) return;          // status update only
+    if (!isAtBottomRef.current) return; // user is reading older messages
+
+    requestAnimationFrame(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
   }, [messages]);
 
   const triggerVibration = () => {
@@ -1025,6 +1058,28 @@ function ChatDetailContent() {
         <div ref={scrollRef} className="h-2" />
       </div>
       </div>
+
+      {/* Floating scroll-to-bottom button (WhatsApp-style) */}
+      <AnimatePresence>
+        {showScrollBtn && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+            onClick={() => {
+              if (scrollRef.current) {
+                scrollRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }}
+            className="fixed bottom-[88px] right-4 w-10 h-10 bg-zinc-900/95 backdrop-blur-md border border-zinc-700/60 rounded-full flex items-center justify-center shadow-xl text-white active:scale-90 transition-transform z-40"
+            aria-label="Scroll to latest messages"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+              <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+            </svg>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       {/* Selected Image Preview Bar above input */}
       {/* Bottom Message Composer Input form is fixed position and non-scrollable */}
