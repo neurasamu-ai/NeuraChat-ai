@@ -625,23 +625,6 @@ function ChatDetailContent() {
   };
 
   // ---- AI Refine ----
-  // Renders the composer text with any <...> instruction blocks
-  // highlighted in red behind the transparent textarea.
-  const renderHighlightedText = (text: string) => {
-    if (!text) return null;
-    const parts = text.split(/(<[^<>]*>)/g);
-    return parts.map((part, idx) => {
-      const isInstruction = /^<[^<>]*>$/.test(part);
-      return (
-        <span
-          key={idx}
-          className={isInstruction ? 'text-red-500 font-bold' : 'text-zinc-100'}
-        >
-          {part}
-        </span>
-      );
-    });
-  };
 
   // Takes the current composer text, sends it through the user's default
   // AI provider, and shows a preview popup. The user can Replace (which
@@ -1187,29 +1170,13 @@ function ChatDetailContent() {
       >
         {/* Hidden Picker Input */}
         <div className="flex-1 relative">
-          {/* Highlight mirror (draws <...> blocks in red behind the textarea) */}
-          <div
-            aria-hidden="true"
-            className="absolute inset-0 py-2 px-2 text-sm whitespace-pre-wrap break-words leading-snug pointer-events-none max-h-32 overflow-hidden"
-            style={{ minHeight: '36px' }}
-          >
-            {inputText ? (
-              renderHighlightedText(inputText)
-            ) : (
-              <span className="text-zinc-500">Send chat...</span>
-            )}
-            {/* Extra space so the caret does not overlap the last character */}
-            <span> </span>
-          </div>
-
-          {/* Actual textarea — text is transparent, caret is visible */}
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            placeholder="Send chat..."
             rows={1}
-            className="relative w-full bg-transparent py-2 px-2 text-sm text-transparent caret-[#cbfe00] focus:outline-none transition-colors resize-none max-h-32 leading-snug"
+            className="w-full bg-transparent py-2 px-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors resize-none max-h-32 leading-snug"
             style={{ minHeight: '36px' }}
-            spellCheck={false}
           />
         </div>
 

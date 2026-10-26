@@ -165,6 +165,11 @@ export default function CallsPage() {
     setDialNumber((prev) => prev + char);
   };
 
+  const handleBackspace = () => {
+    triggerVibration();
+    setDialNumber((prev) => prev.slice(0, -1));
+  };
+
 
   // Dial Trigger via window.location.href = tel:NUMBER
   const handleDialCall = async (customNum?: string) => {
@@ -475,43 +480,63 @@ export default function CallsPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-3 gap-y-3 gap-x-6 w-full max-w-[280px] mx-auto mb-4 shrink-0">
-                  {[
-                    { char: '1', sub: '' },
-                    { char: '2', sub: 'ABC' },
-                    { char: '3', sub: 'DEF' },
-                    { char: '4', sub: 'GHI' },
-                    { char: '5', sub: 'JKL' },
-                    { char: '6', sub: 'MNO' },
-                    { char: '7', sub: 'PQRS' },
-                    { char: '8', sub: 'TUV' },
-                    { char: '9', sub: 'WXYZ' },
-                    { char: '*', sub: '' },
-                    { char: '0', sub: '+' },
-                    { char: '#', sub: '' },
-                  ].map((keyItem) => (
-                    <button
-                      key={keyItem.char}
-                      onClick={() => {
-                        handleNumPress(keyItem.char);
-                      }}
-                      className="flex flex-col items-center justify-center w-[76px] h-[76px] mx-auto rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-transform duration-100 ease-out cursor-pointer relative select-none"
-                    >
-                      <span className="text-3xl font-black font-mono text-white leading-none">{keyItem.char}</span>
-                      {keyItem.sub.trim() && (
-                        <span className="text-[9px] text-zinc-400 font-sans tracking-wide mt-0.5 uppercase leading-none">{keyItem.sub}</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
+                {/* Split Layout: Numpad Left, Call/SMS Right */}
+                <div className="flex items-center gap-4 w-full max-w-[340px] mx-auto mb-4 shrink-0 px-2">
+                  {/* Numpad (Left) */}
+                  <div className="grid grid-cols-3 gap-y-3 gap-x-4 flex-1">
+                    {[
+                      { char: '1', sub: '' },
+                      { char: '2', sub: 'ABC' },
+                      { char: '3', sub: 'DEF' },
+                      { char: '4', sub: 'GHI' },
+                      { char: '5', sub: 'JKL' },
+                      { char: '6', sub: 'MNO' },
+                      { char: '7', sub: 'PQRS' },
+                      { char: '8', sub: 'TUV' },
+                      { char: '9', sub: 'WXYZ' },
+                      { char: '*', sub: '' },
+                      { char: '0', sub: '+' },
+                      { char: '#', sub: '' },
+                    ].map((keyItem) => (
+                      <button
+                        key={keyItem.char}
+                        onClick={() => handleNumPress(keyItem.char)}
+                        className="flex flex-col items-center justify-center w-full aspect-square max-w-[70px] rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-transform duration-100 ease-out cursor-pointer relative select-none mx-auto"
+                      >
+                        <span className="text-2xl font-black font-mono text-white leading-none">{keyItem.char}</span>
+                        {keyItem.sub.trim() && (
+                          <span className="text-[8px] text-zinc-400 font-sans tracking-wide mt-0.5 uppercase leading-none">{keyItem.sub}</span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
 
-                <div className="flex items-center gap-6 justify-center w-full shrink-0">
-                  <button type="button" disabled={!dialNumber} onClick={() => { const num = dialNumber.replace(/\s+/g, ''); if (!num) return; setDialNumber(''); router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`); }} className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-[#00D4FF] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer" title="Send SMS">
-                    <MessageSquare className="h-5 w-5" />
-                  </button>
-                  <button type="button" onClick={() => handleDialCall()} disabled={!dialNumber} className="w-16 h-16 rounded-full bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-90 transition-all cursor-pointer" title="Call">
-                    <Phone className="h-6 w-6 stroke-[2.5]" />
-                  </button>
+                  {/* Action Buttons (Right) */}
+                  <div className="flex flex-col w-[76px] h-[290px] shrink-0 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleDialCall()}
+                      disabled={!dialNumber}
+                      className="flex-[7] w-full rounded-2xl bg-[#10b981] hover:bg-[#059669] text-black shadow-[0_0_15px_rgba(16,185,129,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                      title="Call"
+                    >
+                      <Phone className="h-8 w-8 stroke-[2.5]" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!dialNumber}
+                      onClick={() => {
+                        const num = dialNumber.replace(/\s+/g, '');
+                        if (!num) return;
+                        setDialNumber('');
+                        router.push(`/chat-detail?phone=${encodeURIComponent(num)}&name=${encodeURIComponent(num)}`);
+                      }}
+                      className="flex-[3] w-full rounded-2xl bg-[#00D4FF] hover:bg-[#00b8e0] text-black shadow-[0_0_15px_rgba(0,212,255,0.4)] disabled:opacity-40 flex items-center justify-center active:scale-95 transition-all cursor-pointer"
+                      title="Send SMS"
+                    >
+                      <MessageSquare className="h-6 w-6" />
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
