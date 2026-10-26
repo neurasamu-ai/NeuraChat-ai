@@ -68,6 +68,11 @@ export interface UserProfile {
   username?: string;
   theme?: 'dark' | 'light' | 'system';
   bubbleColor?: string; // hex, e.g. "#cbfe00"; default handled in UI
+  // ---- App Lock ----
+  appLockEnabled?: boolean;
+  appLockType?: 'biometric' | 'pattern' | 'both';
+  appLockPattern?: string;   // JSON array of grid indices [0..8]
+  autoLockTimeout?: number;  // minutes; 0 = immediately on background
 }
 
 const DB_NAME = 'neurachat_db';

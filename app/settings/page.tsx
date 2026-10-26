@@ -19,7 +19,8 @@ import {
   Sparkles,
   Trash2,
   Palette,
-  Music
+  Music,
+  Lock
 } from 'lucide-react';
 import {
   getUserProfile,
@@ -77,6 +78,8 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
+  const [appLockEnabled, setAppLockEnabled] = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
 
 
 
@@ -124,6 +127,7 @@ export default function SettingsPage() {
       setEditAvatar(stored.avatar || '');
       setAppearance(stored.theme || 'system');
       setBubbleColor(getBubbleColorHex(stored.bubbleColor));
+      setAppLockEnabled(!!stored.appLockEnabled);
     }
     const handle = setTimeout(() => {
       loadProfile();
@@ -283,6 +287,61 @@ export default function SettingsPage() {
             </div>
           </div>
 
+
+          {/* App Lock */}
+          <div className="flex items-center justify-between p-3 px-4 transition-colors rounded-xl">
+            <div className="flex items-center gap-3">
+              <Lock className="h-4 w-4 text-[#00D4FF]" />
+              <div>
+                <span className="text-xs font-medium text-zinc-200">App Lock</span>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  Lock on app launch (fingerprint / face / pattern)
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={async () => {
+                triggerVibration();
+                if (lockBusy) return;
+                setLockBusy(true);
+                try {
+                  if (appLockEnabled) {
+                    // Turning off — clear the pattern too.
+                    const updated = {
+                      ...profile,
+                      appLockEnabled: false,
+                      appLockPattern: undefined,
+                    };
+                    setProfile(updated);
+                    setAppLockEnabled(false);
+                    await saveUserProfile(updated);
+                  } else {
+                    // Turning on — save flag, provider will trigger setup next launch.
+                    const updated = {
+                      ...profile,
+                      appLockEnabled: true,
+                    };
+                    setProfile(updated);
+                    setAppLockEnabled(true);
+                    await saveUserProfile(updated);
+                  }
+                } catch (e) {
+                  console.error('App Lock toggle failed', e);
+                } finally {
+                  setLockBusy(false);
+                }
+              }}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                appLockEnabled ? 'bg-[#00D4FF]' : 'bg-zinc-700'
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+                  appLockEnabled ? 'left-[22px]' : 'left-0.5'
+                }`}
+              />
+            </button>
+          </div>
 
           {/* Bubble Color (collapsible) */}
           <div className="flex flex-col p-3 px-4 transition-colors rounded-xl">
