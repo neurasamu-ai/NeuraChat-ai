@@ -20,7 +20,8 @@ import {
   User,
   ExternalLink,
   Users,
-  MessageSquare
+  MessageSquare,
+  Sparkles
 } from 'lucide-react';
 import {
   getMessages,
@@ -94,6 +95,8 @@ function ChatDetailContent() {
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [refining, setRefining] = useState(false);
+  const [refinedText, setRefinedText] = useState<string | null>(null);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
   const [chatBg, setChatBg] = useState<ChatBackground | null>(null);
   const [subsMap, setSubsMap] = useState<Record<number, { label: string; number: string }>>({});
@@ -621,6 +624,81 @@ function ChatDetailContent() {
     }
   };
 
+  // ---- AI Refine ----
+  // Takes the current composer text, sends it through the user's default
+  // AI provider, and shows a preview popup. The user can Replace (which
+  // swaps the composer content) or Dismiss (which keeps the original).
+  //
+  // Optional custom instruction: wrap it in <prompt>...</prompt> anywhere
+  // in the composer text. If present, the AI follows that instead of the
+  // default "fix grammar only" instruction, and the <prompt> block is
+  // stripped from the text before refinement.
+  const handleRefine = async () => {
+    const raw = inputText.trim();
+    if (!raw || refining) return;
+
+    setRefining(true);
+    try {
+      // 1. Require at least one enabled AI provider.
+      const { getProviderSettings } = await import('@/lib/ai/keystore');
+      const settings = await getProviderSettings();
+      const enabled = settings.filter((s) => s.enabled);
+      if (enabled.length === 0) {
+        alertToast('Add an AI provider in Settings → AI Providers first', 'error');
+        setRefining(false);
+        return;
+      }
+
+      // 2. Extract optional custom instruction.
+      const promptMatch = raw.match(/<prompt>([\s\S]*?)<\/prompt>/i);
+      const customPrompt = promptMatch ? promptMatch[1].trim() : '';
+      const textToRefine = promptMatch
+        ? raw.replace(/<prompt>[\s\S]*?<\/prompt>/gi, '').trim()
+        : raw;
+
+      if (!textToRefine) {
+        alertToast('Nothing to refine after removing <prompt>', 'error');
+        setRefining(false);
+        return;
+      }
+
+      // 3. Ask the AI.
+      const { chatOnce } = await import('@/lib/ai/client');
+      const instruction = customPrompt
+        ? `Apply this instruction exactly: ${customPrompt}`
+        : 'Fix only grammar, spelling, punctuation, and sentence structure. Do not change the meaning, do not add anything, do not remove anything.';
+
+      const result = await chatOnce(enabled[0].providerId, [
+        {
+          role: 'system',
+          content: `You are a precise text-refinement assistant. Rules:
+1. Preserve the ORIGINAL language. English stays English, Hinglish stays Hinglish, Urdu stays Urdu, Roman Urdu stays Roman Urdu. Never translate.
+2. ${instruction}
+3. Output ONLY the refined text. No quotes, no code fences, no explanation, no preamble.
+4. Keep the original line structure unless the instruction says otherwise.`,
+        },
+        {
+          role: 'user',
+          content: textToRefine,
+        },
+      ]);
+
+      const cleaned = result.trim().replace(/^["'`]+|["'`]+$/g, '').trim();
+      if (!cleaned) {
+        alertToast('AI returned empty response', 'error');
+        setRefining(false);
+        return;
+      }
+
+      setRefinedText(cleaned);
+    } catch (e: any) {
+      console.error('handleRefine failed', e);
+      alertToast('Refine failed: ' + (e?.message || 'unknown'), 'error');
+    } finally {
+      setRefining(false);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
@@ -1100,6 +1178,33 @@ function ChatDetailContent() {
           />
         </div>
 
+        {/* AI Refine button (only shows when there is text) */}
+        {inputText.trim().length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              handleRefine();
+            }}
+            disabled={refining}
+            className={`p-2.5 rounded-2xl transition-all duration-200 cursor-pointer shrink-0 ${
+              refining
+                ? 'bg-zinc-900 text-zinc-500'
+                : 'bg-zinc-900 text-[#00D4FF] border border-[#00D4FF]/30 hover:bg-[#00D4FF]/10 active:scale-95'
+            }`}
+            title="Refine text with AI"
+          >
+            {refining ? (
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4 animate-spin">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+          </button>
+        )}
+
         {/* Send button is gray by default, turns yellow when there is text or media */}
         <button
           type="submit"
@@ -1537,6 +1642,50 @@ function ChatDetailContent() {
               }}
             />
             <span style={{ wordBreak: 'break-word' }}>{toastMessage}</span>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Refine preview popup */}
+      <AnimatePresence>
+        {refinedText !== null && (
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-md z-[110] flex items-end justify-center p-3 pb-6 select-none">
+            <motion.div
+              initial={{ y: 40, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 40, opacity: 0 }}
+              transition={{ type: 'spring', damping: 24, stiffness: 260 }}
+              className="w-full max-w-md bg-zinc-950 border border-zinc-800/80 rounded-3xl p-4 relative"
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-4 w-4 text-[#00D4FF]" />
+                <p className="text-sm font-bold text-white">AI Refined</p>
+              </div>
+
+              <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl p-3 mb-3 max-h-60 overflow-y-auto">
+                <p className="text-sm text-zinc-100 leading-snug whitespace-pre-wrap break-words">
+                  {refinedText}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => setRefinedText(null)}
+                  className="py-3 rounded-2xl bg-zinc-900 text-zinc-300 text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all"
+                >
+                  Dismiss
+                </button>
+                <button
+                  onClick={() => {
+                    setInputText(refinedText || '');
+                    setRefinedText(null);
+                  }}
+                  className="py-3 rounded-2xl bg-[#cbfe00] text-black text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all"
+                >
+                  Replace
+                </button>
+              </div>
+            </motion.div>
           </div>
         )}
       </AnimatePresence>
