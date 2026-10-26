@@ -649,15 +649,16 @@ function ChatDetailContent() {
         return;
       }
 
-      // 2. Extract optional custom instruction.
-      const promptMatch = raw.match(/<prompt>([\s\S]*?)<\/prompt>/i);
-      const customPrompt = promptMatch ? promptMatch[1].trim() : '';
-      const textToRefine = promptMatch
-        ? raw.replace(/<prompt>[\s\S]*?<\/prompt>/gi, '').trim()
-        : raw;
+      // 2. Extract all <...> instruction blocks (may be multiple).
+      const instructionMatches = raw.match(/<([^<>]+)>/g) || [];
+      const instructions: string[] = instructionMatches
+        .map((m) => m.slice(1, -1).trim())
+        .filter((x) => x.length > 0);
+      const customPrompt = instructions.join('\n');
+      const textToRefine = raw.replace(/<[^<>]+>/g, '').trim();
 
       if (!textToRefine) {
-        alertToast('Nothing to refine after removing <prompt>', 'error');
+        alertToast('Add some text outside the <> blocks to refine', 'error');
         setRefining(false);
         return;
       }
@@ -665,7 +666,7 @@ function ChatDetailContent() {
       // 3. Ask the AI.
       const { chatOnce } = await import('@/lib/ai/client');
       const instruction = customPrompt
-        ? `Apply this instruction exactly: ${customPrompt}`
+        ? `Follow all of these user instructions exactly, in the order they were given:\n${customPrompt}`
         : 'Fix only grammar, spelling, punctuation, and sentence structure. Do not change the meaning, do not add anything, do not remove anything.';
 
       const result = await chatOnce(enabled[0].providerId, [
