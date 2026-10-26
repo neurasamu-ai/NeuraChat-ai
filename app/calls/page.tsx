@@ -279,7 +279,7 @@ export default function CallsPage() {
         }
       />
 
-      <main className="flex-1 p-4 overflow-y-auto flex flex-col" id="calls-main-container">
+      <main className="flex-1 p-4 pb-24 overflow-y-auto flex flex-col" id="calls-main-container">
         {viewMode === 'history' ? (
           <div className="flex flex-col flex-1 h-full">
             <div className="flex bg-zinc-900 border border-zinc-900 rounded-xl p-1 mb-4 select-none shrink-0" id="calls-filter-tabs">
@@ -473,7 +473,7 @@ export default function CallsPage() {
                       {dialNumber || <span className="opacity-0">0</span>}
                     </div>
                     {dialNumber && (
-                      <button onClick={() => setDialNumber('')} className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90" title="Clear">
+                      <button onClick={handleBackspace} className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90" title="Delete">
                         <Delete className="h-7 w-7" />
                       </button>
                     )}
@@ -512,7 +512,7 @@ export default function CallsPage() {
                   </div>
 
                   {/* Action Buttons (Right) */}
-                  <div className="flex flex-col w-[76px] h-[290px] shrink-0 gap-3">
+                  <div className="flex flex-col w-[76px] h-[265px] shrink-0 gap-3">
                     <button
                       type="button"
                       onClick={() => handleDialCall()}
