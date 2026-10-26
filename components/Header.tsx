@@ -40,44 +40,49 @@ export default function Header({
   if (isChatDetail) {
     return (
       <header
-        className="sticky top-2 left-2 right-2 mx-auto max-w-md h-16 bg-gradient-to-r from-[#cbfe00] via-[#e6ff00] to-[#b3ed00] text-zinc-900 flex items-center px-2 justify-between z-40 select-none shadow-xl rounded-3xl border border-white/20 backdrop-blur-md"
+        className="sticky top-0 left-0 right-0 w-full h-16 bg-gradient-to-r from-[#cbfe00] via-[#e6ff00] to-[#b3ed00] text-zinc-900 flex items-center px-3 justify-between z-40 select-none shadow-md rounded-b-2xl"
         id="app-header-chat"
       >
-        <div className="flex items-center gap-2">
+        {/* Left: back + avatar + title (truncates if too long) */}
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <button
             onClick={handleBack}
-            className="p-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all cursor-pointer text-zinc-900"
+            className="p-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all cursor-pointer text-zinc-900 shrink-0"
             aria-label="Back"
             id="header-back-button"
           >
             <ArrowLeft className="h-5 w-5 stroke-[3]" />
           </button>
 
-          {/* Profile Photo */}
           {avatar ? (
-            <img src={avatar} alt={title} className="w-9 h-9 rounded-full object-cover border-2 border-zinc-900/10 shadow-sm" />
+            <img
+              src={avatar}
+              alt={title}
+              className="w-9 h-9 rounded-full object-cover border-2 border-zinc-900/10 shadow-sm shrink-0"
+            />
           ) : (
-            <div className="w-9 h-9 rounded-full bg-zinc-900/10 flex items-center justify-center text-zinc-800 font-bold text-sm shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-zinc-900/15 flex items-center justify-center text-zinc-800 font-bold text-sm shadow-sm shrink-0">
               {title.charAt(0).toUpperCase()}
             </div>
           )}
 
           <div
-            className={`flex flex-col ${onTitleClick ? 'cursor-pointer active:opacity-70' : ''}`}
+            className={`flex flex-col min-w-0 flex-1 ${onTitleClick ? 'cursor-pointer active:opacity-70' : ''}`}
             onClick={onTitleClick}
           >
-            <h1 className="font-bold text-[15px] tracking-tight font-display text-zinc-900 leading-tight">
+            <h1 className="font-bold text-[15px] tracking-tight font-display text-zinc-900 leading-tight truncate">
               {title}
             </h1>
             {subtitle ? (
-              <span className="text-[10px] text-zinc-700 font-semibold font-sans">
+              <span className="text-[10px] text-zinc-700 font-semibold font-sans truncate">
                 {subtitle}
               </span>
             ) : null}
           </div>
         </div>
 
-        <div className="flex items-center gap-1">
+        {/* Right: fixed-width actions */}
+        <div className="flex items-center gap-1 shrink-0">
           {rightAction ? rightAction : <div className="w-5" />}
         </div>
       </header>
