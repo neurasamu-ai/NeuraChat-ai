@@ -165,10 +165,43 @@ export default function CallsPage() {
     setDialNumber((prev) => prev + char);
   };
 
+  const backspaceIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  const backspaceTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  const startBackspace = () => {
+    triggerVibration();
+    setDialNumber((prev) => prev.slice(0, -1));
+    // After 400ms of holding, start continuous delete every 60ms
+    backspaceTimeoutRef.current = setTimeout(() => {
+      backspaceIntervalRef.current = setInterval(() => {
+        setDialNumber((prev) => {
+          if (prev.length === 0) {
+            stopBackspace();
+            return prev;
+          }
+          return prev.slice(0, -1);
+        });
+      }, 60);
+    }, 400);
+  };
+
+  const stopBackspace = () => {
+    if (backspaceTimeoutRef.current) {
+      clearTimeout(backspaceTimeoutRef.current);
+      backspaceTimeoutRef.current = null;
+    }
+    if (backspaceIntervalRef.current) {
+      clearInterval(backspaceIntervalRef.current);
+      backspaceIntervalRef.current = null;
+    }
+  };
+
   const handleBackspace = () => {
+    // Kept for backwards compat — falls back to single delete
     triggerVibration();
     setDialNumber((prev) => prev.slice(0, -1));
   };
+
 
 
   // Dial Trigger via window.location.href = tel:NUMBER
@@ -473,7 +506,14 @@ export default function CallsPage() {
                       {dialNumber || <span className="opacity-0">0</span>}
                     </div>
                     {dialNumber && (
-                      <button onClick={handleBackspace} className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90" title="Delete">
+                      <button
+                      onPointerDown={startBackspace}
+                      onPointerUp={stopBackspace}
+                      onPointerLeave={stopBackspace}
+                      onPointerCancel={stopBackspace}
+                      className="absolute right-2 p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors cursor-pointer active:scale-90"
+                      title="Delete (hold to clear faster)"
+                    >
                         <Delete className="h-7 w-7" />
                       </button>
                     )}

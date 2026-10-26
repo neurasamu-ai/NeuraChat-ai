@@ -119,14 +119,14 @@ function MessageBubbleInner({
         className={`p-2 px-2.5 rounded-2xl relative transition-all duration-200 flex flex-col ${
           isUser
             ? 'max-w-[80%] rounded-tr-sm'
-            : 'max-w-[82%] rounded-tl-sm'
+            : 'max-w-[82%] rounded-tl-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100'
         } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
         style={
           msg.starred
-            ? { backgroundColor: '#facc15', color: '#18181b' } // yellow-400 + dark text
+            ? { backgroundColor: '#facc15', color: '#18181b' }
             : isUser
               ? { backgroundColor: bubbleColor, color: bubbleTextColor(bubbleColor) }
-              : { backgroundColor: '#18181b', border: '1px solid #27272a', color: '#f4f4f5' }
+              : undefined
         }
       >
         {/* Header INSIDE bubble: avatar + name only */}
@@ -145,7 +145,7 @@ function MessageBubbleInner({
           ) : (
             <>
               <Avatar src={headerAvatar} name={headerName} size={20} />
-              <span className="text-[10px] font-semibold text-zinc-200 truncate max-w-[120px]">
+              <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[120px]">
                 {headerName}
               </span>
               <div className="flex-1" />
@@ -188,7 +188,7 @@ function MessageBubbleInner({
                   ? 'text-zinc-900 fill-zinc-900'
                   : isUser
                     ? 'text-zinc-800/50'
-                    : 'text-zinc-500'
+                    : 'text-zinc-500 dark:text-zinc-400'
               }`}
             />
           </button>
