@@ -691,9 +691,9 @@ export default function CallsPage() {
                         }
                         handleNumPress(keyItem.char);
                       }}
-                      className="flex flex-col items-center justify-center w-16 h-16 rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-all cursor-pointer relative select-none touch-none"
+                      className="flex flex-col items-center justify-center w-[76px] h-[76px] rounded-full bg-zinc-900 border border-zinc-805 hover:bg-zinc-850 active:scale-90 transition-transform duration-100 ease-out cursor-pointer relative select-none"
                     >
-                      <span className="text-2xl font-black font-mono text-white leading-none">{keyItem.char}</span>
+                      <span className="text-3xl font-black font-mono text-white leading-none">{keyItem.char}</span>
                       {keyItem.sub.trim() && (
                         <span className="text-[9px] text-zinc-400 font-sans tracking-wide mt-0.5 uppercase leading-none">{keyItem.sub}</span>
                       )}

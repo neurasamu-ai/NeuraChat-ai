@@ -842,15 +842,12 @@ function ChatDetailContent() {
       {/* Pink Glowing pulsing header component */}
       <Header
         title={(() => {
-          // URL name may still be a raw phone number on the first render
-          // (or after a fresh chat was created from an SMS). Prefer the
-          // resolved contact name when available so the header always shows
-          // the saved contact title.
           const urlName = (name || '').trim();
           const looksNumeric = /^[+\d\s-]+$/.test(urlName);
           if (!urlName || looksNumeric) return resolvedContact?.name || urlName || phone;
           return urlName;
         })()}
+        avatar={avatar || resolvedContact?.avatar}
         isChatDetail={true}
         backHref="/chats"
         onTitleClick={() => {

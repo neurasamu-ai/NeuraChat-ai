@@ -12,6 +12,7 @@ interface HeaderProps {
   rightAction?: React.ReactNode;
   onBack?: () => void;
   onTitleClick?: () => void;
+  avatar?: string;
 }
 
 export default function Header({
@@ -22,6 +23,7 @@ export default function Header({
   rightAction,
   onBack,
   onTitleClick,
+  avatar,
 }: HeaderProps) {
   const router = useRouter();
 
@@ -38,24 +40,33 @@ export default function Header({
   if (isChatDetail) {
     return (
       <header
-        className="sticky top-0 left-0 right-0 h-13 bg-gradient-to-r from-[#cbfe00] via-[#e6ff00] to-[#b3ed00] text-zinc-900 flex items-center px-4 justify-between z-40 select-none shadow-[0_2px_15px_rgba(203,254,0,0.18)] rounded-b-[20px] rounded-t-none"
+        className="sticky top-2 left-2 right-2 mx-auto max-w-md h-16 bg-gradient-to-r from-[#cbfe00] via-[#e6ff00] to-[#b3ed00] text-zinc-900 flex items-center px-2 justify-between z-40 select-none shadow-xl rounded-3xl border border-white/20 backdrop-blur-md"
         id="app-header-chat"
       >
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleBack}
-            className="p-1 rounded-full hover:bg-black/10 active:scale-90 transition-all cursor-pointer text-zinc-900"
-            aria-label="Close"
+            className="p-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all cursor-pointer text-zinc-900"
+            aria-label="Back"
             id="header-back-button"
           >
-            <X className="h-5 w-5 stroke-[2.5]" />
+            <ArrowLeft className="h-5 w-5 stroke-[3]" />
           </button>
-          
+
+          {/* Profile Photo */}
+          {avatar ? (
+            <img src={avatar} alt={title} className="w-9 h-9 rounded-full object-cover border-2 border-zinc-900/10 shadow-sm" />
+          ) : (
+            <div className="w-9 h-9 rounded-full bg-zinc-900/10 flex items-center justify-center text-zinc-800 font-bold text-sm shadow-sm">
+              {title.charAt(0).toUpperCase()}
+            </div>
+          )}
+
           <div
             className={`flex flex-col ${onTitleClick ? 'cursor-pointer active:opacity-70' : ''}`}
             onClick={onTitleClick}
           >
-            <h1 className="font-bold text-sm tracking-tight font-display text-zinc-900">
+            <h1 className="font-bold text-[15px] tracking-tight font-display text-zinc-900 leading-tight">
               {title}
             </h1>
             {subtitle ? (
@@ -66,13 +77,8 @@ export default function Header({
           </div>
         </div>
 
-        {/* Header Right Actions */}
         <div className="flex items-center gap-1">
-          {rightAction ? (
-            rightAction
-          ) : (
-            <div className="w-5" /> // spacing
-          )}
+          {rightAction ? rightAction : <div className="w-5" />}
         </div>
       </header>
     );
