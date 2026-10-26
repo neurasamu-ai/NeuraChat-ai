@@ -29,6 +29,7 @@ export interface Message {
   timestamp: number;
   status: 'sending' | 'sent' | 'received' | 'read' | 'failed';
   subscriptionId?: number; // SIM subscription id, -1 / undefined if unknown
+  starred?: boolean;
 }
 
 export interface Contact {

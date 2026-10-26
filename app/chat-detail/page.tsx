@@ -701,6 +701,17 @@ function ChatDetailContent() {
     }
   };
 
+  const handleToggleStar = async (msg: Message) => {
+    triggerVibration();
+    try {
+      const updated = { ...msg, starred: !msg.starred };
+      await saveMessage(updated);
+      await loadMessages();
+    } catch (e) {
+      console.error('handleToggleStar failed', e);
+    }
+  };
+
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!inputText.trim()) return;
@@ -1127,6 +1138,7 @@ function ChatDetailContent() {
                   ? subsMap[msg.subscriptionId]?.label
                   : undefined
               }
+              onToggleStar={handleToggleStar}
               onRetry={handleRetryMessage}
               onPressStart={handleMessagePressStart}
               onPressEnd={handleMessagePressEnd}

@@ -15,6 +15,7 @@ interface MessageBubbleProps {
   userAvatar?: string;
   bubbleColor: string;
   simLabel?: string;
+  onToggleStar: (msg: Message) => void;
   onRetry: (msg: Message) => void;
   onPressStart: (msg: Message, x?: number, y?: number) => void;
   onPressEnd: () => void;
@@ -82,6 +83,7 @@ function MessageBubbleInner({
   userAvatar,
   bubbleColor,
   simLabel,
+  onToggleStar,
   onRetry,
   onPressStart,
   onPressEnd,
@@ -117,12 +119,14 @@ function MessageBubbleInner({
         className={`p-2 px-2.5 rounded-2xl relative transition-all duration-200 flex flex-col ${
           isUser
             ? 'max-w-[80%] rounded-tr-sm'
-            : 'max-w-[82%] bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-tl-sm'
+            : 'max-w-[82%] rounded-tl-sm'
         } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
         style={
-          isUser
-            ? { backgroundColor: bubbleColor, color: bubbleTextColor(bubbleColor) }
-            : undefined
+          msg.starred
+            ? { backgroundColor: '#facc15', color: '#18181b' } // yellow-400 + dark text
+            : isUser
+              ? { backgroundColor: bubbleColor, color: bubbleTextColor(bubbleColor) }
+              : { backgroundColor: '#18181b', border: '1px solid #27272a', color: '#f4f4f5' }
         }
       >
         {/* Header INSIDE bubble: avatar + name only */}
@@ -167,14 +171,33 @@ function MessageBubbleInner({
           </p>
         )}
 
-        {/* Bottom row: date/time + SIM badge. Outgoing = right-aligned,
-            incoming = left-aligned. */}
+        {/* Bottom row: date/time + SIM badge + star toggle. */}
         <div className={`mt-1 flex items-center gap-1.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
+          {/* Star button */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleStar(msg);
+            }}
+            className="p-0.5 active:scale-75 transition-transform"
+            title={msg.starred ? 'Unstar' : 'Star message'}
+          >
+            <Star
+              className={`h-3.5 w-3.5 ${
+                msg.starred
+                  ? 'text-zinc-900 fill-zinc-900'
+                  : isUser
+                    ? 'text-zinc-800/50'
+                    : 'text-zinc-500'
+              }`}
+            />
+          </button>
+
           {isUser ? (
             <>
               <span
                 className="text-[9px] font-mono whitespace-nowrap"
-                style={{ color: bubbleTextColor(bubbleColor) + '99' }}
+                style={{ color: msg.starred ? 'rgba(24,24,27,0.6)' : bubbleTextColor(bubbleColor) + '99' }}
               >
                 {dateTime}
               </span>
@@ -264,6 +287,7 @@ const MessageBubble = React.memo(MessageBubbleInner, (prev, next) => {
   if (a.text !== b.text) return false;
   if (a.image !== b.image) return false;
   if (a.timestamp !== b.timestamp) return false;
+  if (a.starred !== b.starred) return false;
   return true;
 });
 
