@@ -34,6 +34,33 @@ function setState(patch: Partial<ChatsState>) {
   emit();
 }
 
+// ---- Batch mode ----
+// While batching, upsertChat only writes to IndexedDB and queues the
+// in-memory update. This avoids N renders when the SMS bridge drains
+// dozens of messages on app launch.
+let isBatching = false;
+const batchedChats = new Map<string, Chat>();
+
+export function beginBatch(): void {
+  isBatching = true;
+  batchedChats.clear();
+}
+
+export function commitBatch(): void {
+  if (batchedChats.size > 0) {
+    let next = [...snapshot.chats];
+    for (const chat of batchedChats.values()) {
+      const idx = next.findIndex((c) => c.id === chat.id);
+      if (idx >= 0) next[idx] = { ...next[idx], ...chat };
+      else next = [chat, ...next];
+    }
+    next.sort((a, b) => b.timestamp - a.timestamp);
+    setState({ chats: next, loadedOnce: true });
+  }
+  batchedChats.clear();
+  isBatching = false;
+}
+
 export function subscribe(l: Listener): () => void {
   listeners.add(l);
   return () => { listeners.delete(l); };
@@ -62,23 +89,31 @@ export async function loadChatsFromDB(): Promise<Chat[]> {
 // Insert or update a chat; keeps the list sorted by timestamp desc.
 export async function upsertChat(chat: Chat): Promise<void> {
   const existing = snapshot.chats.find((c) => c.id === chat.id);
-  let next: Chat[];
-  if (existing) {
-    next = snapshot.chats.map((c) => (c.id === chat.id ? { ...c, ...chat } : c));
-  } else {
-    next = [chat, ...snapshot.chats];
-  }
-  next.sort((a, b) => b.timestamp - a.timestamp);
-  setState({ chats: next, loadedOnce: true });
-  // Persist the *merged* row so partial updates (e.g. an incoming SMS
-  // that only knows lastMessage / unread) do not wipe fields the caller
-  // did not include — like a per-chat background image.
-  const merged = next.find((c) => c.id === chat.id) || chat;
+  const merged = existing ? { ...existing, ...chat } : chat;
+
+  // Persist to IndexedDB first, always.
   try {
     await saveChat(merged);
   } catch (e) {
     console.error('[chats-store] persist failed', e);
   }
+
+  // Batch mode: queue the in-memory update, no re-render yet.
+  if (isBatching) {
+    const pending = batchedChats.get(chat.id);
+    batchedChats.set(chat.id, pending ? { ...pending, ...chat } : chat);
+    return;
+  }
+
+  // Normal mode: update in-memory snapshot + re-render.
+  let next: Chat[];
+  if (existing) {
+    next = snapshot.chats.map((c) => (c.id === chat.id ? { ...c, ...chat } : c));
+  } else {
+    next = [merged, ...snapshot.chats];
+  }
+  next.sort((a, b) => b.timestamp - a.timestamp);
+  setState({ chats: next, loadedOnce: true });
 }
 
 export async function removeChat(id: string): Promise<void> {

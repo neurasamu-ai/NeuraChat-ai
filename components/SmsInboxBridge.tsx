@@ -53,7 +53,7 @@ async function persistIncoming(msg: IncomingSms) {
         ...existing,
         lastMessage: msg.body || '',
         timestamp: msg.timestamp || Date.now(),
-        unread: isOutgoing ? existing.unread || 0 : (existing.unread || 0) + 1,
+        unread: isOutgoing ? 0 : (existing.unread || 0) + 1,
       };
       if (contactName && (!existing.name || existing.name === existing.phone)) {
         patch.name = contactName;
@@ -150,13 +150,23 @@ export default function SmsInboxBridge() {
         console.error('[SmsInbox] blocked list sync failed', e);
       }
 
-      // Drain queued SMS (received while app was closed)
+      // Drain queued SMS (received while app was closed).
+      // Batch the store updates so the chats list renders once instead of
+      // flickering through each message one-by-one.
       try {
         const queued = await drainIncomingSms();
         console.log('[SmsInbox] drained', queued.length, 'queued SMS');
         if (cancelled) return;
-        for (const m of queued) {
-          await persistIncoming(m);
+        if (queued.length > 0) {
+          const { beginBatch, commitBatch } = await import('@/lib/chats-store');
+          beginBatch();
+          try {
+            for (const m of queued) {
+              await persistIncoming(m);
+            }
+          } finally {
+            commitBatch();
+          }
         }
       } catch (e) {
         console.error('[SmsInbox] drain failed', e);

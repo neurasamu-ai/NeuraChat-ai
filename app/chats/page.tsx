@@ -57,6 +57,9 @@ export default function ChatsPage() {
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const pressTimer = useRef<NodeJS.Timeout | null>(null);
   const longPressFiredRef = useRef(false);
+  const pressStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const movedDuringPressRef = useRef(false);
+  const SCROLL_CANCEL_THRESHOLD = 10; // px
 
   // New Chat Dialog States
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -112,15 +115,33 @@ export default function ChatsPage() {
   };
 
   // Start Selection Long Press Handlers
-  const handlePressStart = (chatId: string) => {
+  const handlePressStart = (chatId: string, x?: number, y?: number) => {
     if (isSelectionMode) return;
     longPressFiredRef.current = false;
+    movedDuringPressRef.current = false;
+    pressStartPosRef.current =
+      typeof x === 'number' && typeof y === 'number' ? { x, y } : null;
     pressTimer.current = setTimeout(() => {
+      // Abort if the user was scrolling during the hold window.
+      if (movedDuringPressRef.current) return;
       longPressFiredRef.current = true;
       triggerVibration();
       setIsSelectionMode(true);
       setSelectedChatIds([chatId]);
-    }, 800); // 800ms long press (Android default; fast taps never trigger it)
+    }, 800);
+  };
+
+  const handlePressMove = (x: number, y: number) => {
+    if (!pressStartPosRef.current) return;
+    const dx = x - pressStartPosRef.current.x;
+    const dy = y - pressStartPosRef.current.y;
+    if (Math.hypot(dx, dy) > SCROLL_CANCEL_THRESHOLD) {
+      movedDuringPressRef.current = true;
+      if (pressTimer.current) {
+        clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+      }
+    }
   };
 
   const handlePressEnd = () => {
@@ -128,6 +149,7 @@ export default function ChatsPage() {
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
+    pressStartPosRef.current = null;
   };
 
   const handleChatTap = async (chat: Chat) => {
@@ -240,6 +262,10 @@ export default function ChatsPage() {
   };
 
   // ---- Back-button integration for modals ----
+  useBackHandler(isSelectionMode, () => {
+    setIsSelectionMode(false);
+    setSelectedChatIds([]);
+  });
   useBackHandler(isManualAddOpen, () => setIsManualAddOpen(false));
   useBackHandler(isNewChatOpen && !isManualAddOpen, () => setIsNewChatOpen(false));
 
@@ -427,10 +453,18 @@ export default function ChatsPage() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    onPointerDown={() => handlePressStart(chat.id)}
+                    onPointerDown={(e) => handlePressStart(chat.id, e.clientX, e.clientY)}
+                    onPointerMove={(e) => handlePressMove(e.clientX, e.clientY)}
                     onPointerUp={handlePressEnd}
                     onPointerCancel={handlePressEnd}
-                    onTouchStart={() => handlePressStart(chat.id)}
+                    onTouchStart={(e) => {
+                      const t = e.touches[0];
+                      handlePressStart(chat.id, t?.clientX, t?.clientY);
+                    }}
+                    onTouchMove={(e) => {
+                      const t = e.touches[0];
+                      if (t) handlePressMove(t.clientX, t.clientY);
+                    }}
                     onTouchEnd={handlePressEnd}
                     onClick={() => handleChatTap(chat)}
                     className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer relative select-none ${
