@@ -95,6 +95,10 @@ function ChatDetailContent() {
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [swipeCallOffset, setSwipeCallOffset] = useState(0);
+  const [showSwipeCallConfirm, setShowSwipeCallConfirm] = useState(false);
+  const swipeStartYRef = useRef<number>(0);
+  const isSwipeEnabledRef = useRef(false);
   const [refining, setRefining] = useState(false);
   const [refinedText, setRefinedText] = useState<string | null>(null);
   const [isBgModalOpen, setIsBgModalOpen] = useState(false);
@@ -1009,14 +1013,6 @@ function ChatDetailContent() {
             >
               <Phone className="h-4.5 w-4.5 stroke-[2.5]" />
             </button>
-            {/* Video call icon */}
-            <button
-              onClick={() => triggerCallSimulation(true)}
-              className="p-1 px-1.5 rounded-full hover:bg-black/10 active:scale-90 transition-all text-zinc-900 cursor-pointer"
-              title="Video Call"
-            >
-              <Video className="h-4.5 w-4.5 stroke-[2.5]" />
-            </button>
 
             {/* Menu Dropdown Trigger */}
             <div className="relative">
@@ -1101,7 +1097,37 @@ function ChatDetailContent() {
             }}
           />
         )}
-      <div ref={messagesContainerRef} className="relative flex-1 overflow-y-auto px-4 pt-6 pb-1 space-y-4 no-scrollbar" id="messages-scroller">
+      <div
+        ref={messagesContainerRef}
+        className="relative flex-1 overflow-y-auto px-4 pt-6 pb-1 space-y-4 no-scrollbar"
+        id="messages-scroller"
+        onTouchStart={(e) => {
+          const c = messagesContainerRef.current;
+          if (!c) return;
+          if (c.scrollHeight - c.scrollTop - c.clientHeight < 20) {
+            isSwipeEnabledRef.current = true;
+            swipeStartYRef.current = e.touches[0].clientY;
+          } else {
+            isSwipeEnabledRef.current = false;
+          }
+        }}
+        onTouchMove={(e) => {
+          if (!isSwipeEnabledRef.current) return;
+          const currentY = e.touches[0].clientY;
+          const diff = swipeStartYRef.current - currentY;
+          if (diff > 0) {
+            setSwipeCallOffset(Math.min(diff, 120));
+          }
+        }}
+        onTouchEnd={() => {
+          if (!isSwipeEnabledRef.current) return;
+          if (swipeCallOffset > 60) {
+            setShowSwipeCallConfirm(true);
+          }
+          setSwipeCallOffset(0);
+          isSwipeEnabledRef.current = false;
+        }}
+      >
         {messages.length === 0 ? (
           /* Empty State emoji hello with name */
           <div className="flex flex-col items-center justify-center h-full text-center py-20 select-none" id="messages-empty-state">
@@ -1150,6 +1176,21 @@ function ChatDetailContent() {
         <div ref={scrollRef} className="h-2" />
       </div>
       </div>
+
+      {/* Swipe up to call visual indicator */}
+      <AnimatePresence>
+        {swipeCallOffset > 0 && (
+          <motion.div
+            initial={{ y: 100, opacity: 0 }}
+            animate={{ y: -swipeCallOffset, opacity: Math.min(swipeCallOffset / 60, 1) }}
+            exit={{ y: 100, opacity: 0 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            className="fixed bottom-[80px] left-1/2 -translate-x-1/2 z-40 bg-[#10b981] rounded-full w-14 h-14 flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.6)] pointer-events-none"
+          >
+            <Phone className="text-white w-6 h-6 stroke-[2.5]" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Floating scroll-to-bottom button (WhatsApp-style) */}
       <AnimatePresence>
@@ -1697,6 +1738,46 @@ function ChatDetailContent() {
                   className="py-3 rounded-2xl bg-[#cbfe00] text-black text-xs font-bold uppercase tracking-wider active:scale-[0.98] transition-all"
                 >
                   Replace
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Swipe-to-call Confirmation Modal */}
+      <AnimatePresence>
+        {showSwipeCallConfirm && (
+          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[110] flex items-center justify-center p-6 select-none">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-sm bg-zinc-950 border border-zinc-800 rounded-3xl p-6 text-center"
+            >
+              <div className="w-12 h-12 rounded-full bg-[#10b981]/15 text-[#10b981] flex items-center justify-center mx-auto mb-4">
+                <Phone className="h-6 w-6 stroke-[2.5]" />
+              </div>
+              <h3 className="text-white font-bold text-lg mb-1">Make a call?</h3>
+              <p className="text-zinc-400 text-xs mb-6">
+                Do you want to call <span className="text-white font-semibold">{name || phone}</span>?
+              </p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setShowSwipeCallConfirm(false)}
+                  className="py-3 rounded-2xl bg-zinc-900 text-zinc-300 text-xs font-bold uppercase tracking-wider active:scale-95 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setShowSwipeCallConfirm(false);
+                    triggerCallSimulation(false);
+                  }}
+                  className="py-3 rounded-2xl bg-[#10b981] text-black text-xs font-bold uppercase tracking-wider active:scale-95 transition-all"
+                >
+                  Call
                 </button>
               </div>
             </motion.div>
