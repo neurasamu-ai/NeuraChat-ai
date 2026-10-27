@@ -114,29 +114,53 @@ public class CallNotifier {
                 ? name
                 : (number == null ? "Unknown" : number);
 
-            Intent openIntent = new Intent(context, MainActivity.class);
-            openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-            openIntent.putExtra("open_active_call", true);
+            // Tap on the notification reopens the native call screen.
+            Intent openIntent = new Intent(context, CallActivity.class);
+            openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK
+                | Intent.FLAG_ACTIVITY_CLEAR_TOP
+                | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            openIntent.putExtra(CallActivity.EXTRA_STATE, CallActivity.STATE_ACTIVE);
+            openIntent.putExtra(CallActivity.EXTRA_NUMBER, number == null ? "" : number);
+            openIntent.putExtra(CallActivity.EXTRA_NAME, name == null ? "" : name);
+            openIntent.putExtra(CallActivity.EXTRA_INCOMING, false);
             PendingIntent openPending = PendingIntent.getActivity(
                 context, 3001, openIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+            // Mute toggle action.
+            boolean muted = CallService.isMuted;
+            Intent muteIntent = new Intent(context, SmsReplyReceiver.class);
+            muteIntent.setAction(SmsReplyReceiver.ACTION_TOGGLE_MUTE);
+            PendingIntent mutePending = PendingIntent.getBroadcast(
+                context, 3003, muteIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+            // End call action.
             Intent endIntent = new Intent(context, SmsReplyReceiver.class);
             endIntent.setAction(SmsReplyReceiver.ACTION_END_CALL);
             PendingIntent endPending = PendingIntent.getBroadcast(
                 context, 3002, endIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
 
+            long startedAt = CallService.callStartedAt > 0
+                ? CallService.callStartedAt
+                : System.currentTimeMillis();
+
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, ACTIVE_CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_call)
-                .setContentTitle("In call")
-                .setContentText(title)
+                .setContentTitle(title)
+                .setContentText(muted ? "In call · Muted" : "In call")
                 .setPriority(NotificationCompat.PRIORITY_LOW)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
                 .setOngoing(true)
                 .setAutoCancel(false)
+                .setUsesChronometer(true)
+                .setShowWhen(true)
+                .setWhen(startedAt)
+                .setOnlyAlertOnce(true)
                 .setContentIntent(openPending)
-                .addAction(R.drawable.ic_stat_call, "End", endPending);
+                .addAction(R.drawable.ic_call_mic, muted ? "Unmute" : "Mute", mutePending)
+                .addAction(R.drawable.ic_call_phone_down, "End", endPending);
 
             try {
                 NotificationManagerCompat.from(context).notify(ACTIVE_NOTIFICATION_ID, builder.build());
