@@ -15,7 +15,9 @@ import {
   Share2,
   Ban,
   Trash2,
-, Bell, BellOff} from 'lucide-react';
+  Bell,
+  BellOff,
+} from 'lucide-react';
 import {
   getContacts,
   saveContact,
