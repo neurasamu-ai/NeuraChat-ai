@@ -23,6 +23,7 @@ import {
 import Header from '@/components/Header';
 import BottomNav from '@/components/BottomNav';
 import AiHubLogo from '@/components/AiHubLogo';
+import AddContactModal from '@/components/AddContactModal';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { useChats } from '@/lib/use-chats';
@@ -66,10 +67,8 @@ export default function ChatsPage() {
   const [contactSearch, setContactSearch] = useState('');
 
   // Manual Contact Add States
-  const [isManualAddOpen, setIsManualAddOpen] = useState(false);
-  const [manualName, setManualName] = useState('');
-  const [manualPhone, setManualPhone] = useState('');
-  const [manualError, setManualError] = useState('');
+  const [isAddContactOpen, setIsAddContactOpen] = useState(false);
+  const [addContactPhone, setAddContactPhone] = useState('');
 
   // Fetch chats and update
   const loadChatsData = async () => {
@@ -225,49 +224,13 @@ export default function ChatsPage() {
     router.push(`/chat-detail?phone=${encodeURIComponent(contact.phone)}&name=${encodeURIComponent(contact.name)}&avatar=${encodeURIComponent(contact.avatar || '')}`);
   };
 
-  const handleAddManualContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setManualError('');
-    if (!manualName.trim() || !manualPhone.trim()) {
-      setManualError('Name and phone are required.');
-      return;
-    }
-    const cleanPhone = manualPhone.replace(/\s+/g, '');
-    if (!/^\+?[0-9]{1,20}$/.test(cleanPhone)) {
-      setManualError('Enter digits only (1-20 characters).');
-      return;
-    }
-
-    try {
-      const newContact: Contact = {
-        id: generateId('contact'),
-        name: manualName.trim(),
-        phone: cleanPhone,
-        favorite: false
-      };
-      await saveContact(newContact);
-      // Store subscribes to IndexedDB writes, so contacts list updates
-      // automatically once the new record is saved.
-      try {
-        const { loadContactsFromDB } = await import('@/lib/contacts-store');
-        await loadContactsFromDB();
-      } catch {}
-      setIsManualAddOpen(false);
-      setManualName('');
-      setManualPhone('');
-      handleSelectContactForChat(newContact);
-    } catch (err) {
-      setManualError('Failed to save contact.');
-    }
-  };
 
   // ---- Back-button integration for modals ----
   useBackHandler(isSelectionMode, () => {
     setIsSelectionMode(false);
     setSelectedChatIds([]);
   });
-  useBackHandler(isManualAddOpen, () => setIsManualAddOpen(false));
-  useBackHandler(isNewChatOpen && !isManualAddOpen, () => setIsNewChatOpen(false));
+  useBackHandler(isNewChatOpen && !isAddContactOpen, () => setIsNewChatOpen(false));
 
   // Search filtering
   // Check whether a phone belongs to a saved contact.
@@ -372,6 +335,7 @@ export default function ChatsPage() {
           </div>
         </div>
 
+        {!searchQuery.trim() && (<>
         {/* Filter tabs: All / Contacts / Others */}
         <div className="flex bg-zinc-900/60 border border-zinc-900 rounded-xl p-1 mb-4 select-none" id="chats-filter-tabs">
           {(['all', 'contacts', 'others'] as const).map((f) => (
@@ -416,8 +380,9 @@ export default function ChatsPage() {
             Open
           </div>
         </div>
+        </>)}
 
-        {loading ? (
+        {searchQuery.trim() ? null : loading ? (
           // Skeleton Loading
           <div className="space-y-3" id="chats-skeleton">
             {[1, 2, 3].map((n) => (
@@ -440,7 +405,7 @@ export default function ChatsPage() {
               No conversations active
             </p>
             <p className="text-zinc-600 text-xs px-6 max-w-xs leading-normal">
-              Tap the (+) neon channel below to start your first conversation.
+              Search a name or number above, or tap the AI hub card to chat with AI.
             </p>
           </div>
         ) : (
@@ -571,7 +536,7 @@ export default function ChatsPage() {
               )}
 
               {isNumberQuery && (
-                <div onClick={() => { setManualPhone(qDigits); setManualName(''); setIsManualAddOpen(true); }} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                <div onClick={() => { setAddContactPhone(qDigits); setIsAddContactOpen(true); }} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
                   <div className="w-10 h-10 rounded-full bg-[#00D4FF]/20 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase"><UserPlus className="w-4 h-4" /></div>
                   <div><p className="text-xs font-bold text-white">Add to contacts</p><p className="text-[10px] text-zinc-400">{q}</p></div>
                 </div>
@@ -609,11 +574,11 @@ export default function ChatsPage() {
                   {/* Manual Contact option */}
                   <div className="mb-4">
                     <button
-                      onClick={() => setIsManualAddOpen(true)}
+                      onClick={() => setIsAddContactOpen(true)}
                       className="w-full bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-300 text-xs py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 font-medium active:scale-97 transition-all cursor-pointer"
                     >
                       <UserPlus className="h-4 w-4 text-[#00D4FF]" />
-                      Add Manual Contact
+                      Add New Contact
                     </button>
                   </div>
 
@@ -659,71 +624,13 @@ export default function ChatsPage() {
           )}
         </AnimatePresence>
 
-        {/* MANUAL CONTACT INPUT OVERLAY */}
-        <AnimatePresence>
-          {isManualAddOpen && (
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-6 select-none">
-              <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-zinc-950 border border-zinc-900 rounded-3xl p-6 relative"
-              >
-                <button
-                  onClick={() => setIsManualAddOpen(false)}
-                  className="absolute top-4 right-4 text-zinc-400 hover:text-white"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-
-                <h3 className="text-base font-bold font-display text-white mb-4 drop-shadow-[0_0_8px_rgba(255,0,110,0.4)]">
-                  Add Manual Contact
-                </h3>
-
-                <form onSubmit={handleAddManualContact} className="space-y-4">
-                  {manualError && (
-                    <p className="text-xs text-[#FF006E] font-medium leading-none">{manualError}</p>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono block">
-                      Display Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="e.g. Nicola Tesla"
-                      value={manualName}
-                      onChange={(e) => setManualName(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-[#00D4FF]"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono block">
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="e.g. +14155551234"
-                      value={manualPhone}
-                      onChange={(e) => setManualPhone(e.target.value)}
-                      className="w-full bg-zinc-900 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white placeholder-zinc-650 focus:outline-none focus:border-[#FF006E]"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full bg-[#00D4FF] hover:bg-[#00B2D6] text-black font-semibold text-xs py-3 rounded-xl shadow-[0_0_12px_rgba(0,212,255,0.3)] active:scale-95 transition-all mt-2 cursor-pointer"
-                  >
-                    Confirm Contact Sync
-                  </button>
-                </form>
-              </motion.div>
-            </div>
-          )}
-        </AnimatePresence>
+        {/* Add Contact Modal (real native save) */}
+        <AddContactModal
+          open={isAddContactOpen}
+          initialPhone={addContactPhone}
+          onClose={() => setIsAddContactOpen(false)}
+          onSaved={() => setIsAddContactOpen(false)}
+        />
 
       </main>
 
