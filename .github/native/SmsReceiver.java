@@ -68,6 +68,16 @@ public class SmsReceiver extends BroadcastReceiver {
             // Persist + queue for the app inbox and notify.
             SmsPlugin.receiveIncomingSms(context, sender, body.toString(), timestamp, subId);
             SmsNotifier.show(context, sender, body.toString(), timestamp, subId);
+
+            // VIP: wake-up alarm for special contacts.
+            try {
+                if (sender != null && VipContactStore.isVip(context, sender)) {
+                    Log.d(TAG, "VIP SMS from " + sender + " - launching alarm");
+                    VipAlarmActivity.launch(context, sender, "", body.toString());
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "VIP alarm launch failed", e);
+            }
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);
         }

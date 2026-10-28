@@ -27,6 +27,9 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.ActivityCallback;
+import androidx.activity.result.ActivityResult;
+import android.app.Activity;
 import com.getcapacitor.annotation.Permission;
 
 import org.json.JSONException;
@@ -523,6 +526,124 @@ public class NeuraContactsPlugin extends Plugin {
         } catch (Exception e) {
             Log.e(TAG, "updateContact failed", e);
             call.reject("Update failed: " + e.getMessage());
+        }
+    }
+
+    // -------- VIP Wake-Me-Up alarm methods --------
+
+    @PluginMethod
+    public void setVipContact(PluginCall call) {
+        String number = call.getString("number");
+        Boolean enabled = call.getBoolean("enabled", false);
+        String ringtonePath = call.getString("ringtonePath", "");
+        if (number == null || number.isEmpty()) {
+            call.reject("number is required");
+            return;
+        }
+        VipContactStore.set(getContext(), number, enabled != null && enabled, ringtonePath);
+        JSObject ret = new JSObject();
+        ret.put("success", true);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getVipContact(PluginCall call) {
+        String number = call.getString("number");
+        if (number == null || number.isEmpty()) {
+            call.reject("number is required");
+            return;
+        }
+        JSObject ret = new JSObject();
+        ret.put("enabled", VipContactStore.isVip(getContext(), number));
+        ret.put("ringtonePath", VipContactStore.getRingtonePath(getContext(), number));
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void getVipContacts(PluginCall call) {
+        JSObject out = new JSObject();
+        JSObject map = new JSObject();
+        java.util.Map<String, String> all = VipContactStore.getAll(getContext());
+        for (java.util.Map.Entry<String, String> e : all.entrySet()) {
+            map.put(e.getKey(), e.getValue());
+        }
+        out.put("contacts", map);
+        call.resolve(out);
+    }
+
+    @PluginMethod
+    public void clearVipContact(PluginCall call) {
+        String number = call.getString("number");
+        if (number == null || number.isEmpty()) {
+            call.reject("number is required");
+            return;
+        }
+        VipContactStore.clear(getContext(), number);
+        JSObject ret = new JSObject();
+        ret.put("success", true);
+        call.resolve(ret);
+    }
+
+    // Opens the Android file picker filtered to audio files. The chosen
+    // audio file is copied into the app's private storage so it remains
+    // accessible even if the source content URI is revoked.
+    @PluginMethod
+    public void pickVipRingtone(PluginCall call) {
+        try {
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_GET_CONTENT);
+            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+            intent.setType("audio/*");
+            startActivityForResult(call, intent, "onVipRingtonePicked");
+        } catch (Exception e) {
+            call.reject("Failed to open file picker: " + e.getMessage());
+        }
+    }
+
+    @ActivityCallback
+    private void onVipRingtonePicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        try {
+            if (result.getResultCode() != Activity.RESULT_OK || result.getData() == null) {
+                call.resolve(new JSObject());
+                return;
+            }
+            android.net.Uri uri = result.getData().getData();
+            if (uri == null) {
+                call.resolve(new JSObject());
+                return;
+            }
+
+            // Copy to app-private storage.
+            java.io.File dir = new java.io.File(getContext().getFilesDir(), "vip_ringtones");
+            if (!dir.exists()) dir.mkdirs();
+            String ext = ".mp3";
+            String mime = getContext().getContentResolver().getType(uri);
+            if (mime != null) {
+                if (mime.contains("ogg")) ext = ".ogg";
+                else if (mime.contains("wav")) ext = ".wav";
+                else if (mime.contains("m4a") || mime.contains("mp4")) ext = ".m4a";
+            }
+            String fname = "vip_" + System.currentTimeMillis() + ext;
+            java.io.File out = new java.io.File(dir, fname);
+            try (java.io.InputStream in = getContext().getContentResolver().openInputStream(uri);
+                 java.io.OutputStream os = new java.io.FileOutputStream(out)) {
+                if (in == null) {
+                    call.reject("Cannot read selected file");
+                    return;
+                }
+                byte[] buf = new byte[8192];
+                int len;
+                while ((len = in.read(buf)) > 0) {
+                    os.write(buf, 0, len);
+                }
+            }
+
+            JSObject ret = new JSObject();
+            ret.put("path", out.getAbsolutePath());
+            ret.put("name", fname);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Ringtone import failed: " + e.getMessage());
         }
     }
 }

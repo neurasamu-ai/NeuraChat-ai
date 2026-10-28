@@ -75,6 +75,8 @@ jobs:
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/
         cp .github/native/CallNotifier.java $TARGET/
+        cp .github/native/VipContactStore.java $TARGET/
+        cp .github/native/VipAlarmActivity.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
         mkdir -p android/app/src/main/res/layout
         mkdir -p android/app/src/main/res/values
@@ -84,8 +86,10 @@ jobs:
         cp .github/native/res/drawable/bg_overlay_*.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/bg_call_*.xml android/app/src/main/res/drawable/
         cp .github/native/res/drawable/bg_numpad_key.xml android/app/src/main/res/drawable/
+        cp .github/native/res/drawable/bg_vip_alarm_dismiss.xml android/app/src/main/res/drawable/
         cp .github/native/res/layout/overlay_incoming_call.xml android/app/src/main/res/layout/
         cp .github/native/res/layout/activity_call.xml android/app/src/main/res/layout/
+        cp .github/native/res/layout/activity_vip_alarm.xml android/app/src/main/res/layout/
         cp .github/native/res/values/overlay_styles.xml android/app/src/main/res/values/
         cp .github/native/IncomingCallOverlay.java $TARGET/
 

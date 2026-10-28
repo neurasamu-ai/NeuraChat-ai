@@ -15,7 +15,7 @@ import {
   Share2,
   Ban,
   Trash2,
-} from 'lucide-react';
+, Bell, BellOff} from 'lucide-react';
 import {
   getContacts,
   saveContact,
@@ -26,7 +26,7 @@ import {
   Contact,
 } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
-import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount } from '@/lib/neura-contacts';
+import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount, getVipContactNative, setVipContactNative, clearVipContactNative, pickVipRingtoneNative } from '@/lib/neura-contacts';
 import CallSimPicker from '@/components/CallSimPicker';
 import ImageCropModal from '@/components/ImageCropModal';
 import { useSimCall } from '@/hooks/use-sim-call';
@@ -55,6 +55,11 @@ function ProfileContent() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // VIP Wake-Me-Up alarm
+  const [vipEnabled, setVipEnabled] = useState(false);
+  const [vipRingtonePath, setVipRingtonePath] = useState('');
+  const [vipRingtoneName, setVipRingtoneName] = useState('');
+  const [vipBusy, setVipBusy] = useState(false);
 
   // SIM-picker-aware calling (matches chat-detail and Calls tab).
   const simCall = useSimCall();
@@ -111,6 +116,22 @@ function ProfileContent() {
     }
     loadContact();
   }, [urlPhone, urlName, urlAvatar]);
+
+  // Load VIP alarm settings for this contact.
+  useEffect(() => {
+    (async () => {
+      try {
+        const target = contact?.phone || urlPhone;
+        if (!target) return;
+        const info = await getVipContactNative(target);
+        setVipEnabled(info.enabled);
+        setVipRingtonePath(info.ringtonePath || '');
+        setVipRingtoneName(info.ringtonePath ? info.ringtonePath.split('/').pop() || 'Ringtone' : '');
+      } catch (e) {
+        console.error('load VIP failed', e);
+      }
+    })();
+  }, [contact?.phone, urlPhone]);
 
   // Load writable accounts for the Save-to dropdown (edit mode).
   useEffect(() => {
@@ -350,6 +371,60 @@ function ProfileContent() {
     }
   });
 
+  // ---- VIP Wake-Me-Up handlers ----
+  const handleVipToggle = async () => {
+    triggerVibration();
+    if (vipBusy) return;
+    const target = contact?.phone || editPhone || urlPhone;
+    if (!target) return;
+    setVipBusy(true);
+    try {
+      if (vipEnabled) {
+        await clearVipContactNative(target);
+        setVipEnabled(false);
+        setVipRingtonePath('');
+        setVipRingtoneName('');
+      } else {
+        // If no ringtone chosen yet, ask for one first.
+        let path = vipRingtonePath;
+        if (!path) {
+          const picked = await pickVipRingtoneNative();
+          if (!picked) { setVipBusy(false); return; }
+          path = picked.path;
+          setVipRingtonePath(path);
+          setVipRingtoneName(picked.name);
+        }
+        await setVipContactNative(target, true, path);
+        setVipEnabled(true);
+      }
+    } catch (e) {
+      console.error('VIP toggle failed', e);
+    } finally {
+      setVipBusy(false);
+    }
+  };
+
+  const handlePickVipRingtone = async () => {
+    triggerVibration();
+    if (vipBusy) return;
+    setVipBusy(true);
+    try {
+      const picked = await pickVipRingtoneNative();
+      if (!picked) return;
+      setVipRingtonePath(picked.path);
+      setVipRingtoneName(picked.name);
+      // If VIP is already enabled, persist the new ringtone.
+      if (vipEnabled) {
+        const target = contact?.phone || editPhone || urlPhone;
+        if (target) await setVipContactNative(target, true, picked.path);
+      }
+    } catch (e) {
+      console.error('pick ringtone failed', e);
+    } finally {
+      setVipBusy(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-screen w-full md:max-w-md md:mx-auto bg-zinc-950 text-white relative">
       <Header
@@ -540,6 +615,59 @@ function ProfileContent() {
                 {isBlocked ? 'Unblock' : 'Block'}
               </span>
             </button>
+          </div>
+        )}
+
+        {/* Wake Me Up (VIP alarm) card */}
+        {!isEditMode && contact && (
+          <div className={`w-full max-w-sm rounded-2xl border p-3 transition-colors ${
+            vipEnabled
+              ? 'bg-amber-950/20 border-amber-900/40'
+              : 'bg-zinc-900/60 border-zinc-850'
+          }`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                vipEnabled ? 'bg-amber-500/15' : 'bg-zinc-800'
+              }`}>
+                {vipEnabled ? (
+                  <Bell className="h-4 w-4 text-amber-400" />
+                ) : (
+                  <BellOff className="h-4 w-4 text-zinc-500" />
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-white">Wake me up</p>
+                <p className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                  {vipEnabled
+                    ? vipRingtoneName || 'Alarm set'
+                    : 'Ring loud when this contact texts'}
+                </p>
+              </div>
+              <button
+                onClick={handleVipToggle}
+                disabled={vipBusy}
+                className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                  vipEnabled ? 'bg-amber-500' : 'bg-zinc-700'
+                } ${vipBusy ? 'opacity-50' : ''}`}
+                aria-label="Toggle VIP alarm"
+              >
+                <span
+                  className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${
+                    vipEnabled ? 'left-[22px]' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            {vipEnabled && (
+              <button
+                onClick={handlePickVipRingtone}
+                disabled={vipBusy}
+                className="mt-2 w-full py-2 rounded-xl bg-zinc-950/60 border border-zinc-800 text-[11px] font-bold uppercase tracking-wider text-amber-400 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                Change alarm ringtone
+              </button>
+            )}
           </div>
         )}
 

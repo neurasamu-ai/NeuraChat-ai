@@ -35,6 +35,11 @@ export interface NeuraContactsPluginType {
   }): Promise<{ success: boolean; uri?: string; rawContactId?: string; contactId?: string }>;
   deleteContactRaw(options: { rawContactId: string }): Promise<{ deleted: number }>;
   updateContact(options: { rawContactId: string; name?: string; phone?: string; email?: string }): Promise<{ success: boolean; updated?: number }>;
+  setVipContact(options: { number: string; enabled: boolean; ringtonePath?: string }): Promise<{ success: boolean }>;
+  getVipContact(options: { number: string }): Promise<{ enabled: boolean; ringtonePath: string }>;
+  getVipContacts(): Promise<{ contacts: Record<string, string> }>;
+  clearVipContact(options: { number: string }): Promise<{ success: boolean }>;
+  pickVipRingtone(): Promise<{ path?: string; name?: string }>;
 }
 
 const NeuraContacts = registerPlugin<NeuraContactsPluginType>('NeuraContactsPlugin');
@@ -214,3 +219,60 @@ export async function updateContactNative(opts: {
     return { success: false, error: e?.message || String(e) };
   }
 }
+
+// ---- VIP Wake-Me-Up alarm ----
+
+export interface VipContactInfo {
+  enabled: boolean;
+  ringtonePath: string;
+}
+
+export async function setVipContactNative(
+  number: string,
+  enabled: boolean,
+  ringtonePath: string = '',
+): Promise<boolean> {
+  if (!isContactsPluginAvailable()) return false;
+  try {
+    const r = await NeuraContacts.setVipContact({ number, enabled, ringtonePath });
+    return !!r?.success;
+  } catch (e) {
+    console.error('[NeuraContacts] setVipContact failed', e);
+    return false;
+  }
+}
+
+export async function getVipContactNative(number: string): Promise<VipContactInfo> {
+  if (!isContactsPluginAvailable()) return { enabled: false, ringtonePath: '' };
+  try {
+    const r = await NeuraContacts.getVipContact({ number });
+    return { enabled: !!r?.enabled, ringtonePath: r?.ringtonePath || '' };
+  } catch (e) {
+    console.error('[NeuraContacts] getVipContact failed', e);
+    return { enabled: false, ringtonePath: '' };
+  }
+}
+
+export async function clearVipContactNative(number: string): Promise<boolean> {
+  if (!isContactsPluginAvailable()) return false;
+  try {
+    const r = await NeuraContacts.clearVipContact({ number });
+    return !!r?.success;
+  } catch (e) {
+    console.error('[NeuraContacts] clearVipContact failed', e);
+    return false;
+  }
+}
+
+export async function pickVipRingtoneNative(): Promise<{ path: string; name: string } | null> {
+  if (!isContactsPluginAvailable()) return null;
+  try {
+    const r = await NeuraContacts.pickVipRingtone();
+    if (!r?.path) return null;
+    return { path: r.path, name: r.name || 'Ringtone' };
+  } catch (e) {
+    console.error('[NeuraContacts] pickVipRingtone failed', e);
+    return null;
+  }
+}
+
