@@ -81,8 +81,8 @@ public class VipAlarmActivity extends Activity {
         TextView nameView = findViewById(R.id.vip_alarm_name);
         TextView msgView = findViewById(R.id.vip_alarm_message);
         TextView timeView = findViewById(R.id.vip_alarm_time);
-        if (nameView != null) nameView.setText(displayName);
-        if (msgView != null) msgView.setText(body == null ? "" : body);
+        if (nameView != null) nameView.setText("NeuraChat SMS");
+        if (msgView != null) msgView.setVisibility(View.GONE);
 
         // Live clock
         clockTicker = new Runnable() {
