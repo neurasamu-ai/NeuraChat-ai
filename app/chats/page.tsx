@@ -529,6 +529,28 @@ export default function ChatsPage() {
           </div>
         )}
 
+        {/* Search results for contacts & new numbers */}
+        {searchQuery && (
+          <div className="mt-4 space-y-2">
+            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider ml-1">Contacts</p>
+            {contacts
+              .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.phone.includes(searchQuery))
+              .map(c => (
+                <div key={c.id} onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                  <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase">{c.name.slice(0,2)}</div>
+                  <div><p className="text-xs font-bold text-white">{c.name}</p><p className="text-[10px] text-zinc-400">{c.phone}</p></div>
+                </div>
+              ))}
+
+            {/^[+\d\s-]{3,}$/.test(searchQuery) && !contacts.some(c => c.phone.replace(/\D/g, '').endsWith(searchQuery.replace(/\D/g, ''))) && (
+              <div onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(searchQuery)}&name=${encodeURIComponent(searchQuery)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                <div className="w-10 h-10 rounded-full bg-[#cbfe00]/20 flex items-center justify-center text-[#cbfe00] font-bold text-xs uppercase"><Plus className="w-4 h-4" /></div>
+                <div><p className="text-xs font-bold text-white">Start chat with {searchQuery}</p><p className="text-[10px] text-zinc-400">Create new contact</p></div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* NEW CHAT DIALOG OVERLAY (Single tab: Contacts list) */}
         <AnimatePresence>
           {isNewChatOpen && (
@@ -677,14 +699,6 @@ export default function ChatsPage() {
       </main>
 
       {/* FAB To Open Contacts Menu - Now outside scroll container & positioned absolute */}
-      <button
-        onClick={openNewChat}
-        className="absolute bottom-24 right-5 w-14 h-14 bg-gradient-to-tr from-[#00D4FF] to-[#008BBF] text-black rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(0,212,255,0.4)] hover:shadow-[0_0_20px_rgba(0,212,255,0.6)] cursor-pointer hover:scale-105 active:scale-95 transition-all z-40"
-        aria-label="New Chat"
-        id="new-chat-fab"
-      >
-        <Plus className="h-6 w-6 stroke-[3]" />
-      </button>
 
       {/* Bottom Main Tab Bar */}
       <BottomNav currentTab="chats" />

@@ -2,6 +2,7 @@ package com.neurasamu.build.chat;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.KeyguardManager;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -87,10 +88,20 @@ public class SmsNotifier {
                 markReadPending
             ).build();
 
+            boolean isLocked = false;
+            try {
+                KeyguardManager km = (KeyguardManager) context.getSystemService(Context.KEYGUARD_SERVICE);
+                if (km != null) isLocked = km.isKeyguardLocked();
+            } catch (Exception ignore) {}
+
+            String safeTitle = isLocked ? "NeuraChat VIP SMS" : (displayName != null && !displayName.isEmpty() ? displayName : sender);
+            String safeBody = isLocked ? "Unlock to read content" : body;
+
             NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_sms)
-                .setContentTitle(displayName != null && !displayName.isEmpty() ? displayName : sender)
-                .setContentText(body)
+                .setContentTitle(safeTitle)
+                .setContentText(safeBody)
+                .setVisibility(isLocked ? NotificationCompat.VISIBILITY_PRIVATE : NotificationCompat.VISIBILITY_PUBLIC)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(body))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)
