@@ -278,9 +278,12 @@ export default function ChatsPage() {
   }, [contacts]);
 
   const filteredChats = chats.filter(chat => {
+    const qLower = searchQuery.toLowerCase();
+    const qDigits = searchQuery.replace(/\D/g, '');
     const matchesSearch =
-      chat.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (chat.lastMessage || '').toLowerCase().includes(searchQuery.toLowerCase());
+      chat.name.toLowerCase().includes(qLower) ||
+      (chat.lastMessage || '').toLowerCase().includes(qLower) ||
+      (qDigits.length > 0 && (chat.phone || '').replace(/\D/g, '').includes(qDigits));
     if (!matchesSearch) return false;
     if (chatFilter === 'all') return true;
     const saved = isSavedContact(chat.phone);
@@ -530,26 +533,52 @@ export default function ChatsPage() {
         )}
 
         {/* Search results for contacts & new numbers */}
-        {searchQuery && (
-          <div className="mt-4 space-y-2">
-            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider ml-1">Contacts</p>
-            {contacts
-              .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()) || c.phone.includes(searchQuery))
-              .map(c => (
-                <div key={c.id} onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
-                  <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase">{c.name.slice(0,2)}</div>
-                  <div><p className="text-xs font-bold text-white">{c.name}</p><p className="text-[10px] text-zinc-400">{c.phone}</p></div>
-                </div>
-              ))}
+        {searchQuery && (() => {
+          const q = searchQuery.trim();
+          const qLower = q.toLowerCase();
+          const qDigits = q.replace(/\D/g, '');
+          const isNumberQuery = qDigits.length >= 3 && /^[+\d\s\-()]+$/.test(q);
+          const matchedContacts = contacts.filter(c => {
+            if (c.name.toLowerCase().includes(qLower)) return true;
+            if (qDigits) {
+              const rawPhone = (c.phone || '').replace(/\D/g, '');
+              if (rawPhone.includes(qDigits)) return true;
+            }
+            return false;
+          });
+          const numberExistsInContacts = isNumberQuery && contacts.some(c =>
+            (c.phone || '').replace(/\D/g, '').includes(qDigits)
+          );
+          return (
+            <div className="mt-4 space-y-2">
+              {matchedContacts.length > 0 && (
+                <>
+                  <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider ml-1">Contacts</p>
+                  {matchedContacts.map(c => (
+                    <div key={c.id} onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(c.phone)}&name=${encodeURIComponent(c.name)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                      <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase">{c.name.slice(0,2)}</div>
+                      <div><p className="text-xs font-bold text-white">{c.name}</p><p className="text-[10px] text-zinc-400">{c.phone}</p></div>
+                    </div>
+                  ))}
+                </>
+              )}
 
-            {/^[+\d\s-]{3,}$/.test(searchQuery) && !contacts.some(c => c.phone.replace(/\D/g, '').endsWith(searchQuery.replace(/\D/g, ''))) && (
-              <div onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(searchQuery)}&name=${encodeURIComponent(searchQuery)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
-                <div className="w-10 h-10 rounded-full bg-[#cbfe00]/20 flex items-center justify-center text-[#cbfe00] font-bold text-xs uppercase"><Plus className="w-4 h-4" /></div>
-                <div><p className="text-xs font-bold text-white">Start chat with {searchQuery}</p><p className="text-[10px] text-zinc-400">Create new contact</p></div>
-              </div>
-            )}
-          </div>
-        )}
+              {isNumberQuery && !numberExistsInContacts && (
+                <div onClick={() => router.push(`/chat-detail?phone=${encodeURIComponent(qDigits)}&name=${encodeURIComponent(q)}`)} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                  <div className="w-10 h-10 rounded-full bg-[#cbfe00]/20 flex items-center justify-center text-[#cbfe00] font-bold text-xs uppercase"><Plus className="w-4 h-4" /></div>
+                  <div><p className="text-xs font-bold text-white">Start chat with {q}</p><p className="text-[10px] text-zinc-400">Not in your contacts</p></div>
+                </div>
+              )}
+
+              {isNumberQuery && (
+                <div onClick={() => { setManualPhone(qDigits); setManualName(''); setIsManualAddOpen(true); }} className="flex items-center gap-3 p-3 bg-zinc-900 border border-zinc-800 rounded-xl cursor-pointer active:scale-95">
+                  <div className="w-10 h-10 rounded-full bg-[#00D4FF]/20 flex items-center justify-center text-[#00D4FF] font-bold text-xs uppercase"><UserPlus className="w-4 h-4" /></div>
+                  <div><p className="text-xs font-bold text-white">Add to contacts</p><p className="text-[10px] text-zinc-400">{q}</p></div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* NEW CHAT DIALOG OVERLAY (Single tab: Contacts list) */}
         <AnimatePresence>
