@@ -237,6 +237,7 @@ function ChatDetailContent() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const lastMessageIdRef = useRef<string>('');
+  const initialScrollDoneRef = useRef(false);
 
   // Simulated Voice/Video Call states
   // SIM picker for outgoing SMS
@@ -298,6 +299,20 @@ function ChatDetailContent() {
       setMessages(logs);
       // If we fetched exactly the page size, there may be older messages.
       setHasMore(logs.length === MESSAGE_PAGE_SIZE);
+      // First paint of this chat → jump straight to latest, no animation.
+      if (!initialScrollDoneRef.current && logs.length > 0) {
+        initialScrollDoneRef.current = true;
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            if (scrollRef.current) {
+              scrollRef.current.scrollIntoView({ behavior: 'auto', block: 'end' });
+            } else if (messagesContainerRef.current) {
+              const c = messagesContainerRef.current;
+              c.scrollTop = c.scrollHeight;
+            }
+          });
+        });
+      }
     } catch (e) {
       console.error('loadMessages failed', e);
     }
@@ -475,6 +490,12 @@ function ChatDetailContent() {
     window.addEventListener('neura-sms-updated', handler);
     return () => window.removeEventListener('neura-sms-updated', handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatId]);
+
+  // Reset first-paint scroll flag when switching to another chat.
+  useEffect(() => {
+    initialScrollDoneRef.current = false;
+    lastMessageIdRef.current = '';
   }, [chatId]);
 
   // Reload when returning to foreground (in case the bridge missed something).
@@ -1096,7 +1117,7 @@ function ChatDetailContent() {
               style={{
                 minHeight: '100vh',
                 backgroundImage: src,
-                opacity: hasCustom ? (chatBg!.opacity ?? 40) / 100 : 0.35,
+                opacity: hasCustom ? (chatBg!.opacity ?? 40) / 100 : 0.85,
                 backgroundPosition: hasCustom
                   ? `calc(50% + ${chatBg!.panX ?? 0}%) calc(50% + ${chatBg!.panY ?? 0}%)`
                   : 'center center',
@@ -1107,7 +1128,7 @@ function ChatDetailContent() {
         })()}
       <div
         ref={messagesContainerRef}
-        className="relative flex-1 overflow-y-auto px-4 pt-6 pb-1 space-y-4 no-scrollbar"
+        className="relative flex-1 overflow-y-auto px-4 pt-8 pb-4 space-y-4 no-scrollbar"
         id="messages-scroller"
         onTouchStart={(e) => {
           const c = messagesContainerRef.current;
