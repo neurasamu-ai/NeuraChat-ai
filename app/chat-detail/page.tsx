@@ -1085,18 +1085,26 @@ function ChatDetailContent() {
         {/* Per-chat custom background (behind the messages).
             Height is pinned to 100vh so the layer keeps covering the
             screen even when the soft keyboard shrinks the flex parent. */}
-        {chatBg?.image && (
-          <div
-            className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
-            style={{
-              minHeight: '100vh',
-              backgroundImage: `url(data:image/jpeg;base64,${chatBg.image})`,
-              opacity: (chatBg.opacity ?? 40) / 100,
-              backgroundPosition: `calc(50% + ${chatBg.panX ?? 0}%) calc(50% + ${chatBg.panY ?? 0}%)`,
-              backgroundSize: `${(chatBg.zoom ?? 1) * 100}% auto`,
-            }}
-          />
-        )}
+        {(() => {
+          const hasCustom = !!chatBg?.image;
+          const src = hasCustom
+            ? `url(data:image/jpeg;base64,${chatBg!.image})`
+            : `url('/chat-default-bg.jpg')`;
+          return (
+            <div
+              className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
+              style={{
+                minHeight: '100vh',
+                backgroundImage: src,
+                opacity: hasCustom ? (chatBg!.opacity ?? 40) / 100 : 0.35,
+                backgroundPosition: hasCustom
+                  ? `calc(50% + ${chatBg!.panX ?? 0}%) calc(50% + ${chatBg!.panY ?? 0}%)`
+                  : 'center center',
+                backgroundSize: hasCustom ? `${(chatBg!.zoom ?? 1) * 100}% auto` : 'cover',
+              }}
+            />
+          );
+        })()}
       <div
         ref={messagesContainerRef}
         className="relative flex-1 overflow-y-auto px-4 pt-6 pb-1 space-y-4 no-scrollbar"
@@ -1221,19 +1229,7 @@ function ChatDetailContent() {
         className="relative z-30 mx-3 mb-1 mt-1 flex items-end gap-2 select-none rounded-3xl bg-zinc-950/70 backdrop-blur-xl border border-zinc-800/60 shadow-[0_8px_30px_rgba(0,0,0,0.5)] px-2.5 py-2"
         id="messages-composer-form"
       >
-        {/* Hidden Picker Input */}
-        <div className="flex-1 relative">
-          <textarea
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Send chat..."
-            rows={1}
-            className="w-full bg-transparent py-2 px-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors resize-none max-h-32 leading-snug"
-            style={{ minHeight: '36px' }}
-          />
-        </div>
-
-        {/* AI Refine button (only shows when there is text) */}
+        {/* AI Refine button — left side to avoid mis-touch with send */}
         {inputText.trim().length > 0 && (
           <button
             type="button"
@@ -1259,6 +1255,18 @@ function ChatDetailContent() {
             )}
           </button>
         )}
+
+        {/* Hidden Picker Input */}
+        <div className="flex-1 relative">
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Send chat..."
+            rows={1}
+            className="w-full bg-transparent py-2 px-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors resize-none max-h-32 leading-snug"
+            style={{ minHeight: '36px' }}
+          />
+        </div>
 
         {/* Send button is gray by default, turns yellow when there is text or media */}
         <button

@@ -40,7 +40,7 @@ export default function CallsPage() {
   const contacts = contactsStore.contacts;
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<'all' | 'incoming' | 'outgoing' | 'missed'>('all');
-  const [viewMode, setViewMode] = useState<'history' | 'dialer'>('history');
+  const [viewMode, setViewMode] = useState<'history' | 'dialer'>('dialer');
 
   // Dynamic caller name lookup from contacts database
   const findContactFor = (phone: string) => {
