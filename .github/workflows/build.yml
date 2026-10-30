@@ -77,6 +77,7 @@ jobs:
         cp .github/native/CallNotifier.java $TARGET/
         cp .github/native/VipContactStore.java $TARGET/
         cp .github/native/VipAlarmActivity.java $TARGET/
+        cp .github/native/VipAlarmNotifier.java $TARGET/
         mkdir -p android/app/src/main/res/drawable
         mkdir -p android/app/src/main/res/layout
         mkdir -p android/app/src/main/res/values

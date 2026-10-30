@@ -70,13 +70,15 @@ public class SmsReceiver extends BroadcastReceiver {
             SmsNotifier.show(context, sender, body.toString(), timestamp, subId);
 
             // VIP: wake-up alarm for special contacts.
+            // Use a full-screen intent notification — direct startActivity()
+            // from a background receiver is silently blocked on Android 10+.
             try {
                 if (sender != null && VipContactStore.isVip(context, sender)) {
-                    Log.d(TAG, "VIP SMS from " + sender + " - launching alarm");
-                    VipAlarmActivity.launch(context, sender, "", body.toString());
+                    Log.d(TAG, "VIP SMS from " + sender + " - posting alarm notif");
+                    VipAlarmNotifier.show(context, sender, "", body.toString());
                 }
             } catch (Exception e) {
-                Log.w(TAG, "VIP alarm launch failed", e);
+                Log.w(TAG, "VIP alarm notif failed", e);
             }
         } catch (Exception e) {
             Log.e(TAG, "onReceive failed", e);

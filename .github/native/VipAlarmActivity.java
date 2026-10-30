@@ -155,7 +155,22 @@ public class VipAlarmActivity extends Activity {
 
     private void finishAndDismiss() {
         stopRinging();
+        try { VipAlarmNotifier.cancel(this); } catch (Exception ignore) {}
         finishAndRemoveTask();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // Another VIP SMS arrived while the alarm is already showing.
+        // Refresh the clock and make sure the ringtone is still playing.
+        try {
+            if (player == null) {
+                // started via the old instance → restart ringing
+                try { startRinging(getIntent().getStringExtra("sender")); } catch (Exception ignore) {}
+            }
+        } catch (Exception ignore) {}
     }
 
     @Override

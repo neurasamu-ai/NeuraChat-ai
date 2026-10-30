@@ -34,10 +34,31 @@ public class VipContactStore {
         if (ctx == null || number == null || number.isEmpty()) return false;
         try {
             SharedPreferences sp = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            return sp.contains(PREFIX + normalize(number));
+            // 1. Exact normalized match
+            String nKey = PREFIX + normalize(number);
+            if (sp.contains(nKey)) return true;
+            // 2. Fallback: match on last 10 digits so "+92..." vs "0..." vs
+            //    "92..." all resolve to the same VIP entry. This is the
+            //    common case that used to silently miss.
+            String tail = lastDigits(normalize(number), 10);
+            if (tail.isEmpty()) return false;
+            for (java.util.Map.Entry<String, ?> e : sp.getAll().entrySet()) {
+                String k = e.getKey();
+                if (k == null || !k.startsWith(PREFIX)) continue;
+                String stored = k.substring(PREFIX.length());
+                if (stored.equals(normalize(number))) return true;
+                if (lastDigits(stored, 10).equals(tail)) return true;
+            }
+            return false;
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static String lastDigits(String s, int n) {
+        if (s == null) return "";
+        if (s.length() <= n) return s;
+        return s.substring(s.length() - n);
     }
 
     public static String getRingtonePath(Context ctx, String number) {
@@ -72,8 +93,14 @@ public class VipContactStore {
         set(ctx, number, false, null);
     }
 
-    // Digits only, so "+92...", "0300...", "92300..." all map to the same key.
+    // Digits only, and strip a leading 0 / common country-code prefix so
+    // "+92300...", "0300...", and "92300..." all map to the same key.
     private static String normalize(String number) {
-        return number.replaceAll("[^0-9]", "");
+        if (number == null) return "";
+        String d = number.replaceAll("[^0-9]", "");
+        // 92 is Pakistan's country code in this app; extend here if needed.
+        if (d.startsWith("92") && d.length() > 10) d = d.substring(2);
+        while (d.startsWith("0")) d = d.substring(1);
+        return d;
     }
 }
