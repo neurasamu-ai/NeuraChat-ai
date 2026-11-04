@@ -29,9 +29,7 @@ import {
 } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { updateContactNative, deleteRawContact, getWritableAccounts, saveContactToAccount, WritableAccount, getVipContactNative, setVipContactNative, clearVipContactNative, pickVipRingtoneNative } from '@/lib/neura-contacts';
-import CallSimPicker from '@/components/CallSimPicker';
 import ImageCropModal from '@/components/ImageCropModal';
-import { useSimCall } from '@/hooks/use-sim-call';
 import Header from '@/components/Header';
 import { generateId } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
@@ -64,7 +62,6 @@ function ProfileContent() {
   const [vipBusy, setVipBusy] = useState(false);
 
   // SIM-picker-aware calling (matches chat-detail and Calls tab).
-  const simCall = useSimCall();
   const [accounts, setAccounts] = useState<WritableAccount[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
 
@@ -332,10 +329,10 @@ function ProfileContent() {
     }
   };
 
-  const handleCall = async () => {
+  const handleCall = () => {
     if (!editPhone) return;
     triggerVibration();
-    await simCall.startCall(editPhone, editName || undefined);
+    window.location.href = `tel:${editPhone}`;
   };
 
   const handleSms = () => {
@@ -758,14 +755,6 @@ function ProfileContent() {
         </AnimatePresence>
 
         {/* SIM picker for calls (2+ SIMs, no remembered preference) */}
-        <CallSimPicker
-          isOpen={simCall.pickerOpen}
-          accounts={simCall.accounts}
-          remember={simCall.remember}
-          onRememberChange={simCall.setRemember}
-          onPick={simCall.pick}
-          onCancel={simCall.cancel}
-        />
 
         <ImageCropModal
           open={!!cropSrc}

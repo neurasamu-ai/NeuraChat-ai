@@ -53,7 +53,6 @@ public class MainActivity extends BridgeActivity {
         // Capacitor builds its plugin registry during BridgeActivity.onCreate,
         // so plugins registered after it are never exposed to JS.
         registerPlugin(SmsPlugin.class);
-        registerPlugin(TelecomPlugin.class);
         registerPlugin(SettingsPlugin.class);
         registerPlugin(SoundPlugin.class);
         registerPlugin(NeuraContactsPlugin.class);

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { getMessages, saveMessage, getContacts, Chat, Message } from '@/lib/db';
 import { upsertChat, loadChatsFromDB, getState as getChatsState } from '@/lib/chats-store';
-import { loadCallLogsFromDB } from '@/lib/call-log-store';
 import { generateId } from '@/lib/utils';
 import {
   drainIncomingSms,

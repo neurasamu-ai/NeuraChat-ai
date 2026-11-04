@@ -18,9 +18,6 @@ public class SmsReplyReceiver extends BroadcastReceiver {
     private static final String TAG = "NeuraSmsReply";
     public static final String ACTION_REPLY = "com.neurasamu.build.chat.SMS_REPLY";
     public static final String ACTION_MARK_READ = "com.neurasamu.build.chat.SMS_MARK_READ";
-    public static final String ACTION_END_CALL = "com.neurasamu.build.chat.END_CALL";
-    public static final String ACTION_ANSWER_CALL = "com.neurasamu.build.chat.ANSWER_CALL";
-    public static final String ACTION_TOGGLE_MUTE = "com.neurasamu.build.chat.TOGGLE_MUTE";
     public static final String KEY_REPLY_TEXT = "neura_reply_text";
 
     @Override
@@ -41,40 +38,6 @@ public class SmsReplyReceiver extends BroadcastReceiver {
                 return;
             }
             handleReply(context, sender, replyText.toString(), notifId);
-        } else if (ACTION_ANSWER_CALL.equals(action)) {
-            try {
-                android.telecom.Call c = CallService.activeCall;
-                if (c != null) c.answer(0);
-            } catch (Exception e) {
-                Log.w(TAG, "answer failed", e);
-            }
-            try {
-                android.app.NotificationManager nm =
-                    (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-                if (nm != null) nm.cancel(9100);
-            } catch (Exception ignore) {}
-        } else if (ACTION_TOGGLE_MUTE.equals(action)) {
-            try {
-                CallService.isMuted = !CallService.isMuted;
-                android.media.AudioManager am =
-                    (android.media.AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
-                if (am != null) am.setMicrophoneMute(CallService.isMuted);
-                // Refresh the ongoing notification so the Mute/Unmute label updates.
-                CallNotifier.showActive(context, CallService.currentNumber, CallService.currentName);
-            } catch (Exception e) {
-                Log.w(TAG, "toggle mute failed", e);
-            }
-        } else if (ACTION_END_CALL.equals(action)) {
-            try {
-                if (CallService.activeCall != null) {
-                    CallService.activeCall.disconnect();
-                }
-            } catch (Exception e) {
-                Log.w(TAG, "end call failed", e);
-            }
-            try {
-                NotificationManagerCompat.from(context).cancel(9002);
-            } catch (Exception ignore) {}
         } else if (ACTION_MARK_READ.equals(action)) {
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);

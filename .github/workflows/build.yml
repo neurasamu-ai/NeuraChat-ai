@@ -54,13 +54,8 @@ jobs:
         mkdir -p $TARGET
         cp .github/native/MainActivity.java $TARGET/
         cp .github/native/SmsPlugin.java $TARGET/
-        cp .github/native/TelecomPlugin.java $TARGET/
-        cp .github/native/CallService.java $TARGET/
-        cp .github/native/CallActivity.java $TARGET/
-        cp .github/native/PendingCallLogStore.java $TARGET/
         cp .github/native/SoundPreferenceStore.java $TARGET/
         cp .github/native/SoundPlugin.java $TARGET/
-        cp .github/native/CallIntentProcessor.java $TARGET/
         cp .github/native/SmsReceiver.java $TARGET/
         cp .github/native/MmsReceiver.java $TARGET/
         cp .github/native/HeadlessSmsSendService.java $TARGET/
@@ -72,7 +67,6 @@ jobs:
         cp .github/native/NameResolver.java $TARGET/
         cp .github/native/SmsNotifier.java $TARGET/
         cp .github/native/SmsReplyReceiver.java $TARGET/
-        cp .github/native/CallNotifier.java $TARGET/
         cp .github/native/VipContactStore.java $TARGET/
         cp .github/native/VipAlarmActivity.java $TARGET/
         cp .github/native/VipAlarmNotifier.java $TARGET/
@@ -90,7 +84,6 @@ jobs:
         cp .github/native/res/layout/activity_call.xml android/app/src/main/res/layout/
         cp .github/native/res/layout/activity_vip_alarm.xml android/app/src/main/res/layout/
         cp .github/native/res/values/overlay_styles.xml android/app/src/main/res/values/
-        cp .github/native/IncomingCallOverlay.java $TARGET/
 
     - name: Sync Android
       run: npx cap sync android

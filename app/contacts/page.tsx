@@ -32,9 +32,7 @@ import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { normalizePhone } from '@/lib/phone';
 import { getWritableAccounts, saveContactToAccount, deleteRawContact, WritableAccount } from '@/lib/neura-contacts';
-import CallSimPicker from '@/components/CallSimPicker';
 import ImageCropModal from '@/components/ImageCropModal';
-import { useSimCall } from '@/hooks/use-sim-call';
 import { blockContact, isBlocked, unblockContact, getBlockedContacts } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import { useContacts } from '@/lib/use-contacts';
@@ -138,7 +136,6 @@ export default function ContactsPage() {
   const [skeletonTimedOut, setSkeletonTimedOut] = useState(false);
 
   // SIM-picker-aware calling.
-  const simCall = useSimCall();
   const [selectedAccountId, setSelectedAccountId] = useState<string>('neurachat');
   const [addAvatar, setAddAvatar] = useState<string>('');
   const [cropSrc, setCropSrc] = useState<string | null>(null);
@@ -636,10 +633,10 @@ export default function ContactsPage() {
                               <MessageSquare className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={async (e) => {
+                              onClick={(e) => {
                                 e.stopPropagation();
                                 triggerVibration();
-                                await simCall.startCall(contact.phone);
+                                window.location.href = `tel:${contact.phone}`;
                               }}
                               onPointerDown={(e) => e.stopPropagation()}
                               className="w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 active:scale-90 transition-all"
@@ -729,9 +726,9 @@ export default function ContactsPage() {
                   </button>
 
                   <button
-                    onClick={async () => {
+                    onClick={() => {
                       triggerVibration();
-                      await simCall.startCall(activeContact.phone);
+                      window.location.href = `tel:${activeContact.phone}`;
                     }}
                     className="flex flex-col items-center bg-zinc-900 hover:bg-zinc-850 p-3 rounded-2xl transition-colors cursor-pointer group active:scale-95"
                   >
@@ -1025,14 +1022,6 @@ export default function ContactsPage() {
       <BottomNav currentTab="contacts" />
 
       {/* SIM picker for calls */}
-      <CallSimPicker
-        isOpen={simCall.pickerOpen}
-        accounts={simCall.accounts}
-        remember={simCall.remember}
-        onRememberChange={simCall.setRemember}
-        onPick={simCall.pick}
-        onCancel={simCall.cancel}
-      />
 
       <ImageCropModal
         open={!!cropSrc}
