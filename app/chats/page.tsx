@@ -352,7 +352,7 @@ export default function ChatsPage() {
         </div>
 
 
-        {searchQuery.trim() ? null : loading ? (
+        {loading ? (
           // Skeleton Loading
           <div className="space-y-3" id="chats-skeleton">
             {[1, 2, 3].map((n) => (
@@ -466,6 +466,7 @@ export default function ChatsPage() {
             </AnimatePresence>
           </div>
         )}
+        </>)}
 
         {/* Search results for contacts & new numbers */}
         {searchQuery && (() => {
