@@ -34,7 +34,7 @@ import ImageCropModal from '@/components/ImageCropModal';
 import { BUBBLE_COLORS, DEFAULT_BUBBLE_COLOR, getBubbleColorHex, bubbleTextColor } from '@/lib/bubble-colors';
 import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
-import AiProvidersModal from '@/components/AiProvidersModal';
+import RefineSettingsModal from '@/components/RefineSettingsModal';
 import {
   getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
   isDefaultDialer, requestDefaultDialer, CallAccount,
@@ -65,7 +65,7 @@ export default function SettingsPage() {
   const [defaultDialerOk, setDefaultDialerOk] = useState<boolean>(true);
   const [isBlockedOpen, setIsBlockedOpen] = useState(false);
   const [blockedList, setBlockedList] = useState<BlockedContact[]>([]);
-  const [isAiProvidersOpen, setIsAiProvidersOpen] = useState(false);
+  const [isRefineOpen, setIsRefineOpen] = useState(false);
 
   // Edit fields
   const [editName, setEditName] = useState('');
@@ -179,7 +179,7 @@ export default function SettingsPage() {
   useBackHandler(isCommsOpen, () => setIsCommsOpen(false));
 
   useBackHandler(isBlockedOpen, () => setIsBlockedOpen(false));
-  useBackHandler(isAiProvidersOpen, () => setIsAiProvidersOpen(false));
+  useBackHandler(isRefineOpen, () => setIsRefineOpen(false));
 
   useBackHandler(isEditProfileOpen, () => setIsEditProfileOpen(false));
 
@@ -477,17 +477,17 @@ export default function SettingsPage() {
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
 
-          {/* AI Providers */}
+          {/* AI Refine Endpoint */}
           <div
             onClick={() => {
               triggerVibration();
-              setIsAiProvidersOpen(true);
+              setIsRefineOpen(true);
             }}
             className="flex items-center justify-between p-3 px-4 hover:bg-zinc-900/60 transition-colors cursor-pointer rounded-xl group"
           >
             <div className="flex items-center gap-3">
               <Sparkles className="h-4 w-4 text-[#00D4FF]" />
-              <span className="text-xs font-medium text-zinc-200">AI Providers</span>
+              <span className="text-xs font-medium text-zinc-200">AI Refine</span>
             </div>
             <ChevronRight className="h-4 w-4 text-zinc-600 group-hover:text-zinc-400 transition-colors" />
           </div>
@@ -916,9 +916,9 @@ export default function SettingsPage() {
 
       </main>
 
-        <AiProvidersModal
-          open={isAiProvidersOpen}
-          onClose={() => setIsAiProvidersOpen(false)}
+        <RefineSettingsModal
+          open={isRefineOpen}
+          onClose={() => setIsRefineOpen(false)}
         />
 
         <ImageCropModal
