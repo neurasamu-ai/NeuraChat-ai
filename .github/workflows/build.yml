@@ -101,45 +101,7 @@ jobs:
         echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > android/app/neurachat-release.jks
         echo "Keystore decoded: $(stat -c%s android/app/neurachat-release.jks) bytes"
 
-        python3 - << 'PYEOF'
-        path = 'android/app/build.gradle'
-        with open(path) as f:
-            g = f.read()
-
-        # 1) Insert signingConfigs right after `android {`
-        signing = '''
-            signingConfigs {
-                release {
-                    storeFile file('neurachat-release.jks')
-                    storePassword System.getenv("KEYSTORE_PASSWORD")
-                    keyAlias System.getenv("KEY_ALIAS")
-                    keyPassword System.getenv("KEY_PASSWORD")
-                }
-            }
-        '''
-        marker = 'android {'
-        idx = g.find(marker)
-        assert idx != -1, 'android { not found'
-        insert_at = idx + len(marker)
-        g = g[:insert_at] + signing + g[insert_at:]
-
-        # 2) Wire signingConfig into existing release block
-        old_release = '''        release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }'''
-        new_release = '''        release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
-        }'''
-        assert g.count(old_release) == 1, f'release block count: {g.count(old_release)}'
-        g = g.replace(old_release, new_release, 1)
-
-        with open(path, 'w') as f:
-            f.write(g)
-        print('build.gradle signing injected')
-        PYEOF
+        python3 .github/scripts/inject-signing.py
 
     - name: Build Release AAB (Play Store)
       env:
