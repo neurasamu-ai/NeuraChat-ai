@@ -52,7 +52,7 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
               <Icon
                 className={`h-5 w-5 transition-all duration-300 ${
                   isActive
-                    ? tab.id === 'calls' || tab.id === 'settings'
+                    ? tab.id === 'settings'
                       ? 'text-[#FF006E]'
                       : 'text-[#00D4FF]'
                     : 'text-zinc-500 hover:text-zinc-300'
