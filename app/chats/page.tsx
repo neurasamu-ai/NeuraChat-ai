@@ -375,7 +375,7 @@ export default function ChatsPage() {
               No conversations active
             </p>
             <p className="text-zinc-600 text-xs px-6 max-w-xs leading-normal">
-              Search a name or number above, or tap the AI hub card to chat with AI.
+              Search a name or number above to start a new conversation.
             </p>
           </div>
         ) : (

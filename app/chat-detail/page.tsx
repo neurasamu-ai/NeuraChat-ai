@@ -90,6 +90,8 @@ function ChatDetailContent() {
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const reloadDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [inputText, setInputText] = useState('');
+  // Per-chat draft: keeps unsent text when the user backs out and returns,
+  // like the default SMS app. Stored in localStorage keyed by phone.
   
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -490,7 +492,24 @@ function ChatDetailContent() {
   useEffect(() => {
     initialScrollDoneRef.current = false;
     lastMessageIdRef.current = '';
-  }, [chatId]);
+    // Restore any saved draft for this chat.
+    if (typeof window !== 'undefined' && phone) {
+      try {
+        const saved = localStorage.getItem(`neura_chat_draft_${phone}`);
+        if (saved) setInputText(saved);
+      } catch {}
+    }
+  }, [chatId, phone]);
+
+  // Persist the draft as the user types.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !phone) return;
+    try {
+      const key = `neura_chat_draft_${phone}`;
+      if (inputText) localStorage.setItem(key, inputText);
+      else localStorage.removeItem(key);
+    } catch {}
+  }, [inputText, phone]);
 
   // Reload when returning to foreground (in case the bridge missed something).
   useEffect(() => {
@@ -1044,26 +1063,18 @@ function ChatDetailContent() {
         {/* Per-chat custom background (behind the messages).
             Height is pinned to 100vh so the layer keeps covering the
             screen even when the soft keyboard shrinks the flex parent. */}
-        {(() => {
-          const hasCustom = !!chatBg?.image;
-          const src = hasCustom
-            ? `url(data:image/jpeg;base64,${chatBg!.image})`
-            : `url('/chat-default-bg.jpg')`;
-          return (
-            <div
-              className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
-              style={{
-                minHeight: '100vh',
-                backgroundImage: src,
-                opacity: hasCustom ? (chatBg!.opacity ?? 40) / 100 : 0.85,
-                backgroundPosition: hasCustom
-                  ? `calc(50% + ${chatBg!.panX ?? 0}%) calc(50% + ${chatBg!.panY ?? 0}%)`
-                  : 'center center',
-                backgroundSize: hasCustom ? `${(chatBg!.zoom ?? 1) * 100}% auto` : 'cover',
-              }}
-            />
-          );
-        })()}
+        {chatBg?.image && (
+          <div
+            className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
+            style={{
+              minHeight: '100vh',
+              backgroundImage: `url(data:image/jpeg;base64,${chatBg.image})`,
+              opacity: (chatBg.opacity ?? 40) / 100,
+              backgroundPosition: `calc(50% + ${chatBg.panX ?? 0}%) calc(50% + ${chatBg.panY ?? 0}%)`,
+              backgroundSize: `${(chatBg.zoom ?? 1) * 100}% auto`,
+            }}
+          />
+        )}
       <div
         ref={messagesContainerRef}
         className="relative flex-1 overflow-y-auto px-4 pt-8 pb-4 space-y-4 no-scrollbar"
