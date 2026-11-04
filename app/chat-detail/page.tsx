@@ -665,17 +665,7 @@ function ChatDetailContent() {
 
     setRefining(true);
     try {
-      // 1. Require at least one enabled AI provider.
-      const { getProviderSettings } = await import('@/lib/ai/keystore');
-      const settings = await getProviderSettings();
-      const enabled = settings.filter((s) => s.enabled);
-      if (enabled.length === 0) {
-        alertToast('Add an AI provider in Settings → AI Providers first', 'error');
-        setRefining(false);
-        return;
-      }
-
-      // 2. Extract all <...> instruction blocks (may be multiple).
+      // Extract all <...> instruction blocks (may be multiple).
       const instructionMatches = raw.match(/<([^<>]+)>/g) || [];
       const instructions: string[] = instructionMatches
         .map((m) => m.slice(1, -1).trim())
@@ -689,35 +679,15 @@ function ChatDetailContent() {
         return;
       }
 
-      // 3. Ask the AI.
-      const { chatOnce } = await import('@/lib/ai/client');
-      const instruction = customPrompt
-        ? `Follow all of these user instructions exactly, in the order they were given:\n${customPrompt}`
-        : 'Fix only grammar, spelling, punctuation, and sentence structure. Do not change the meaning, do not add anything, do not remove anything.';
-
-      const result = await chatOnce(enabled[0].providerId, [
-        {
-          role: 'system',
-          content: `You are a precise text-refinement assistant. Rules:
-1. Preserve the ORIGINAL language. English stays English, Hinglish stays Hinglish, Urdu stays Urdu, Roman Urdu stays Roman Urdu. Never translate.
-2. ${instruction}
-3. Output ONLY the refined text. No quotes, no code fences, no explanation, no preamble.
-4. Keep the original line structure unless the instruction says otherwise.`,
-        },
-        {
-          role: 'user',
-          content: textToRefine,
-        },
-      ]);
-
-      const cleaned = result.trim().replace(/^["'`]+|["'`]+$/g, '').trim();
-      if (!cleaned) {
-        alertToast('AI returned empty response', 'error');
+      const { refineText } = await import('@/lib/refine/client');
+      const result = await refineText(textToRefine, customPrompt);
+      if (!result.ok || !result.text) {
+        alertToast(result.error || 'Refine failed', 'error');
         setRefining(false);
         return;
       }
 
-      setRefinedText(cleaned);
+      setRefinedText(result.text);
     } catch (e: any) {
       console.error('handleRefine failed', e);
       alertToast('Refine failed: ' + (e?.message || 'unknown'), 'error');
