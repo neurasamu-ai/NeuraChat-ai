@@ -26,6 +26,7 @@ public class SmsReplyReceiver extends BroadcastReceiver {
         String action = intent.getAction();
         String sender = intent.getStringExtra("sender");
         int notifId = intent.getIntExtra("notification_id", 8001);
+        int subscriptionId = intent.getIntExtra("subscription_id", -1);
 
         if (ACTION_REPLY.equals(action)) {
             CharSequence replyText = null;
@@ -37,7 +38,7 @@ public class SmsReplyReceiver extends BroadcastReceiver {
                 Log.w(TAG, "Reply action had no text or sender");
                 return;
             }
-            handleReply(context, sender, replyText.toString(), notifId);
+            handleReply(context, sender, replyText.toString(), notifId, subscriptionId);
         } else if (ACTION_MARK_READ.equals(action)) {
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);
@@ -62,9 +63,17 @@ public class SmsReplyReceiver extends BroadcastReceiver {
         }
     }
 
-    private void handleReply(Context context, String sender, String text, int notifId) {
+    private void handleReply(Context context, String sender, String text, int notifId, int subscriptionId) {
         try {
-            SmsManager smsManager = SmsManager.getDefault();
+            // Use the same SIM the original SMS arrived on. Falls back to
+            // the default manager if the subscription id is unknown.
+            SmsManager smsManager;
+            if (subscriptionId > 0 && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                smsManager = context.getSystemService(SmsManager.class)
+                        .createForSubscriptionId(subscriptionId);
+            } else {
+                smsManager = SmsManager.getDefault();
+            }
             java.util.ArrayList<String> parts = smsManager.divideMessage(text);
             if (parts.size() > 1) {
                 smsManager.sendMultipartTextMessage(sender, null, parts, null, null);
@@ -85,7 +94,7 @@ public class SmsReplyReceiver extends BroadcastReceiver {
             } catch (Exception ignore) {}
 
             // Queue to app inbox as OUTGOING so the chat shows it as sent by user.
-            SmsPlugin.receiveOutgoingSms(context, sender, text, System.currentTimeMillis(), -1);
+            SmsPlugin.receiveOutgoingSms(context, sender, text, System.currentTimeMillis(), subscriptionId);
 
             try {
                 NotificationManagerCompat.from(context).cancel(notifId);

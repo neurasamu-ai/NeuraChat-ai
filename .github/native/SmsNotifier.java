@@ -56,10 +56,15 @@ public class SmsNotifier {
             replyIntent.setAction(SmsReplyReceiver.ACTION_REPLY);
             replyIntent.putExtra("sender", sender);
             replyIntent.putExtra("notification_id", NOTIFICATION_ID);
+            replyIntent.putExtra("subscription_id", subscriptionId);
+
+            // Per-sender request code so two notifications from different
+            // senders do not overwrite each other's reply PendingIntent.
+            int replyReqCode = 1002 + (sender == null ? 0 : sender.hashCode());
 
             PendingIntent replyPending = PendingIntent.getBroadcast(
                 context,
-                1002,
+                replyReqCode,
                 replyIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_MUTABLE
             );
@@ -75,9 +80,10 @@ public class SmsNotifier {
             markReadIntent.setAction(SmsReplyReceiver.ACTION_MARK_READ);
             markReadIntent.putExtra("sender", sender);
             markReadIntent.putExtra("notification_id", NOTIFICATION_ID);
+            int markReadReqCode = 1003 + (sender == null ? 0 : sender.hashCode());
             PendingIntent markReadPending = PendingIntent.getBroadcast(
                 context,
-                1003,
+                markReadReqCode,
                 markReadIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
             );
