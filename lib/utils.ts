@@ -18,19 +18,10 @@ export function getRandomCallDuration(): number {
 }
 
 export function triggerDial(phone: string) {
-  // Prefer TelecomManager via the plugin. Fall back to tel: intent.
+  // Opens the system dialer via tel: intent. No in-app call UI.
   if (typeof window === 'undefined') return;
-  (async () => {
-    try {
-      const mod = await import('@/lib/telecom-plugin');
-      const res = await mod.placeCall(phone);
-      if (!res.success) {
-        window.location.href = `tel:${phone}`;
-      }
-    } catch {
-      window.location.href = `tel:${phone}`;
-    }
-  })();
+  if (!phone) return;
+  window.location.href = `tel:${phone}`;
 }
 
 export function triggerSms(phone: string, bodyText?: string) {

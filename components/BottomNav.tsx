@@ -3,11 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { MessageSquare, Phone, Users, Settings as SettingsIcon } from 'lucide-react';
+import { MessageSquare, Users, Settings as SettingsIcon } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface BottomNavProps {
-  currentTab?: 'chats' | 'calls' | 'contacts' | 'settings';
+  currentTab?: 'chats' | 'contacts' | 'settings';
 }
 
 export default function BottomNav({ currentTab }: BottomNavProps) {
@@ -16,14 +16,12 @@ export default function BottomNav({ currentTab }: BottomNavProps) {
   // Determine active tab based on prop or pathname
   const activeTab = currentTab || (
     pathname.startsWith('/chats') ? 'chats' :
-    pathname.startsWith('/calls') ? 'calls' :
     pathname.startsWith('/contacts') ? 'contacts' :
     pathname.startsWith('/settings') ? 'settings' : 'chats'
   );
 
   const tabs = [
     { id: 'chats' as const, label: 'Chats', href: '/chats', icon: MessageSquare, accent: '#00D4FF' },
-    { id: 'calls' as const, label: 'Calls', href: '/calls', icon: Phone, accent: '#FF006E' },
     { id: 'contacts' as const, label: 'Contacts', href: '/contacts', icon: Users, accent: '#00D4FF' },
     { id: 'settings' as const, label: 'Settings', href: '/settings', icon: SettingsIcon, accent: '#FF006E' },
   ];

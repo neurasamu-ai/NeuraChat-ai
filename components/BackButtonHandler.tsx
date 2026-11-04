@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Capacitor } from '@capacitor/core';
 import { tryHandleBack } from '@/lib/back-stack';
 
-const ROOT_TABS = ['/chats', '/calls', '/contacts', '/settings'];
+const ROOT_TABS = ['/chats', '/contacts', '/settings'];
 
 export default function BackButtonHandler() {
   const router = useRouter();
@@ -34,7 +34,7 @@ export default function BackButtonHandler() {
           if (window.history.length > 1) {
             router.back();
           } else {
-            router.push('/calls');
+            router.push('/chats');
           }
         });
       } catch (e) {

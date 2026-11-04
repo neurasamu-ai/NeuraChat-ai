@@ -26,7 +26,8 @@ export default function NotificationNavigator() {
           });
           router.push(`/chat-detail?${q.toString()}`);
         } else if (nav.type === 'open_call_log') {
-          router.push('/calls');
+          // Calls tab removed — redirect to chats as a safe fallback.
+          router.push('/chats');
         }
       } catch (e) {
         console.error('[NotificationNavigator] failed', e);

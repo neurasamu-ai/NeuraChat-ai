@@ -36,10 +36,6 @@ import { getBlockedContacts, unblockContact, BlockedContact } from '@/lib/db';
 import { syncBlockedListToNative } from '@/lib/sms-plugin';
 import RefineSettingsModal from '@/components/RefineSettingsModal';
 import {
-  getCallAccounts, getPreferredCallSimId, setPreferredCallSimId,
-  isDefaultDialer, requestDefaultDialer, CallAccount,
-} from '@/lib/telecom-plugin';
-import {
   getActiveSubscriptions, getPreferredSimId, setPreferredSimId,
   isDefaultSmsApp, requestDefaultSmsRole, Subscription,
 } from '@/lib/sms-plugin';
@@ -57,12 +53,9 @@ export default function SettingsPage() {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isCommsOpen, setIsCommsOpen] = useState(false);
-  const [callAccounts, setCallAccounts] = useState<CallAccount[]>([]);
-  const [callSimId, setCallSimId] = useState<string | null>(null);
   const [smsSubs, setSmsSubs] = useState<Subscription[]>([]);
   const [smsSimId, setSmsSimId] = useState<number | null>(null);
   const [defaultSmsOk, setDefaultSmsOk] = useState<boolean>(true);
-  const [defaultDialerOk, setDefaultDialerOk] = useState<boolean>(true);
   const [isBlockedOpen, setIsBlockedOpen] = useState(false);
   const [blockedList, setBlockedList] = useState<BlockedContact[]>([]);
   const [isRefineOpen, setIsRefineOpen] = useState(false);
@@ -101,16 +94,11 @@ export default function SettingsPage() {
     if (!isCommsOpen) return;
     (async () => {
       try {
-        const accounts = await getCallAccounts();
-        setCallAccounts(accounts);
-        setCallSimId(getPreferredCallSimId());
-
         const subs = await getActiveSubscriptions();
         setSmsSubs(subs);
         setSmsSimId(getPreferredSimId());
 
         setDefaultSmsOk(await isDefaultSmsApp());
-        setDefaultDialerOk(await isDefaultDialer());
       } catch (e) {
         console.error('comms load failed', e);
       }
@@ -652,83 +640,6 @@ export default function SettingsPage() {
                     )}
                   </button>
 
-                  <button
-                    onClick={async () => {
-                      triggerVibration();
-                      if (defaultDialerOk) return;
-                      await requestDefaultDialer();
-                      setTimeout(async () => {
-                        setDefaultDialerOk(await isDefaultDialer());
-                      }, 800);
-                    }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
-                      defaultDialerOk
-                        ? 'bg-emerald-950/20 border-emerald-900/30 text-emerald-400'
-                        : 'bg-zinc-900 border-zinc-800 text-white hover:bg-zinc-850 cursor-pointer active:scale-[0.98]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      <div className="text-left">
-                        <p className="text-xs font-semibold">Default Phone app</p>
-                        <p className="text-[10px] text-zinc-500 mt-0.5">
-                          {defaultDialerOk ? 'Set' : 'Tap to set as default'}
-                        </p>
-                      </div>
-                    </div>
-                    {defaultDialerOk && (
-                      <span className="text-[9px] font-mono uppercase">Active</span>
-                    )}
-                  </button>
-                </div>
-
-                {/* ---- Call SIM ---- */}
-                <p className="text-[10px] uppercase tracking-widest text-zinc-500 font-mono mb-2">
-                  Preferred SIM for calls
-                </p>
-
-                <div className="space-y-2 mb-5">
-                  {callAccounts.length === 0 ? (
-                    <p className="text-[11px] text-zinc-500 px-2">
-                      No call accounts detected.
-                    </p>
-                  ) : (
-                    <>
-                      <button
-                        onClick={() => {
-                          triggerVibration();
-                          setPreferredCallSimId(null);
-                          setCallSimId(null);
-                        }}
-                        className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
-                          callSimId === null
-                            ? 'bg-[#10b981]/15 border-[#10b981]/40 text-[#10b981]'
-                            : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
-                        }`}
-                      >
-                        <span>Always ask</span>
-                        {callSimId === null && <span className="text-[9px]">✓</span>}
-                      </button>
-                      {callAccounts.map((acc) => (
-                        <button
-                          key={acc.id}
-                          onClick={() => {
-                            triggerVibration();
-                            setPreferredCallSimId(acc.id);
-                            setCallSimId(acc.id);
-                          }}
-                          className={`w-full flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
-                            callSimId === acc.id
-                              ? 'bg-[#10b981]/15 border-[#10b981]/40 text-[#10b981]'
-                              : 'bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850 cursor-pointer'
-                          }`}
-                        >
-                          <span className="truncate">{acc.label}</span>
-                          {callSimId === acc.id && <span className="text-[9px]">✓</span>}
-                        </button>
-                      ))}
-                    </>
-                  )}
                 </div>
 
                 {/* ---- SMS SIM ---- */}
