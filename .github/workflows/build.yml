@@ -96,6 +96,13 @@ jobs:
         echo "=== android/build.gradle (after pin) ==="
         cat android/build.gradle
 
+    - name: Print build.gradle for signing setup
+      run: |
+        echo "=== app/build.gradle ==="
+        cat android/app/build.gradle
+        echo "=== variables.gradle ==="
+        cat android/variables.gradle 2>/dev/null || echo "no variables.gradle"
+
     - name: Build Android App
       run: |
         cd android
