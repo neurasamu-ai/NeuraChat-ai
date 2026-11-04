@@ -22,10 +22,13 @@ cat > "$DRAWABLE_DIR/transparent_splash.xml" << 'XMLEOF'
 </shape>
 XMLEOF
 
-# Also replace the base splash drawable if it exists (Capacitor's logo)
-if [ -f "$DRAWABLE_DIR/splash.png" ]; then
-  rm -f "$DRAWABLE_DIR/splash.png"
-fi
+# Delete ALL splash.png variants Capacitor generates across density folders.
+# Lint fails (MissingDefaultResource) if a density-specific splash exists but
+# no base drawable/splash.png is present — so remove every one of them.
+find "$ROOT/app/src/main/res" -type f -name 'splash.png' -delete
+find "$ROOT/app/src/main/res" -type f -name 'splash.jpg' -delete
+# Also remove any leftover splash background xml shims.
+find "$ROOT/app/src/main/res" -type d -name 'drawable*' -exec sh -c 'rm -f "$1"/splash.xml 2>/dev/null || true' _ {} \;
 
 if [ ! -f "$STYLES" ]; then
   echo "WARNING: $STYLES not found — skipping style patch"
