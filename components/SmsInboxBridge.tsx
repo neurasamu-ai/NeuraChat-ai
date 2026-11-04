@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { getMessages, saveMessage, getContacts, Chat, Message } from '@/lib/db';
-import { upsertChat, loadChatsFromDB, getState as getChatsState } from '@/lib/chats-store';
+import { upsertChat, loadChatsFromDB, getChatInBatch } from '@/lib/chats-store';
 import { generateId } from '@/lib/utils';
 import {
   drainIncomingSms,
@@ -43,14 +43,46 @@ async function persistIncoming(msg: IncomingSms) {
     }
   } catch {}
 
-  // Ensure chat exists via the global chats store so every screen updates.
+  const newMsg: Message = {
+    id: generateId(isOutgoing ? 'sms-out' : 'sms-in'),
+    chatId,
+    text: msg.body || '',
+    sender: isOutgoing ? 'user' : 'contact',
+    timestamp: msg.timestamp || Date.now(),
+    status: isOutgoing ? 'sent' : 'received',
+    subscriptionId: typeof msg.subscriptionId === 'number' ? msg.subscriptionId : undefined,
+  };
+
+  // Dedup BEFORE touching the chat unread counter. Otherwise re-draining the
+  // native queue on every cold start inflates unread counts for old SMS.
   try {
-    const current = getChatsState().chats;
-    const existing = current.find((c) => c.id === chatId);
+    const existingMsgs = await getMessages(chatId);
+    const dup = existingMsgs.some(
+      (m) =>
+        m.text === newMsg.text &&
+        m.sender === newMsg.sender &&
+        Math.abs((m.timestamp || 0) - (newMsg.timestamp || 0)) < 5000
+    );
+    if (dup) {
+      console.log('[SmsInbox] duplicate skipped');
+      return;
+    }
+    await saveMessage(newMsg);
+    console.log('[SmsInbox] saved', isOutgoing ? 'outgoing' : 'incoming', 'msg');
+  } catch (e) {
+    console.error('[SmsInbox] message save failed', e);
+    return;
+  }
+
+  // Ensure chat exists via the global chats store so every screen updates.
+  // getChatInBatch is batch-aware so multiple messages within a single drain
+  // correctly accumulate unread counts instead of each seeing unread=0.
+  try {
+    const existing = getChatInBatch(chatId);
     if (existing) {
       const patch: Chat = {
         ...existing,
-        lastMessage: msg.body || '',
+        lastMessage: msg.body || existing.lastMessage || '',
         timestamp: msg.timestamp || Date.now(),
         unread: isOutgoing ? 0 : (existing.unread || 0) + 1,
       };
@@ -78,35 +110,8 @@ async function persistIncoming(msg: IncomingSms) {
     console.error('[SmsInbox] chat upsert failed', e);
   }
 
-  const newMsg: Message = {
-    id: generateId(isOutgoing ? 'sms-out' : 'sms-in'),
-    chatId,
-    text: msg.body || '',
-    sender: isOutgoing ? 'user' : 'contact',
-    timestamp: msg.timestamp || Date.now(),
-    status: isOutgoing ? 'sent' : 'received',
-    subscriptionId: typeof msg.subscriptionId === 'number' ? msg.subscriptionId : undefined,
-  };
-
-  try {
-    const existingMsgs = await getMessages(chatId);
-    const dup = existingMsgs.some(
-      (m) =>
-        m.text === newMsg.text &&
-        m.sender === newMsg.sender &&
-        Math.abs((m.timestamp || 0) - (newMsg.timestamp || 0)) < 5000
-    );
-    if (dup) {
-      console.log('[SmsInbox] duplicate skipped');
-      return;
-    }
-    await saveMessage(newMsg);
-    console.log('[SmsInbox] saved', isOutgoing ? 'outgoing' : 'incoming', 'msg');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('neura-sms-updated', { detail: { chatId } }));
-    }
-  } catch (e) {
-    console.error('[SmsInbox] message save failed', e);
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('neura-sms-updated', { detail: { chatId } }));
   }
 }
 

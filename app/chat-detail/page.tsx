@@ -41,7 +41,7 @@ import {
 import Header from '@/components/Header';
 import MessageBubble from '@/components/MessageBubble';
 import ChatBackgroundModal from '@/components/ChatBackgroundModal';
-import { upsertChat, markChatRead as storeMarkRead, persistChatRead } from '@/lib/chats-store';
+import { upsertChat, markChatRead as storeMarkRead, persistChatRead, getChatInBatch } from '@/lib/chats-store';
 import { generateId, getCurrentTimestamp } from '@/lib/utils';
 import { useBackHandler } from '@/lib/use-back-handler';
 import { chatIdFromPhone, normalizePhone } from '@/lib/phone';
@@ -363,8 +363,21 @@ function ChatDetailContent() {
   };
 
   // Ensure a chat entry exists for this contact.
+  // Preserve existing lastMessage/timestamp/unread/archived so opening a chat
+  // does not wipe the preview, bump it to the top, or reset its unread badge.
   const ensureChatExists = async () => {
     try {
+      const existing = getChatInBatch(chatId);
+      if (existing) {
+        const patch: Chat = {
+          ...existing,
+          name: existing.name || name,
+          phone: existing.phone || phone,
+          avatar: existing.avatar || avatar,
+        };
+        await upsertChat(patch);
+        return;
+      }
       const matchingChat: Chat = {
         id: chatId,
         name,

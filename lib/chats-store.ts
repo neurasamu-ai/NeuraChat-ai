@@ -70,6 +70,16 @@ export function getState(): ChatsState {
   return snapshot;
 }
 
+// Batch-aware read: during batch mode, snapshot.chats is stale (updates are
+// queued in batchedChats). This merges the queue so callers see the latest
+// in-progress value for a specific chat. Returns undefined if not found.
+export function getChatInBatch(id: string): Chat | undefined {
+  const live = snapshot.chats.find((c) => c.id === id);
+  const pending = isBatching ? batchedChats.get(id) : undefined;
+  if (live && pending) return { ...live, ...pending };
+  return live || pending;
+}
+
 export async function loadChatsFromDB(): Promise<Chat[]> {
   if (snapshot.loading) return snapshot.chats;
   setState({ loading: true });
