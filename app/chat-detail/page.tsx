@@ -1115,18 +1115,21 @@ function ChatDetailContent() {
           const hasCustom = !!chatBg?.image;
           const src = hasCustom
             ? `url(data:image/jpeg;base64,${chatBg!.image})`
-            : `url('/chat-default-bg.jpg')`;
+            : null;
+          if (!hasCustom) {
+            return (
+              <div className="absolute inset-0 pointer-events-none bg-white dark:bg-black transition-colors" />
+            );
+          }
           return (
             <div
               className="absolute left-0 right-0 top-0 pointer-events-none bg-cover bg-center"
               style={{
                 minHeight: '100vh',
-                backgroundImage: src,
-                opacity: hasCustom ? (chatBg!.opacity ?? 40) / 100 : 0.85,
-                backgroundPosition: hasCustom
-                  ? `calc(50% + ${chatBg!.panX ?? 0}%) calc(50% + ${chatBg!.panY ?? 0}%)`
-                  : 'center center',
-                backgroundSize: hasCustom ? `${(chatBg!.zoom ?? 1) * 100}% auto` : 'cover',
+                backgroundImage: src!,
+                opacity: (chatBg!.opacity ?? 40) / 100,
+                backgroundPosition: `calc(50% + ${chatBg!.panX ?? 0}%) calc(50% + ${chatBg!.panY ?? 0}%)`,
+                backgroundSize: `${(chatBg!.zoom ?? 1) * 100}% auto`,
               }}
             />
           );
