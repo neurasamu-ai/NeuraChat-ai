@@ -14,6 +14,7 @@ interface MessageBubbleProps {
   userName: string;
   userAvatar?: string;
   bubbleColor: string;
+  bubbleScale?: number;
   simLabel?: string;
   onToggleStar: (msg: Message) => void;
   onRetry: (msg: Message) => void;
@@ -82,6 +83,7 @@ function MessageBubbleInner({
   userName,
   userAvatar,
   bubbleColor,
+  bubbleScale = 1,
   simLabel,
   onToggleStar,
   onRetry,
@@ -91,6 +93,13 @@ function MessageBubbleInner({
   onClick,
 }: MessageBubbleProps) {
   const isUser = msg.sender === 'user';
+  const scale = Math.min(1.25, Math.max(0.65, bubbleScale || 1));
+  const padY = Math.max(4, Math.round(8 * scale));
+  const padX = Math.max(7, Math.round(10 * scale));
+  const textPx = Math.max(10, Math.round(14 * scale));
+  const headerPx = Math.max(8, Math.round(10 * scale));
+  const timePx = Math.max(7.5, Number((9 * scale).toFixed(1)));
+  const avatarPx = Math.max(14, Math.round(20 * scale));
   const headerName = isUser ? userName : contactName || 'Unknown';
   const headerAvatar = isUser ? userAvatar : contactAvatar;
   const dateTime = formatDateTime(msg.timestamp);
@@ -116,18 +125,22 @@ function MessageBubbleInner({
       className={`flex select-none cursor-pointer ${isUser ? 'justify-end' : 'justify-start'}`}
     >
       <div
-        className={`p-2 px-2.5 rounded-2xl relative transition-all duration-200 flex flex-col ${
+        className={`rounded-2xl relative transition-all duration-200 flex flex-col ${
           isUser
             ? 'max-w-[80%] rounded-tr-sm'
             : 'max-w-[82%] rounded-tl-sm bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100'
         } ${isSelected ? 'ring-2.5 ring-yellow-400 scale-[0.97] shadow-[0_0_15px_rgba(234,179,8,0.5)]' : ''}`}
-        style={
-          msg.starred
+        style={{
+          paddingTop: padY,
+          paddingBottom: padY,
+          paddingLeft: padX,
+          paddingRight: padX,
+          ...(msg.starred
             ? { backgroundColor: '#facc15', color: '#18181b' }
             : isUser
               ? { backgroundColor: bubbleColor, color: bubbleTextColor(bubbleColor) }
-              : undefined
-        }
+              : {}),
+        }}
       >
         {/* Header INSIDE bubble: avatar + name only */}
         <div className="flex items-center gap-1.5 mb-1">
@@ -136,16 +149,16 @@ function MessageBubbleInner({
               <div className="flex-1" />
               <span
                 className="text-[10px] font-semibold truncate max-w-[120px]"
-                style={{ color: bubbleTextColor(bubbleColor) }}
+                style={{ color: bubbleTextColor(bubbleColor), fontSize: headerPx }}
               >
                 {headerName}
               </span>
-              <Avatar src={headerAvatar} name={headerName} size={20} />
+              <Avatar src={headerAvatar} name={headerName} size={avatarPx} />
             </>
           ) : (
             <>
-              <Avatar src={headerAvatar} name={headerName} size={20} />
-              <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[120px]">
+              <Avatar src={headerAvatar} name={headerName} size={avatarPx} />
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200 truncate max-w-[120px]" style={{ fontSize: headerPx }}>
                 {headerName}
               </span>
               <div className="flex-1" />
@@ -166,7 +179,7 @@ function MessageBubbleInner({
         )}
 
         {msg.text && (
-          <p className="text-sm leading-snug font-sans break-words whitespace-pre-wrap">
+          <p className="leading-snug font-sans break-words whitespace-pre-wrap" style={{ fontSize: textPx }}>
             {msg.text}
           </p>
         )}
@@ -197,7 +210,7 @@ function MessageBubbleInner({
             <>
               <span
                 className="text-[9px] font-mono whitespace-nowrap"
-                style={{ color: msg.starred ? 'rgba(24,24,27,0.6)' : bubbleTextColor(bubbleColor) + '99' }}
+                style={{ color: msg.starred ? 'rgba(24,24,27,0.6)' : bubbleTextColor(bubbleColor) + '99', fontSize: timePx }}
               >
                 {dateTime}
               </span>

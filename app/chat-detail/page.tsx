@@ -62,6 +62,7 @@ function ChatDetailContent() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [resolvedContact, setResolvedContact] = useState<{ name: string; avatar?: string } | null>(null);
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
+  const [bubbleScale, setBubbleScale] = useState<number>(1);
 
   // Load the owner's profile once, so outgoing bubbles can show their
   // own avatar / name on the right side.
@@ -71,6 +72,7 @@ function ChatDetailContent() {
         const p = await getUserProfile();
         setUserProfile(p);
         setBubbleColor(getBubbleColorHex(p.bubbleColor));
+        if (typeof p.bubbleScale === 'number') setBubbleScale(p.bubbleScale);
       } catch (e) {
         console.error('load userProfile failed', e);
       }
@@ -83,14 +85,23 @@ function ChatDetailContent() {
       const detail = (e as CustomEvent).detail as { color?: string } | undefined;
       if (detail?.color) setBubbleColor(detail.color);
     };
+    const onScale = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { scale?: number } | undefined;
+      if (typeof detail?.scale === 'number') setBubbleScale(detail.scale);
+    };
     window.addEventListener('neurachat-bubble-color-change', handler);
-    return () => window.removeEventListener('neurachat-bubble-color-change', handler);
+    window.addEventListener('neurachat-bubble-scale-change', onScale);
+    return () => {
+      window.removeEventListener('neurachat-bubble-color-change', handler);
+      window.removeEventListener('neurachat-bubble-scale-change', onScale);
+    };
   }, []);
   const [hasMore, setHasMore] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement | null>(null);
   const reloadDebounceRef = useRef<NodeJS.Timeout | null>(null);
   const [inputText, setInputText] = useState('');
+  const draftLoadedRef = useRef<string | null>(null);
   
   // Header Options Menu Dropdown state
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -478,6 +489,29 @@ function ChatDetailContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phone]);
 
+  // WhatsApp-style per-chat draft: restore on open, persist synchronously on every edit.
+  useEffect(() => {
+    if (!chatId || typeof window === 'undefined') return;
+    try {
+      const saved = localStorage.getItem(`neurachat_draft_${chatId}`) || '';
+      setInputText(saved);
+      draftLoadedRef.current = chatId;
+    } catch {}
+  }, [chatId]);
+
+  useEffect(() => {
+    if (!chatId || typeof window === 'undefined') return;
+    if (draftLoadedRef.current !== chatId) return;
+    try {
+      const key = `neurachat_draft_${chatId}`;
+      if (inputText) {
+        localStorage.setItem(key, inputText);
+      } else {
+        localStorage.removeItem(key);
+      }
+    } catch {}
+  }, [chatId, inputText]);
+
   // Live reload when an SMS for this chat is saved by the bridge.
   useEffect(() => {
     const handler = (e: Event) => {
@@ -729,8 +763,9 @@ function ChatDetailContent() {
     // 3. Save locally in IndexedDB
     await saveMessage(newMsg);
     
-    // Clear inputs immediately
+    // Clear inputs & saved draft immediately
     setInputText('');
+    try { localStorage.removeItem(`neurachat_draft_${chatId}`); } catch {}
 
     // Refresh display
     await loadMessages();
@@ -1158,6 +1193,7 @@ function ChatDetailContent() {
               userName={msg.sender === 'user' ? senderNameFor(msg.subscriptionId) : (userProfile?.name || 'You')}
               userAvatar={userProfile?.avatar || undefined}
               bubbleColor={bubbleColor}
+              bubbleScale={bubbleScale}
               simLabel={
                 msg.subscriptionId != null
                   ? subsMap[msg.subscriptionId]?.label

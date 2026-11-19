@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { getMessages, saveMessage, getContacts, Chat, Message } from '@/lib/db';
+import { getRecentMessages, saveMessage, getContacts, Chat, Message } from '@/lib/db';
 import { upsertChat, loadChatsFromDB, getState as getChatsState } from '@/lib/chats-store';
 import { loadCallLogsFromDB } from '@/lib/call-log-store';
 import { generateId } from '@/lib/utils';
@@ -41,7 +41,7 @@ async function persistIncoming(msg: IncomingSms) {
   // Deduplicate & save message FIRST so the active chat UI updates with 0ms delay
   // and duplicate events never double-increment unread counts.
   try {
-    const existingMsgs = await getMessages(chatId);
+    const existingMsgs = await getRecentMessages(chatId, 30);
     const dup = existingMsgs.some(
       (m) =>
         m.text === newMsg.text &&

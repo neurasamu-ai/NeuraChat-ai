@@ -78,6 +78,7 @@ export default function SettingsPage() {
   const [appearance, setAppearance] = useState<'dark' | 'light' | 'system'>('system');
   const [bubbleColor, setBubbleColor] = useState<string>(DEFAULT_BUBBLE_COLOR);
   const [bubbleColorOpen, setBubbleColorOpen] = useState(false);
+  const [bubbleScale, setBubbleScale] = useState<number>(1);
   const [appLockEnabled, setAppLockEnabled] = useState(false);
   const [lockBusy, setLockBusy] = useState(false);
 
@@ -127,6 +128,7 @@ export default function SettingsPage() {
       setEditAvatar(stored.avatar || '');
       setAppearance(stored.theme || 'system');
       setBubbleColor(getBubbleColorHex(stored.bubbleColor));
+      if (typeof stored.bubbleScale === 'number') setBubbleScale(stored.bubbleScale);
       setAppLockEnabled(!!stored.appLockEnabled);
     }
     const handle = setTimeout(() => {
@@ -341,6 +343,70 @@ export default function SettingsPage() {
                 }`}
               />
             </button>
+          </div>
+
+          {/* Chat Bubble & Text Size Slider */}
+          <div className="flex flex-col p-3 px-4 rounded-xl space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-bold text-cyan-400">Aa</span>
+                <span className="text-xs font-medium text-zinc-200">Chat Bubble &amp; Text Size</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono text-zinc-400">{Math.round(bubbleScale * 100)}%</span>
+                {bubbleScale !== 1 && (
+                  <button
+                    onClick={async () => {
+                      triggerVibration();
+                      setBubbleScale(1);
+                      const updated = { ...profile, bubbleScale: 1 };
+                      setProfile(updated);
+                      await saveUserProfile(updated);
+                      window.dispatchEvent(new CustomEvent('neurachat-bubble-scale-change', { detail: { scale: 1 } }));
+                    }}
+                    className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+            <input
+              type="range"
+              min={0.7}
+              max={1.2}
+              step={0.05}
+              value={bubbleScale}
+              onChange={async (e) => {
+                const val = Number(e.target.value);
+                setBubbleScale(val);
+                const updated = { ...profile, bubbleScale: val };
+                setProfile(updated);
+                await saveUserProfile(updated);
+                window.dispatchEvent(new CustomEvent('neurachat-bubble-scale-change', { detail: { scale: val } }));
+              }}
+              className="w-full accent-cyan-400 cursor-pointer"
+            />
+            <div className="flex justify-between text-[10px] text-zinc-500">
+              <span>Compact (More messages)</span>
+              <span>Large</span>
+            </div>
+            <div className="flex justify-end pt-1">
+              <div
+                className="rounded-2xl rounded-tr-sm transition-all"
+                style={{
+                  backgroundColor: bubbleColor,
+                  color: bubbleTextColor(bubbleColor),
+                  paddingTop: Math.max(4, Math.round(8 * bubbleScale)),
+                  paddingBottom: Math.max(4, Math.round(8 * bubbleScale)),
+                  paddingLeft: Math.max(7, Math.round(10 * bubbleScale)),
+                  paddingRight: Math.max(7, Math.round(10 * bubbleScale)),
+                  fontSize: Math.max(10, Math.round(14 * bubbleScale)),
+                }}
+              >
+                Preview message bubble
+              </div>
+            </div>
           </div>
 
           {/* Bubble Color (collapsible) */}

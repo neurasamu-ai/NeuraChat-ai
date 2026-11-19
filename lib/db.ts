@@ -69,6 +69,7 @@ export interface UserProfile {
   username?: string;
   theme?: 'dark' | 'light' | 'system';
   bubbleColor?: string; // hex, e.g. "#cbfe00"; default handled in UI
+  bubbleScale?: number; // 0.70 to 1.20 (default 1.0)
   // ---- App Lock ----
   appLockEnabled?: boolean;
   appLockType?: 'biometric' | 'pattern' | 'both';
