@@ -28,8 +28,41 @@ async function persistIncoming(msg: IncomingSms) {
   const isOutgoing = msg.direction === 'outgoing';
   const chatId = chatIdFor(address);
 
-  // Look up the contact once so a freshly-created chat uses the saved
-  // name (and avatar) instead of the raw phone number.
+  const newMsg: Message = {
+    id: generateId(isOutgoing ? 'sms-out' : 'sms-in'),
+    chatId,
+    text: msg.body || '',
+    sender: isOutgoing ? 'user' : 'contact',
+    timestamp: msg.timestamp || Date.now(),
+    status: isOutgoing ? 'sent' : 'received',
+    subscriptionId: typeof msg.subscriptionId === 'number' ? msg.subscriptionId : undefined,
+  };
+
+  // Deduplicate & save message FIRST so the active chat UI updates with 0ms delay
+  // and duplicate events never double-increment unread counts.
+  try {
+    const existingMsgs = await getMessages(chatId);
+    const dup = existingMsgs.some(
+      (m) =>
+        m.text === newMsg.text &&
+        m.sender === newMsg.sender &&
+        Math.abs((m.timestamp || 0) - (newMsg.timestamp || 0)) < 5000
+    );
+    if (dup) {
+      console.log('[SmsInbox] duplicate skipped');
+      return;
+    }
+    await saveMessage(newMsg);
+    console.log('[SmsInbox] saved', isOutgoing ? 'outgoing' : 'incoming', 'msg');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('neura-sms-updated', { detail: { chatId } }));
+    }
+  } catch (e) {
+    console.error('[SmsInbox] message save failed', e);
+    return;
+  }
+
+  // Look up the contact for display name / avatar on new or unnamed chats.
   let contactName: string | undefined;
   let contactAvatar: string | undefined;
   try {
@@ -78,37 +111,6 @@ async function persistIncoming(msg: IncomingSms) {
   } catch (e) {
     console.error('[SmsInbox] chat upsert failed', e);
   }
-
-  const newMsg: Message = {
-    id: generateId(isOutgoing ? 'sms-out' : 'sms-in'),
-    chatId,
-    text: msg.body || '',
-    sender: isOutgoing ? 'user' : 'contact',
-    timestamp: msg.timestamp || Date.now(),
-    status: isOutgoing ? 'sent' : 'received',
-    subscriptionId: typeof msg.subscriptionId === 'number' ? msg.subscriptionId : undefined,
-  };
-
-  try {
-    const existingMsgs = await getMessages(chatId);
-    const dup = existingMsgs.some(
-      (m) =>
-        m.text === newMsg.text &&
-        m.sender === newMsg.sender &&
-        Math.abs((m.timestamp || 0) - (newMsg.timestamp || 0)) < 5000
-    );
-    if (dup) {
-      console.log('[SmsInbox] duplicate skipped');
-      return;
-    }
-    await saveMessage(newMsg);
-    console.log('[SmsInbox] saved', isOutgoing ? 'outgoing' : 'incoming', 'msg');
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('neura-sms-updated', { detail: { chatId } }));
-    }
-  } catch (e) {
-    console.error('[SmsInbox] message save failed', e);
-  }
 }
 
 export default function SmsInboxBridge() {
@@ -119,60 +121,41 @@ export default function SmsInboxBridge() {
     let listenerHandleOut: { remove: () => void } | null = null;
     let cancelled = false;
 
-    const start = async () => {
-      // Give the Capacitor bridge a moment to be ready (same pattern as
-      // contacts sync). Without this, the very first drain call can fail
-      // silently on a cold start.
-      await new Promise((r) => setTimeout(r, 1200));
-      if (cancelled) return;
+    const drainQueue = async () => {
+      if (cancelled || !isSmsPluginAvailable()) return;
+      try {
+        const queued = await drainIncomingSms();
+        if (cancelled || queued.length === 0) return;
+        console.log('[SmsInbox] drained', queued.length, 'queued SMS');
+        const { beginBatch, commitBatch } = await import('@/lib/chats-store');
+        beginBatch();
+        try {
+          for (const m of queued) {
+            await persistIncoming(m);
+          }
+        } finally {
+          commitBatch();
+        }
+      } catch (e) {
+        console.error('[SmsInbox] drain failed', e);
+      }
+    };
 
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        drainQueue();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+
+    const start = async () => {
       if (!isSmsPluginAvailable()) {
         console.warn('[SmsInbox] plugin not available, skipping');
         return;
       }
 
-      // Prime the chats store so upsertChat has current data.
-      try {
-        await loadChatsFromDB();
-      } catch (e) {
-        console.warn('[SmsInbox] chats-store prime failed', e);
-      }
-
-      // Push the persisted blocked list to native so SMS / calls from
-      // blocked numbers are dropped even after a cold start.
-      try {
-        const { getBlockedContacts } = await import('@/lib/db');
-        const { syncBlockedListToNative } = await import('@/lib/sms-plugin');
-        const list = await getBlockedContacts();
-        await syncBlockedListToNative(list.map((x) => x.phone));
-        console.log('[SmsInbox] blocked list synced to native, count=', list.length);
-      } catch (e) {
-        console.error('[SmsInbox] blocked list sync failed', e);
-      }
-
-      // Drain queued SMS (received while app was closed).
-      // Batch the store updates so the chats list renders once instead of
-      // flickering through each message one-by-one.
-      try {
-        const queued = await drainIncomingSms();
-        console.log('[SmsInbox] drained', queued.length, 'queued SMS');
-        if (cancelled) return;
-        if (queued.length > 0) {
-          const { beginBatch, commitBatch } = await import('@/lib/chats-store');
-          beginBatch();
-          try {
-            for (const m of queued) {
-              await persistIncoming(m);
-            }
-          } finally {
-            commitBatch();
-          }
-        }
-      } catch (e) {
-        console.error('[SmsInbox] drain failed', e);
-      }
-
-      // Subscribe to live incoming SMS
+      // Attach live listeners IMMEDIATELY (0ms delay) before draining so no
+      // message can slip through the gap.
       try {
         listenerHandle = await addSmsReceivedListener(async (msg) => {
           await persistIncoming(msg);
@@ -182,7 +165,6 @@ export default function SmsInboxBridge() {
         console.error('[SmsInbox] incoming listener attach failed', e);
       }
 
-      // Subscribe to live outgoing SMS (sent from app or notification reply)
       try {
         listenerHandleOut = await addSmsSentListener(async (msg) => {
           await persistIncoming(msg);
@@ -191,12 +173,34 @@ export default function SmsInboxBridge() {
       } catch (e) {
         console.error('[SmsInbox] outgoing listener attach failed', e);
       }
+
+      // Prime the chats store so upsertChat has current data.
+      try {
+        await loadChatsFromDB();
+      } catch (e) {
+        console.warn('[SmsInbox] chats-store prime failed', e);
+      }
+
+      // Drain any queued SMS immediately.
+      await drainQueue();
+
+      // Push the persisted blocked list to native in the background.
+      try {
+        const { getBlockedContacts } = await import('@/lib/db');
+        const { syncBlockedListToNative } = await import('@/lib/sms-plugin');
+        const list = await getBlockedContacts();
+        await syncBlockedListToNative(list.map((x) => x.phone));
+        console.log('[SmsInbox] blocked list synced to native, count=', list.length);
+      } catch (e) {
+        console.error('[SmsInbox] blocked list sync failed', e);
+      }
     };
 
     start();
 
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
       if (listenerHandle && listenerHandle.remove) {
         try { listenerHandle.remove(); } catch {}
       }

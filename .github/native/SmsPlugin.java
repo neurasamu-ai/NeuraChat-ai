@@ -56,6 +56,8 @@ public class SmsPlugin extends Plugin {
     private static final String TAG = "NeuraSms";
     private static final String QUEUE_PREFS = "neura_sms_queue";
     private static final String QUEUE_KEY = "pending_sms";
+    private static final String STATUS_QUEUE_KEY = "pending_status";
+    private static final Object QUEUE_LOCK = new Object();
 
     private static SmsPlugin instance;
     private static final String SENT_ACTION = "com.neurasamu.build.chat.SMS_SENT";
@@ -82,8 +84,49 @@ public class SmsPlugin extends Plugin {
     private static void enqueue(Context context, String address, String body, long timestamp, String direction, int subscriptionId) {
         Log.d(TAG, "enqueue " + direction + " with " + address);
 
-        // 1. Persist to the system SMS provider (Inbox for incoming, Sent for
-        //    outgoing). Required when we hold the default SMS app role.
+        // 1. Live notify FIRST for instant 0ms UI delivery when app is active.
+        if (instance != null) {
+            try {
+                JSObject data = new JSObject();
+                data.put("sender", address == null ? "" : address);
+                data.put("address", address == null ? "" : address);
+                data.put("body", body == null ? "" : body);
+                data.put("timestamp", timestamp);
+                data.put("direction", direction);
+                data.put("subscriptionId", subscriptionId);
+                instance.notifyListeners("outgoing".equals(direction) ? "smsSent" : "smsReceived", data);
+            } catch (Exception e) {
+                Log.w(TAG, "live notify failed", e);
+            }
+        }
+
+        // 2. Thread-safe queue for JS layer (covers cold start / background / race conditions)
+        synchronized (QUEUE_LOCK) {
+            try {
+                SharedPreferences prefs = context.getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
+                String existing = prefs.getString(QUEUE_KEY, "[]");
+                JSONArray arr = new JSONArray(existing);
+                JSONObject item = new JSONObject();
+                item.put("address", address == null ? "" : address);
+                item.put("body", body == null ? "" : body);
+                item.put("timestamp", timestamp);
+                item.put("direction", direction);
+                item.put("subscriptionId", subscriptionId);
+                arr.put(item);
+                if (arr.length() > 200) {
+                    JSONArray trimmed = new JSONArray();
+                    for (int i = arr.length() - 200; i < arr.length(); i++) {
+                        trimmed.put(arr.get(i));
+                    }
+                    arr = trimmed;
+                }
+                prefs.edit().putString(QUEUE_KEY, arr.toString()).commit();
+            } catch (Exception e) {
+                Log.e(TAG, "queue write failed", e);
+            }
+        }
+
+        // 3. Persist to the system SMS provider (Inbox for incoming, Sent for outgoing).
         try {
             boolean isOutgoing = "outgoing".equals(direction);
             ContentValues values = new ContentValues();
@@ -102,52 +145,18 @@ public class SmsPlugin extends Plugin {
         } catch (Exception e) {
             Log.w(TAG, "provider write failed (not default SMS app?)", e);
         }
-
-        // 2. Queue for our JS layer
-        try {
-            SharedPreferences prefs = context.getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
-            String existing = prefs.getString(QUEUE_KEY, "[]");
-            JSONArray arr = new JSONArray(existing);
-            JSONObject item = new JSONObject();
-            item.put("address", address == null ? "" : address);
-            item.put("body", body == null ? "" : body);
-            item.put("timestamp", timestamp);
-            item.put("direction", direction);
-            item.put("subscriptionId", subscriptionId);
-            arr.put(item);
-            // Keep only last 200
-            if (arr.length() > 200) {
-                JSONArray trimmed = new JSONArray();
-                for (int i = arr.length() - 200; i < arr.length(); i++) {
-                    trimmed.put(arr.get(i));
-                }
-                arr = trimmed;
-            }
-            prefs.edit().putString(QUEUE_KEY, arr.toString()).apply();
-        } catch (Exception e) {
-            Log.e(TAG, "queue write failed", e);
-        }
-
-        // 3. Live notify if JS is listening
-        if (instance != null) {
-            JSObject data = new JSObject();
-            data.put("sender", address == null ? "" : address);
-            data.put("address", address == null ? "" : address);
-            data.put("body", body == null ? "" : body);
-            data.put("timestamp", timestamp);
-            data.put("direction", direction);
-            data.put("subscriptionId", subscriptionId);
-            instance.notifyListeners(direction.equals("outgoing") ? "smsSent" : "smsReceived", data);
-        }
     }
 
     // ---- JS: drain queued SMS (called on app launch) ----
     @PluginMethod
     public void drainIncoming(PluginCall call) {
         try {
-            SharedPreferences prefs = getContext().getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
-            String existing = prefs.getString(QUEUE_KEY, "[]");
-            prefs.edit().putString(QUEUE_KEY, "[]").apply();
+            String existing;
+            synchronized (QUEUE_LOCK) {
+                SharedPreferences prefs = getContext().getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
+                existing = prefs.getString(QUEUE_KEY, "[]");
+                prefs.edit().putString(QUEUE_KEY, "[]").commit();
+            }
 
             JSONArray arr = new JSONArray(existing);
             JSArray result = new JSArray();
@@ -421,13 +430,17 @@ public class SmsPlugin extends Plugin {
                 pendingSmsIds.put(reqCode + 100000, clientId);
 
                 Intent sentI = new Intent(SENT_ACTION);
+                sentI.setPackage(getContext().getPackageName());
                 sentI.putExtra("reqCode", reqCode);
+                sentI.putExtra("clientId", clientId);
                 sentIntents.add(PendingIntent.getBroadcast(
                     getContext(), reqCode, sentI,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
 
                 Intent delI = new Intent(DELIVERED_ACTION);
+                delI.setPackage(getContext().getPackageName());
                 delI.putExtra("reqCode", reqCode + 100000);
+                delI.putExtra("clientId", clientId);
                 deliveredIntents.add(PendingIntent.getBroadcast(
                     getContext(), reqCode + 100000, delI,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
@@ -454,13 +467,69 @@ public class SmsPlugin extends Plugin {
         }
     }
 
-    private static void emitStatus(String clientId, String status, int resultCode) {
-        if (instance == null || clientId == null) return;
-        JSObject data = new JSObject();
-        data.put("clientId", clientId);
-        data.put("status", status); // "sent" | "failed" | "delivered"
-        data.put("resultCode", resultCode);
-        instance.notifyListeners("smsStatusChanged", data);
+    private static void emitStatus(Context ctx, String clientId, String status, int resultCode) {
+        if (clientId == null || clientId.isEmpty()) return;
+
+        // 1. Live notify immediately if JS is active
+        if (instance != null) {
+            try {
+                JSObject data = new JSObject();
+                data.put("clientId", clientId);
+                data.put("status", status); // "sent" | "failed" | "delivered"
+                data.put("resultCode", resultCode);
+                instance.notifyListeners("smsStatusChanged", data);
+            } catch (Exception e) {
+                Log.w(TAG, "emitStatus live notify failed", e);
+            }
+        }
+
+        // 2. Also persist in a tiny status queue so backgrounded/restarted JS never misses it
+        if (ctx != null) {
+            synchronized (QUEUE_LOCK) {
+                try {
+                    SharedPreferences prefs = ctx.getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
+                    JSONArray arr = new JSONArray(prefs.getString(STATUS_QUEUE_KEY, "[]"));
+                    JSONObject item = new JSONObject();
+                    item.put("clientId", clientId);
+                    item.put("status", status);
+                    item.put("resultCode", resultCode);
+                    arr.put(item);
+                    if (arr.length() > 100) {
+                        JSONArray trimmed = new JSONArray();
+                        for (int i = arr.length() - 100; i < arr.length(); i++) {
+                            trimmed.put(arr.get(i));
+                        }
+                        arr = trimmed;
+                    }
+                    prefs.edit().putString(STATUS_QUEUE_KEY, arr.toString()).commit();
+                } catch (Exception e) {
+                    Log.w(TAG, "status queue write failed", e);
+                }
+            }
+        }
+    }
+
+    @PluginMethod
+    public void drainStatusEvents(PluginCall call) {
+        try {
+            String existing;
+            synchronized (QUEUE_LOCK) {
+                SharedPreferences prefs = getContext().getSharedPreferences(QUEUE_PREFS, Context.MODE_PRIVATE);
+                existing = prefs.getString(STATUS_QUEUE_KEY, "[]");
+                prefs.edit().putString(STATUS_QUEUE_KEY, "[]").commit();
+            }
+            JSONArray arr = new JSONArray(existing);
+            JSArray result = new JSArray();
+            for (int i = 0; i < arr.length(); i++) {
+                result.put(arr.getJSONObject(i));
+            }
+            JSObject ret = new JSObject();
+            ret.put("events", result);
+            call.resolve(ret);
+        } catch (Exception e) {
+            Log.e(TAG, "drainStatusEvents failed", e);
+            call.reject("drainStatusEvents failed: " + e.getMessage());
+        }
     }
 
     // Register receivers once when the plugin loads.
@@ -471,11 +540,14 @@ public class SmsPlugin extends Plugin {
                 public void onReceive(Context ctx, Intent intent) {
                     int req = intent.getIntExtra("reqCode", 0);
                     String clientId = pendingSmsIds.remove(req);
+                    if (clientId == null || clientId.isEmpty()) {
+                        clientId = intent.getStringExtra("clientId");
+                    }
                     int rc = getResultCode();
                     if (rc == android.app.Activity.RESULT_OK) {
-                        emitStatus(clientId, "sent", rc);
+                        emitStatus(ctx, clientId, "sent", rc);
                     } else {
-                        emitStatus(clientId, "failed", rc);
+                        emitStatus(ctx, clientId, "failed", rc);
                     }
                 }
             };
@@ -484,8 +556,11 @@ public class SmsPlugin extends Plugin {
                 public void onReceive(Context ctx, Intent intent) {
                     int req = intent.getIntExtra("reqCode", 0);
                     String clientId = pendingSmsIds.remove(req);
+                    if (clientId == null || clientId.isEmpty()) {
+                        clientId = intent.getStringExtra("clientId");
+                    }
                     if (getResultCode() == android.app.Activity.RESULT_OK) {
-                        emitStatus(clientId, "delivered", 0);
+                        emitStatus(ctx, clientId, "delivered", 0);
                     }
                 }
             };
@@ -493,8 +568,8 @@ public class SmsPlugin extends Plugin {
             IntentFilter f1 = new IntentFilter(SENT_ACTION);
             IntentFilter f2 = new IntentFilter(DELIVERED_ACTION);
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                getContext().registerReceiver(sentRcv, f1, Context.RECEIVER_NOT_EXPORTED);
-                getContext().registerReceiver(deliveredRcv, f2, Context.RECEIVER_NOT_EXPORTED);
+                getContext().registerReceiver(sentRcv, f1, Context.RECEIVER_EXPORTED);
+                getContext().registerReceiver(deliveredRcv, f2, Context.RECEIVER_EXPORTED);
             } else {
                 getContext().registerReceiver(sentRcv, f1);
                 getContext().registerReceiver(deliveredRcv, f2);

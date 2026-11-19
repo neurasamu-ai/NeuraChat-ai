@@ -33,6 +33,7 @@ export interface SmsPluginType {
     subscriptionId?: number;
   }): Promise<{ status: string; subscriptionId?: number }>;
   drainIncoming(): Promise<{ messages: IncomingSms[] }>;
+  drainStatusEvents(): Promise<{ events: SmsStatusEvent[] }>;
   sendDirectSMSTracked(options: {
     phone: string;
     message: string;
@@ -193,6 +194,17 @@ export async function sendSmsTracked(
 ): Promise<{ status: string; clientId: string }> {
   if (!isSmsPluginAvailable()) throw new Error('SMS plugin not available');
   return SmsPlugin.sendDirectSMSTracked({ phone, message, clientId, subscriptionId });
+}
+
+export async function drainSmsStatusEvents(): Promise<SmsStatusEvent[]> {
+  if (!isSmsPluginAvailable()) return [];
+  try {
+    const r = await SmsPlugin.drainStatusEvents();
+    return r?.events || [];
+  } catch (e) {
+    console.error('[Sms] drainStatusEvents failed', e);
+    return [];
+  }
 }
 
 export async function addSmsStatusListener(

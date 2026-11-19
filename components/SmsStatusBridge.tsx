@@ -1,17 +1,21 @@
 'use client';
 
 import { useEffect } from 'react';
-import { addSmsStatusListener, isSmsPluginAvailable } from '@/lib/sms-plugin';
+import {
+  addSmsStatusListener,
+  drainSmsStatusEvents,
+  isSmsPluginAvailable,
+  SmsStatusEvent,
+} from '@/lib/sms-plugin';
 import { getChats, getMessages, saveMessage } from '@/lib/db';
 
 // Global SMS status bridge + stuck-message scanner.
 //
 // 1. Live listener  — updates message status on 'sent' / 'delivered' /
-//    'failed' events from the native SMS plugin.
-// 2. Stuck scanner  — any message still marked 'sending' for over 60s is
-//    flipped to 'failed' so the Retry button returns. Covers the cases
-//    where the local timer in chat-detail is killed by backgrounding,
-//    process death, or a dropped broadcast from the ROM.
+//    'failed' events from the native SMS plugin with 0ms startup delay.
+// 2. Status drain   — replays any status events queued while backgrounded.
+// 3. Stuck scanner  — any message still marked 'sending' for over 45s is
+//    flipped to 'failed' so the Retry button returns if the ROM drops a broadcast.
 export default function SmsStatusBridge() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -19,8 +23,56 @@ export default function SmsStatusBridge() {
     let handle: { remove: () => void } | null = null;
     let cancelled = false;
 
-    const STUCK_AFTER_MS = 15_000;
-    const SCAN_INTERVAL_MS = 3_000;
+    const STUCK_AFTER_MS = 45_000;
+    const SCAN_INTERVAL_MS = 5_000;
+
+    const applyStatusEvent = async (ev: SmsStatusEvent) => {
+      if (!ev || !ev.clientId) return;
+      try {
+        const chats = await getChats();
+        for (const c of chats) {
+          const msgs = await getMessages(c.id);
+          const m = msgs.find((x) => x.id === ev.clientId);
+          if (!m) continue;
+
+          // Never downgrade an already delivered ('read') message, and never
+          // overwrite 'sent' with 'failed'.
+          let nextStatus = m.status;
+          if (ev.status === 'delivered') {
+            nextStatus = 'read';
+          } else if (ev.status === 'sent' && m.status !== 'read') {
+            nextStatus = 'sent';
+          } else if (ev.status === 'failed' && m.status !== 'sent' && m.status !== 'read') {
+            nextStatus = 'failed';
+          }
+
+          if (nextStatus !== m.status) {
+            await saveMessage({ ...m, status: nextStatus });
+            window.dispatchEvent(
+              new CustomEvent('neura-sms-status', {
+                detail: { chatId: c.id, messageId: m.id, status: nextStatus },
+              })
+            );
+          }
+          break;
+        }
+      } catch (e) {
+        console.error('[SmsStatusBridge] update failed', e);
+      }
+    };
+
+    const drainStatusQueue = async () => {
+      if (cancelled || !isSmsPluginAvailable()) return;
+      try {
+        const events = await drainSmsStatusEvents();
+        if (cancelled || events.length === 0) return;
+        for (const ev of events) {
+          await applyStatusEvent(ev);
+        }
+      } catch (e) {
+        console.error('[SmsStatusBridge] drainStatusQueue failed', e);
+      }
+    };
 
     const scanStuck = async () => {
       try {
@@ -33,8 +85,7 @@ export default function SmsStatusBridge() {
             if (m.sender !== 'user') continue;
             if (m.status !== 'sending') continue;
             if (now - (m.timestamp || 0) < STUCK_AFTER_MS) continue;
-            m.status = 'failed';
-            await saveMessage(m);
+            await saveMessage({ ...m, status: 'failed' });
             changed = true;
           }
           if (changed) {
@@ -50,58 +101,36 @@ export default function SmsStatusBridge() {
       }
     };
 
-    // Run immediately, then periodically.
-    scanStuck();
-    const scanTimer = setInterval(scanStuck, SCAN_INTERVAL_MS);
-
     const onVisible = () => {
-      if (document.visibilityState === 'visible') scanStuck();
+      if (document.visibilityState === 'visible') {
+        drainStatusQueue().then(scanStuck);
+      }
     };
     document.addEventListener('visibilitychange', onVisible);
 
-    // Live status listener (best effort — plugin may not be available yet).
     const startListener = async () => {
-      if (!isSmsPluginAvailable()) return;
-      await new Promise((r) => setTimeout(r, 1200));
-      if (cancelled) return;
+      if (!isSmsPluginAvailable()) {
+        scanStuck();
+        return;
+      }
 
+      // Attach immediately (0ms delay) before draining queued events.
       try {
         handle = await addSmsStatusListener(async (ev) => {
           console.log('[SmsStatusBridge]', ev);
-          try {
-            const chats = await getChats();
-            for (const c of chats) {
-              const msgs = await getMessages(c.id);
-              const m = msgs.find((x) => x.id === ev.clientId);
-              if (!m) continue;
-
-              if (ev.status === 'sent') {
-                m.status = 'sent';
-              } else if (ev.status === 'delivered') {
-                m.status = 'read';
-              } else if (ev.status === 'failed') {
-                m.status = 'failed';
-              }
-              await saveMessage(m);
-
-              window.dispatchEvent(
-                new CustomEvent('neura-sms-status', {
-                  detail: { chatId: c.id, messageId: m.id, status: m.status },
-                })
-              );
-              break;
-            }
-          } catch (e) {
-            console.error('[SmsStatusBridge] update failed', e);
-          }
+          await applyStatusEvent(ev);
         });
         console.log('[SmsStatusBridge] listener attached');
       } catch (e) {
         console.error('[SmsStatusBridge] attach failed', e);
       }
+
+      await drainStatusQueue();
+      await scanStuck();
     };
 
     startListener();
+    const scanTimer = setInterval(scanStuck, SCAN_INTERVAL_MS);
 
     return () => {
       cancelled = true;

@@ -747,7 +747,7 @@ function ChatDetailContent() {
     try {
       // Use a fresh copy — mutating the parent's object in place makes
       // React.memo think nothing changed (prev.msg === next.msg by ref).
-      const updated: Message = { ...msg, status: 'sending' };
+      const updated: Message = { ...msg, status: 'sending', timestamp: getCurrentTimestamp() };
       await saveMessage(updated);
       await loadMessages();
       // Determine which SIM to use (same rules as a fresh send).
